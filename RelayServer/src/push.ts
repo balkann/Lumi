@@ -32,7 +32,13 @@ export class ApnsPushSender implements PushSender {
 
   async send(deviceTokens: string[], title: string, body: string): Promise<void> {
     if (deviceTokens.length === 0) return
-    const jwt = await this.token()
+    let jwt: string
+    try {
+      jwt = await this.token()
+    } catch (err) {
+      console.warn('apns: jwt üretilemedi:', err instanceof Error ? err.message : err)
+      return
+    }
     const session = connect(this.cfg.host)
     try {
       await Promise.all(deviceTokens.map((t) => this.post(session, jwt, t, title, body)))
@@ -58,6 +64,7 @@ export class ApnsPushSender implements PushSender {
         'apns-topic': this.cfg.bundleId,
         'apns-push-type': 'alert',
         'apns-priority': '10',
+        'content-type': 'application/json',
       })
       // İçerik loglanmaz (spec §7); push hatası akışı bozmaz, sessizce geçilir.
       req.on('response', (headers) => {

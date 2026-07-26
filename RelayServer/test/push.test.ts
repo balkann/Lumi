@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest'
 import { generateKeyPairSync } from 'node:crypto'
-import { buildPushBody, mintJwt, NoopPushSender } from '../src/push.js'
+import { buildPushBody, mintJwt, NoopPushSender, ApnsPushSender } from '../src/push.js'
 
 function testKeyP8(): string {
   const { privateKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' })
@@ -26,4 +26,11 @@ test('mintJwt ES256 başlıklı üç parçalı JWT üretir', async () => {
 
 test('NoopPushSender sessizce başarır', async () => {
   await expect(new NoopPushSender().send(['t'], 'a', 'b')).resolves.toBeUndefined()
+})
+
+test('bozuk anahtar send()\'i reject ettirmez', async () => {
+  const sender = new ApnsPushSender({
+    keyP8: 'geçersiz-anahtar', keyId: 'K', teamId: 'T', bundleId: 'B', host: 'https://localhost:1',
+  })
+  await expect(sender.send(['device-token'], 'başlık', 'gövde')).resolves.toBeUndefined()
 })
