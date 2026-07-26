@@ -59,8 +59,26 @@ export class Bridge {
     }
   }
 
-  private fromPhone(_session: Session, _env: Envelope): void {
-    // Telefon→mac komutları Task 5'te eklenir.
+  private fromPhone(session: Session, env: Envelope): void {
+    const { room } = session
+    switch (env.type) {
+      case 'command':
+        if (room.mac) {
+          room.mac.send(envelope('command', env.payload))
+        } else {
+          session.client.send(envelope('command_result', {
+            commandId: env.payload.commandId ?? null,
+            ok: false,
+            error: 'mac_offline',
+          }))
+        }
+        break
+      case 'register_push':
+        if (typeof env.payload.deviceToken === 'string' && env.payload.deviceToken.length > 0) {
+          room.pushTokens.add(env.payload.deviceToken)
+        }
+        break
+    }
   }
 
   private maybePush(room: Room, p: Record<string, unknown>): void {

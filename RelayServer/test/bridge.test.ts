@@ -140,3 +140,27 @@ test('push reddi süreci düşürmez', async () => {
   bridge.handleMessage(macSession, env('event', { kind: 'status_change', sessionId: 's1', status: 'error' }))
   await new Promise((r) => setTimeout(r, 0))
 })
+
+test('command mac\'e iletilir', () => {
+  const { bridge, mac, phoneSession } = paired()
+  bridge.handleMessage(phoneSession, env('command', { commandId: 'c1', action: 'send_text', sessionId: 's1', text: 'devam et' }))
+  expect(mac.last().type).toBe('command')
+  expect(mac.last().payload).toEqual({ commandId: 'c1', action: 'send_text', sessionId: 's1', text: 'devam et' })
+})
+
+test('mac offline iken command anında hata döner', () => {
+  const { bridge, mac, phone, macSession, phoneSession } = paired()
+  bridge.handleClose(macSession)
+  bridge.handleMessage(phoneSession, env('command', { commandId: 'c2', action: 'press_key', sessionId: 's1', key: 'enter' }))
+  expect(phone.last().type).toBe('command_result')
+  expect(phone.last().payload).toEqual({ commandId: 'c2', ok: false, error: 'mac_offline' })
+  expect(mac.sent.filter((m) => m.type === 'command')).toHaveLength(0)
+})
+
+test('register_push cihaz token\'ını odaya ekler; geçersizi yok sayar', () => {
+  const { bridge, phoneSession, registry } = paired()
+  bridge.handleMessage(phoneSession, env('register_push', { deviceToken: 'device-token-abc' }))
+  bridge.handleMessage(phoneSession, env('register_push', { deviceToken: '' }))
+  bridge.handleMessage(phoneSession, env('register_push', {}))
+  expect([...registry.get(TOKEN)!.pushTokens]).toEqual(['device-token-abc'])
+})
