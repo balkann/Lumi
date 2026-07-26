@@ -129,3 +129,14 @@ test('command_result telefonlara iletilir', () => {
   expect(phone.last().type).toBe('command_result')
   expect(phone.last().payload).toEqual({ commandId: 'c1', ok: true })
 })
+
+test('push reddi süreci düşürmez', async () => {
+  const registry = new Registry(() => 5000)
+  const rejectingPush: PushSender = { send: () => Promise.reject(new Error('apns down')) }
+  const bridge = new Bridge(registry, rejectingPush)
+  const mac = new FakeClient()
+  const macSession = bridge.handleHello(mac, env('hello', { role: 'mac', token: TOKEN }))!
+  registry.get(TOKEN)!.pushTokens.add('device-token-abc')
+  bridge.handleMessage(macSession, env('event', { kind: 'status_change', sessionId: 's1', status: 'error' }))
+  await new Promise((r) => setTimeout(r, 0))
+})

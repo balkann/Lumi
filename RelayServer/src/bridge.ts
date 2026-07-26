@@ -72,7 +72,9 @@ export class Bridge {
     const body = typeof p.summary === 'string'
       ? p.summary
       : p.status === 'error' ? 'Oturum hata verdi' : 'Claude cevabını bekliyor'
-    void this.push.send([...room.pushTokens], title, body)
+    this.push.send([...room.pushTokens], title, body).catch((err) => {
+      console.error('push gönderimi başarısız:', err instanceof Error ? err.message : err)
+    })
   }
 
   private broadcast(room: Room, data: string): void {
