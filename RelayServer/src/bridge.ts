@@ -38,7 +38,45 @@ export class Bridge {
       session.client.send(envelope('pong', {}))
       return
     }
-    // Yönlendirme kuralları Task 4 (mac→telefon) ve Task 5'te (telefon→mac) eklenir.
+    if (session.role === 'mac') this.fromMac(session, env)
+    else this.fromPhone(session, env)
+  }
+
+  private fromMac(session: Session, env: Envelope): void {
+    const { room } = session
+    switch (env.type) {
+      case 'snapshot':
+        room.snapshot = env.payload
+        this.broadcast(room, envelope('snapshot', env.payload))
+        break
+      case 'event':
+        this.broadcast(room, envelope('event', env.payload))
+        this.maybePush(room, env.payload)
+        break
+      case 'command_result':
+        this.broadcast(room, envelope('command_result', env.payload))
+        break
+    }
+  }
+
+  private fromPhone(_session: Session, _env: Envelope): void {
+    // Telefon→mac komutları Task 5'te eklenir.
+  }
+
+  private maybePush(room: Room, p: Record<string, unknown>): void {
+    const PUSH_STATUSES = new Set(['waiting-unseen', 'error'])
+    if (p.kind !== 'status_change') return
+    if (typeof p.status !== 'string' || !PUSH_STATUSES.has(p.status)) return
+    if (room.pushTokens.size === 0) return
+    const title = typeof p.repoName === 'string' ? p.repoName : 'Lumi'
+    const body = typeof p.summary === 'string'
+      ? p.summary
+      : p.status === 'error' ? 'Oturum hata verdi' : 'Claude cevabını bekliyor'
+    void this.push.send([...room.pushTokens], title, body)
+  }
+
+  private broadcast(room: Room, data: string): void {
+    for (const phone of room.phones) phone.send(data)
   }
 
   handleClose(session: Session): void {

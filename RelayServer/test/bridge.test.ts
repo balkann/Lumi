@@ -76,3 +76,56 @@ test('handleClose istemciyi odadan düşürür', () => {
   bridge.handleClose(session)
   expect(registry.get(TOKEN)).toBeUndefined()
 })
+
+function paired() {
+  const s = setup()
+  const mac = new FakeClient()
+  const phone = new FakeClient()
+  const macSession = s.bridge.handleHello(mac, env('hello', { role: 'mac', token: TOKEN }))!
+  const phoneSession = s.bridge.handleHello(phone, env('hello', { role: 'phone', token: TOKEN }))!
+  return { ...s, mac, phone, macSession, phoneSession }
+}
+
+test('snapshot odada saklanır ve telefonlara yayınlanır', () => {
+  const { bridge, mac, phone, macSession, registry } = paired()
+  bridge.handleMessage(macSession, env('snapshot', { sessions: [{ id: 's1' }] }))
+  expect(registry.get(TOKEN)?.snapshot).toEqual({ sessions: [{ id: 's1' }] })
+  expect(phone.last().type).toBe('snapshot')
+  expect(phone.last().payload).toEqual({ sessions: [{ id: 's1' }] })
+  expect(mac.sent.filter((m) => m.type === 'snapshot')).toHaveLength(0)
+})
+
+test('event telefonlara yayınlanır; sıradan event push tetiklemez', () => {
+  const { bridge, phone, macSession, push } = paired()
+  bridge.handleMessage(macSession, env('event', { kind: 'tool_use', sessionId: 's1', summary: 'Bash: swift test' }))
+  expect(phone.last().type).toBe('event')
+  expect(push.calls).toHaveLength(0)
+})
+
+test('waiting-unseen status_change push tetikler (kayıtlı cihaz varsa)', () => {
+  const { bridge, macSession, push, registry } = paired()
+  registry.get(TOKEN)!.pushTokens.add('device-token-abc')
+  bridge.handleMessage(macSession, env('event', {
+    kind: 'status_change', sessionId: 's1', status: 'waiting-unseen',
+    repoName: 'PowerSlap', summary: 'Bash komutu için izin istiyor',
+  }))
+  expect(push.calls).toEqual([{
+    tokens: ['device-token-abc'], title: 'PowerSlap', body: 'Bash komutu için izin istiyor',
+  }])
+})
+
+test('working status_change ve cihazsız oda push tetiklemez', () => {
+  const { bridge, macSession, push, registry } = paired()
+  bridge.handleMessage(macSession, env('event', { kind: 'status_change', sessionId: 's1', status: 'waiting-unseen' }))
+  expect(push.calls).toHaveLength(0) // cihaz kayıtlı değil
+  registry.get(TOKEN)!.pushTokens.add('device-token-abc')
+  bridge.handleMessage(macSession, env('event', { kind: 'status_change', sessionId: 's1', status: 'working' }))
+  expect(push.calls).toHaveLength(0) // working push'lanmaz
+})
+
+test('command_result telefonlara iletilir', () => {
+  const { bridge, phone, macSession } = paired()
+  bridge.handleMessage(macSession, env('command_result', { commandId: 'c1', ok: true }))
+  expect(phone.last().type).toBe('command_result')
+  expect(phone.last().payload).toEqual({ commandId: 'c1', ok: true })
+})
