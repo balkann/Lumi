@@ -9,6 +9,9 @@ Tüm mesajlar WebSocket text frame içinde: `{"v":1,"type":"<tip>","payload":{..
 Bilinmeyen tip veya v≠1 → relay bağlantıyı kapatır. `payload` relay için opaktır
 (tek istisna: push tetikleme, aşağıda).
 
+İstemciler tablodaki tipler dışında mesaj GÖNDERMEZ — relay bilinmeyen tipte
+bağlantıyı kapatır (4002); yeni tip eklemek relay güncellemesi gerektirir.
+
 ## Bağlantı açılışı
 
 İlk mesaj `hello` olmalı (5 sn içinde, yoksa kapanır):
@@ -28,6 +31,10 @@ sonra yeni denemeler direkt kapatılır.
 | `command_result` | mac→relay | `{commandId, ok, error?}` | Telefonlara yayınlanır |
 | `register_push` | phone→relay | `{deviceToken: string}` | Odaya APNs cihaz token'ı ekler |
 | `ping` / `pong` | her iki yön | `{}` | Uygulama seviyesi canlılık |
+
+Not: Relay'in 30 sn'lik canlılık denetimi transport seviyesinde (WS ping/pong
+frame) çalışır; istemcinin uygulama seviyesinde `pong` üretmesi gerekmez —
+`ping`/`pong` zarfları isteğe bağlı uygulama-seviyesi denetim içindir.
 
 ## Push kuralı
 

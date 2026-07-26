@@ -40,6 +40,10 @@ export class ApnsPushSender implements PushSender {
       return
     }
     const session = connect(this.cfg.host)
+    session.on('error', (err) => {
+      console.warn('apns: bağlantı hatası:', err instanceof Error ? err.message : err)
+    })
+    session.setTimeout(10_000, () => session.destroy())
     try {
       await Promise.all(deviceTokens.map((t) => this.post(session, jwt, t, title, body)))
     } finally {

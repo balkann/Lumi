@@ -79,3 +79,17 @@ test('aynı IP 5 başarısız hello sonrası reddedilir', async () => {
   send(ws, 'hello', { role: 'mac', token: TOKEN }) // geçerli token bile olsa
   await closed(ws)
 })
+
+test('1 MB üzeri mesaj bağlantıyı kapatır', async () => {
+  server = startServer({ port: 0, push: new NoopPushSender() })
+  const ws = await connect()
+  send(ws, 'hello', { role: 'mac', token: TOKEN })
+  await nextMessage(ws) // welcome
+  // maxPayload limiti aşan mesaj: sunucu bağlantıyı kapatır.
+  // İstemci tarafında ws Receiver RangeError fırlatabilir; bunu promise'te yakalarız.
+  await new Promise<void>((resolve) => {
+    ws.on('error', () => resolve())
+    ws.on('close', () => resolve())
+    ws.send(JSON.stringify({ v: 1, type: 'event', payload: { blob: 'x'.repeat(1_100_000) } }))
+  })
+})

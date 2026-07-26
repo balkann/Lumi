@@ -16,11 +16,14 @@ const FAILURE_WINDOW_MS = 60_000
 export function startServer(opts: ServerOptions): { wss: WebSocketServer; close(): void } {
   const registry = new Registry()
   const bridge = new Bridge(registry, opts.push)
-  const wss = new WebSocketServer({ port: opts.port })
+  const wss = new WebSocketServer({ port: opts.port, maxPayload: 1_000_000 })
   const failedHellos = new Map<string, { count: number; resetAt: number }>()
 
   wss.on('connection', (ws: WebSocket & { isAlive?: boolean }, req) => {
-    const ip = req.socket.remoteAddress ?? 'unknown'
+    const forwarded = req.headers['x-forwarded-for']
+    const ip = (typeof forwarded === 'string' ? forwarded.split(',')[0]!.trim() : '')
+      || req.socket.remoteAddress
+      || 'unknown'
     const client = {
       send: (d: string) => { if (ws.readyState === WebSocket.OPEN) ws.send(d) },
       close: (c?: number, r?: string) => ws.close(c, r),
@@ -32,6 +35,7 @@ export function startServer(opts: ServerOptions): { wss: WebSocketServer; close(
       if (!session) ws.close(4001, 'hello timeout')
     }, opts.helloTimeoutMs ?? 5000)
 
+    ws.on('error', () => { /* maxPayload veya diğer ws hataları; bağlantı zaten kapanıyor */ })
     ws.on('pong', () => { ws.isAlive = true })
     ws.on('message', (data) => {
       const env = parseEnvelope(data.toString())
