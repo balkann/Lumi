@@ -56,4 +56,12 @@ final class SnapshotBuilderTests: XCTestCase {
             meta: meta(), status: .error, repoName: "repo", summary: nil)
         XCTAssertNil(event["summary"])
     }
+
+    func testDuplicateRepoPathsDoNotCrash() throws {
+        let a = Repo(name: "demo", path: "/tmp/demo", isGitRepo: true, source: .projectsRoot)
+        let b = Repo(name: "demo-kopya", path: "/tmp/demo", isGitRepo: true, source: .standalone)
+        let snap = SnapshotBuilder.snapshot(terminals: [meta(repoPath: "/tmp/demo")], repos: [a, b], personas: [])
+        let sessions = try XCTUnwrap(snap["sessions"] as? [[String: Any]])
+        XCTAssertEqual(sessions[0]["repoName"] as? String, "demo", "ilk kayıt kazanmalı")
+    }
 }

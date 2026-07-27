@@ -8,7 +8,8 @@ enum SnapshotBuilder {
         repos: [Repo],
         personas: [Persona]
     ) -> [String: Any] {
-        let repoNames = Dictionary(uniqueKeysWithValues: repos.map { ($0.path, $0.name) })
+        let repoNames = Dictionary(repos.map { ($0.path, $0.name) },
+                                   uniquingKeysWith: { first, _ in first })
         let sessions: [[String: Any]] = terminals.map { meta in
             var entry: [String: Any] = [
                 "id": meta.id.description,
