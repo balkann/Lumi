@@ -47,6 +47,7 @@ struct SettingsView: View {
 
     @State private var selectedTab: Tab = .general
     @State private var relayUrlDraft: String = ""
+    @State private var cachedPairingQR: NSImage?
 
     var body: some View {
         ZStack {
@@ -832,7 +833,7 @@ struct SettingsView: View {
                     isLast: true
                 ) {
                     VStack(alignment: .leading, spacing: 12) {
-                        if let qr = QRCodeRenderer.image(for: remoteStore.pairingString, scale: 6) {
+                        if let qr = cachedPairingQR {
                             Image(nsImage: qr)
                                 .interpolation(.none)
                                 .frame(width: 160, height: 160)
@@ -842,6 +843,10 @@ struct SettingsView: View {
                             .buttonStyle(.plain)
                             .foregroundStyle(Theme.accentPrimary)
                     }
+                }
+                .onAppear { cachedPairingQR = QRCodeRenderer.image(for: remoteStore.pairingString, scale: 6) }
+                .onChange(of: remoteStore.pairingString) { _, newValue in
+                    cachedPairingQR = QRCodeRenderer.image(for: newValue, scale: 6)
                 }
             }
         }
