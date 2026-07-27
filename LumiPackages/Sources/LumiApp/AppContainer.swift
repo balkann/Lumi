@@ -1,5 +1,6 @@
 import Foundation
 import LumiKit
+import LumiRemote
 import LumiServices
 import LumiState
 import LumiTerminal
@@ -35,6 +36,8 @@ final class AppContainer {
     let usageAutoRefresh: UsageAutoRefreshStore
     let workspace: WorkspaceStore
     let configCoordinator: ConfigSideEffectCoordinator
+    let remoteService: RemoteService
+    let remoteStore: RemoteStore
 
     private var bridgeTasks: [Task<Void, Never>] = []
 
@@ -66,6 +69,13 @@ final class AppContainer {
             terminal: terminal,
             config: config
         )
+        remoteService = RemoteService(
+            paths: paths,
+            terminal: terminal,
+            repos: repoService,
+            personas: personaService
+        )
+        remoteStore = RemoteStore(service: remoteService)
         toasts = ToastStore()
         terminals = TerminalListStore(service: terminal, toasts: toasts)
         promptQueue = PromptQueueStore(service: terminal)
@@ -134,6 +144,7 @@ final class AppContainer {
         personasStore.start()
         actionsStore.start()
         settings.start()
+        remoteStore.start()
         await repoStore.reload()
         await workspace.load(repos: repoStore.repos)
 
@@ -205,6 +216,9 @@ final class AppContainer {
         if let active = workspace.activeTab {
             workspace.onActiveRepoChanged?(nil, active)
         }
+
+        // Remote servisini başlat (enabled değilse no-op; bağlantı config'den akar)
+        Task { await remoteService.start() }
     }
 
     private func startBridges() {
@@ -273,6 +287,7 @@ final class AppContainer {
         bridgeTasks.forEach { $0.cancel() }
         sessionSchedule.stop()
         usageAutoRefresh.stop()
+        remoteService.stop()
         terminal.killAll()
         await config.flushPendingWrites()
         // Temp system-prompt dosyaları (Electron will-quit paritesi + karar 11)

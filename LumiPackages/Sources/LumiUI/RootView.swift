@@ -49,6 +49,7 @@ public struct RootView: View {
     private let settings: SettingsStore
     private let sessionSchedule: SessionScheduleStore
     private let usage: UsageStore
+    private let remoteStore: RemoteStore
     private let toasts: ToastStore
     private let viewProvider: any TerminalViewProviding
     private let highlighter: any SyntaxHighlighting
@@ -67,6 +68,7 @@ public struct RootView: View {
         settings: SettingsStore,
         sessionSchedule: SessionScheduleStore,
         usage: UsageStore,
+        remoteStore: RemoteStore,
         toasts: ToastStore,
         viewProvider: any TerminalViewProviding,
         highlighter: any SyntaxHighlighting,
@@ -84,6 +86,7 @@ public struct RootView: View {
         self.settings = settings
         self.sessionSchedule = sessionSchedule
         self.usage = usage
+        self.remoteStore = remoteStore
         self.toasts = toasts
         self.viewProvider = viewProvider
         self.highlighter = highlighter
@@ -144,6 +147,7 @@ public struct RootView: View {
                     workspace: workspace,
                     sessionSchedule: sessionSchedule,
                     usage: usage,
+                    remoteStore: remoteStore,
                     chooseFolder: shellActions.chooseFolder,
                     onClose: { workspace.isSettingsOpen = false }
                 )

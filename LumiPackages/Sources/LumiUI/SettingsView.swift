@@ -18,6 +18,7 @@ struct SettingsView: View {
         case session = "Session"
         case usage = "Usage"
         case shortcuts = "Shortcuts"
+        case remote = "Remote"
 
         var id: String { rawValue }
 
@@ -31,6 +32,7 @@ struct SettingsView: View {
             case .session: return "clock.arrow.circlepath"
             case .usage: return "gauge.with.dots.needle.bottom.50percent"
             case .shortcuts: return "keyboard"
+            case .remote: return "iphone.and.arrow.forward"
             }
         }
     }
@@ -39,10 +41,12 @@ struct SettingsView: View {
     let workspace: WorkspaceStore
     let sessionSchedule: SessionScheduleStore
     let usage: UsageStore
+    let remoteStore: RemoteStore
     let chooseFolder: () async -> String?
     let onClose: () -> Void
 
     @State private var selectedTab: Tab = .general
+    @State private var relayUrlDraft: String = ""
 
     var body: some View {
         ZStack {
@@ -119,6 +123,7 @@ struct SettingsView: View {
         case .session: sessionTab
         case .usage: usageTab
         case .shortcuts: shortcutsTab
+        case .remote: remoteTab
         }
     }
 
@@ -767,6 +772,78 @@ struct SettingsView: View {
             }
             .background(Theme.border) // satır araları 1px çizgi (v1 .shortcuts-list)
             .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
+    }
+
+    // MARK: - Remote
+
+    private var remoteTab: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            SettingsSectionTitle(
+                title: "Remote",
+                description: "iOS eşleştirme ve relay bağlantısı."
+            )
+            SettingsField(
+                title: "Telefondan erişim",
+                hint: "Etkinleştirildiğinde Lumi, relay'e bağlanır"
+            ) {
+                Toggle("Telefondan erişim", isOn: Binding(
+                    get: { remoteStore.config.enabled },
+                    set: { newValue in Task { await remoteStore.setEnabled(newValue) } }
+                ))
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .tint(Theme.accentPrimary)
+            }
+            SettingsField(
+                title: "Bağlantı durumu",
+                hint: "Relay ile anlık bağlantı"
+            ) {
+                HStack {
+                    Circle()
+                        .fill(remoteStore.state == .connected ? Color.green
+                              : remoteStore.state == .connecting ? Color.yellow : Color.gray)
+                        .frame(width: 8, height: 8)
+                    Text(remoteStore.state == .connected ? "Bağlı"
+                         : remoteStore.state == .connecting ? "Bağlanıyor…" : "Bağlı değil")
+                        .font(.caption)
+                        .foregroundStyle(Theme.textSecondary)
+                }
+            }
+            SettingsField(
+                title: "Relay adresi",
+                hint: "WebSocket relay URL'si",
+                isLast: !remoteStore.config.enabled
+            ) {
+                TextField("Relay adresi", text: $relayUrlDraft, prompt: Text("wss://…"))
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(size: 12, design: .monospaced))
+                    .frame(width: 300, alignment: .leading)
+                    .onAppear { relayUrlDraft = remoteStore.config.relayUrl }
+                    .onChange(of: remoteStore.config.relayUrl) { _, newValue in
+                        relayUrlDraft = newValue
+                    }
+                    .onSubmit { Task { await remoteStore.setRelayUrl(relayUrlDraft) } }
+            }
+            if remoteStore.config.enabled {
+                SettingsField(
+                    title: "iOS eşleştirme",
+                    hint: "iOS uygulaması bu kodu okutarak eşleşir",
+                    isLast: true
+                ) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        if let qr = QRCodeRenderer.image(for: remoteStore.pairingString, scale: 6) {
+                            Image(nsImage: qr)
+                                .interpolation(.none)
+                                .frame(width: 160, height: 160)
+                        }
+                        Button("Token'ı yenile") { Task { await remoteStore.regenerateToken() } }
+                            .font(.system(size: 12, weight: .medium, design: .monospaced))
+                            .buttonStyle(.plain)
+                            .foregroundStyle(Theme.accentPrimary)
+                    }
+                }
+            }
         }
     }
 
