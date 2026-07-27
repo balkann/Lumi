@@ -1,12 +1,12 @@
 import Foundation
 import LumiKit
 
-enum RelayInbound: @unchecked Sendable {
+public enum RelayInbound: @unchecked Sendable {
     case stateChanged(RemoteConnectionState)
     case message(type: String, payload: [String: Any])
 }
 
-protocol RelayConnecting: Actor {
+public protocol RelayConnecting: Actor {
     func start(url: URL, hello: [String: Any])
     func stop()
     func send(type: String, payload: [String: Any])

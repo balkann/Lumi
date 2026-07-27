@@ -1,0 +1,248 @@
+import Foundation
+import XCTest
+import LumiKit
+@testable import LumiRemote
+
+/// Sahte bağlantı: gönderilenleri kaydeder, inbound'u testin kontrolüne verir.
+private actor FakeConnection: RelayConnecting {
+    var sent: [(type: String, payload: [String: Any])] = []
+    var started: [(url: URL, hello: [String: Any])] = []
+    var stopCount = 0
+    private var continuation: AsyncStream<RelayInbound>.Continuation?
+
+    func start(url: URL, hello: [String: Any]) { started.append((url, hello)) }
+    func stop() { stopCount += 1 }
+    func send(type: String, payload: [String: Any]) { sent.append((type, payload)) }
+    func inbound() -> AsyncStream<RelayInbound> {
+        let (stream, c) = AsyncStream.makeStream(of: RelayInbound.self)
+        continuation = c
+        return stream
+    }
+    func push(_ inbound: RelayInbound) { continuation?.yield(inbound) }
+    func startedCount() -> Int { started.count }
+    func stops() -> Int { stopCount }
+    /// Returns started[0] url and hello fields as sendable primitives
+    func firstStartedURL() -> String? { started.first.map { $0.url.absoluteString } }
+    func firstStartedRole() -> String? { started.first.flatMap { $0.hello["role"] as? String } }
+    func firstStartedToken() -> String? { started.first.flatMap { $0.hello["token"] as? String } }
+    // Snapshot query
+    func snapshotSessionCount() -> Int? {
+        guard let snap = sent.first(where: { $0.type == "snapshot" }) else { return nil }
+        return (snap.payload["sessions"] as? [[String: Any]])?.count
+    }
+    func snapshotRepoCount() -> Int? {
+        guard let snap = sent.first(where: { $0.type == "snapshot" }) else { return nil }
+        return (snap.payload["repos"] as? [[String: Any]])?.count
+    }
+    // Status event query
+    func firstEventKind() -> String? {
+        guard let e = sent.first(where: { $0.type == "event" }) else { return nil }
+        return e.payload["kind"] as? String
+    }
+    func firstEventStatus() -> String? {
+        guard let e = sent.first(where: { $0.type == "event" }) else { return nil }
+        return e.payload["status"] as? String
+    }
+    func firstEventRepoName() -> String? {
+        guard let e = sent.first(where: { $0.type == "event" }) else { return nil }
+        return e.payload["repoName"] as? String
+    }
+    // Command result query
+    func commandResultOk() -> Bool? {
+        guard let r = sent.first(where: { $0.type == "command_result" }) else { return nil }
+        return r.payload["ok"] as? Bool
+    }
+    func commandResultId() -> String? {
+        guard let r = sent.first(where: { $0.type == "command_result" }) else { return nil }
+        return r.payload["commandId"] as? String
+    }
+}
+
+// FakeTerminal: RemoteCommandHandlerTests'tekiyle aynı yüzey + events push'u
+@MainActor
+private final class FakeTerminal: TerminalServicing {
+    var metas: [TerminalMeta] = []
+    var writes: [(TerminalID, String)] = []
+    private var eventContinuations: [AsyncStream<TerminalEvent>.Continuation] = []
+
+    func spawn(repoPath: String, task: String?, command: String?) throws -> TerminalMeta {
+        let meta = TerminalMeta(id: TerminalID(), name: "t", repoPath: repoPath,
+                                createdAt: Date(), task: task, oscTitle: nil, status: .idle)
+        metas.append(meta)
+        return meta
+    }
+    func write(id: TerminalID, text: String) throws { writes.append((id, text)) }
+    func kill(id: TerminalID) throws {}
+    func killAll() {}
+    func resize(id: TerminalID, cols: Int, rows: Int) {}
+    func setFocused(_ id: TerminalID?) {}
+    func setWindowFocused(_ focused: Bool) {}
+    var terminals: [TerminalMeta] { metas }
+    func setMaxTerminals(_ n: Int) {}
+    func events() -> AsyncStream<TerminalEvent> {
+        let (stream, c) = AsyncStream.makeStream(of: TerminalEvent.self)
+        eventContinuations.append(c)
+        return stream
+    }
+    func outputStream(id: TerminalID) -> AsyncStream<String>? { nil }
+    func pushEvent(_ e: TerminalEvent) { eventContinuations.forEach { $0.yield(e) } }
+}
+
+private actor FakeRepos: RepoServicing {
+    func repos() async -> [Repo] { [Repo(name: "demo", path: "/tmp/demo", isGitRepo: true, source: .projectsRoot)] }
+    func setRoots(projectsRoot: String, additionalPaths: [AdditionalPath]) async {}
+    func fileTree(repoPath: String) async -> [FileTreeNode] { [] }
+    func watchFileTree(repoPath: String) async {}
+    func unwatchFileTree(repoPath: String) async {}
+    func events() -> AsyncStream<RepoEvent> { AsyncStream { $0.finish() } }
+}
+
+private actor FakePersonas: PersonaServicing {
+    func personas(projectPath: String?) async -> [Persona] { [Persona(id: "rev", label: "Reviewer")] }
+    func seedDefaults() async {}
+    func spawn(personaID: String, repoPath: String) async throws -> TerminalMeta {
+        TerminalMeta(id: TerminalID(), name: "p", repoPath: repoPath,
+                     createdAt: Date(), task: nil, oscTitle: nil, status: .idle)
+    }
+    func events() -> AsyncStream<Void> { AsyncStream { $0.finish() } }
+}
+
+@MainActor
+final class RemoteServiceTests: XCTestCase {
+    nonisolated(unsafe) private var tempHome: URL!
+    nonisolated(unsafe) private var paths: LumiPaths!
+
+    override func setUp() {
+        super.setUp()
+        tempHome = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("remote-service-\(UUID().uuidString)")
+        try! FileManager.default.createDirectory(at: tempHome, withIntermediateDirectories: true)
+        paths = LumiPaths(mode: .development, homeDirectory: tempHome)
+        try! paths.ensureDirectoriesExist()
+        // enabled config hazırla
+        let raw = #"{"enabled": true, "relayUrl": "wss://relay.test", "token": "secret-token-1234567890"}"#
+        try! raw.data(using: .utf8)!.write(to: paths.remoteFile)
+    }
+
+    override func tearDown() {
+        try? FileManager.default.removeItem(at: tempHome)
+        super.tearDown()
+    }
+
+    private func makeService(connection: FakeConnection, terminal: FakeTerminal) -> RemoteService {
+        RemoteService(
+            paths: paths, terminal: terminal, repos: FakeRepos(),
+            personas: FakePersonas(), connection: connection,
+            transcriptsRoot: tempHome.appendingPathComponent("transcripts"))
+    }
+
+    private func drain() async { try? await Task.sleep(for: .milliseconds(200)) }
+
+    func testStartSendsHelloWithToken() async {
+        let connection = FakeConnection()
+        let service = makeService(connection: connection, terminal: FakeTerminal())
+        await service.start()
+        await drain()
+        let count = await connection.startedCount()
+        let url = await connection.firstStartedURL()
+        let role = await connection.firstStartedRole()
+        let token = await connection.firstStartedToken()
+        XCTAssertEqual(count, 1)
+        XCTAssertEqual(url, "wss://relay.test")
+        XCTAssertEqual(role, "mac")
+        XCTAssertEqual(token, "secret-token-1234567890")
+        service.stop()
+    }
+
+    func testDisabledConfigDoesNotConnect() async {
+        let raw = #"{"enabled": false, "relayUrl": "wss://relay.test", "token": "secret-token-1234567890"}"#
+        try! raw.data(using: .utf8)!.write(to: paths.remoteFile)
+        let connection = FakeConnection()
+        let service = makeService(connection: connection, terminal: FakeTerminal())
+        await service.start()
+        await drain()
+        let count = await connection.startedCount()
+        XCTAssertEqual(count, 0)
+    }
+
+    func testWelcomeTriggersSnapshot() async throws {
+        let connection = FakeConnection()
+        let terminal = FakeTerminal()
+        _ = try terminal.spawn(repoPath: "/tmp/demo", task: nil, command: nil)
+        let service = makeService(connection: connection, terminal: terminal)
+        await service.start()
+        await drain()
+        await connection.push(.message(type: "welcome", payload: ["phoneCount": 0]))
+        await drain()
+        let sessionCount = await connection.snapshotSessionCount()
+        let repoCount = await connection.snapshotRepoCount()
+        XCTAssertEqual(sessionCount, 1)
+        XCTAssertEqual(repoCount, 1)
+        service.stop()
+    }
+
+    func testStatusChangeSendsEvent() async throws {
+        let connection = FakeConnection()
+        let terminal = FakeTerminal()
+        let meta = try terminal.spawn(repoPath: "/tmp/demo", task: nil, command: nil)
+        let service = makeService(connection: connection, terminal: terminal)
+        await service.start()
+        await drain()
+        terminal.pushEvent(.statusChanged(meta.id, .waitingUnseen))
+        await drain()
+        let kind = await connection.firstEventKind()
+        let status = await connection.firstEventStatus()
+        let repoName = await connection.firstEventRepoName()
+        XCTAssertEqual(kind, "status_change")
+        XCTAssertEqual(status, "waiting-unseen")
+        XCTAssertEqual(repoName, "demo")
+        service.stop()
+    }
+
+    func testCommandRoutedAndResultSent() async throws {
+        let connection = FakeConnection()
+        let terminal = FakeTerminal()
+        let meta = try terminal.spawn(repoPath: "/tmp/demo", task: nil, command: nil)
+        let service = makeService(connection: connection, terminal: terminal)
+        await service.start()
+        await drain()
+        await connection.push(.message(type: "command", payload: [
+            "commandId": "c1", "action": "send_text",
+            "sessionId": meta.id.description, "text": "merhaba",
+        ]))
+        await drain()
+        XCTAssertEqual(terminal.writes.last?.1, "merhaba\r")
+        let ok = await connection.commandResultOk()
+        let commandId = await connection.commandResultId()
+        XCTAssertEqual(ok, true)
+        XCTAssertEqual(commandId, "c1")
+        service.stop()
+    }
+
+    func testStateChangesBroadcast() async {
+        let connection = FakeConnection()
+        let service = makeService(connection: connection, terminal: FakeTerminal())
+        let stream = service.events()
+        await service.start()
+        await drain()
+        await connection.push(.stateChanged(.connected))
+        var got: RemoteConnectionState?
+        for await event in stream {
+            if case .stateChanged(let s) = event, s == .connected { got = s; break }
+        }
+        XCTAssertEqual(got, .connected)
+        XCTAssertEqual(service.state, .connected)
+        service.stop()
+    }
+
+    func testStopStopsConnection() async {
+        let connection = FakeConnection()
+        let service = makeService(connection: connection, terminal: FakeTerminal())
+        await service.start()
+        await drain()
+        service.stop()
+        await drain()
+        let stops = await connection.stops()
+        XCTAssertGreaterThanOrEqual(stops, 1)
+    }
+}
