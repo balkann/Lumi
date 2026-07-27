@@ -57,6 +57,17 @@ final class RemoteCommandHandlerTests: XCTestCase {
         return (handler, terminal)
     }
 
+    private func makeHandlerWithZeroDelay() -> (RemoteCommandHandler, FakeTerminal) {
+        let terminal = FakeTerminal()
+        let personaMeta = TerminalMeta(id: TerminalID(), name: "p", repoPath: "/r",
+                                       createdAt: Date(), task: nil, oscTitle: nil, status: .idle)
+        let handler = RemoteCommandHandler(
+            terminal: terminal,
+            personas: FakePersonas(meta: personaMeta),
+            personaPromptDelay: .zero)
+        return (handler, terminal)
+    }
+
     func testSendTextWritesWithEnter() async {
         let (handler, terminal) = makeHandler()
         let meta = try! terminal.spawn(repoPath: "/r", task: nil, command: nil)
@@ -131,5 +142,17 @@ final class RemoteCommandHandlerTests: XCTestCase {
         ])
         XCTAssertEqual(result["ok"] as? Bool, false)
         XCTAssertNotNil(result["error"])
+    }
+
+    func testStartSessionWithPersonaAndPromptWritesPromptAfterDelay() async {
+        let (handler, terminal) = makeHandlerWithZeroDelay()
+        let result = await handler.handle([
+            "commandId": "c8", "action": "start_session",
+            "repoPath": "/r", "personaId": "engineer", "prompt": "merhaba",
+        ])
+        XCTAssertEqual(result["ok"] as? Bool, true)
+        XCTAssertEqual(terminal.writes.count, 1)
+        XCTAssertEqual(terminal.writes[0].1, "merhaba\r")
+        XCTAssertEqual(terminal.spawns.count, 0, "persona yolu terminal.spawn kullanmaz")
     }
 }
