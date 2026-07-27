@@ -26,8 +26,8 @@ final class RemoteCommandHandler {
         self.personaPromptDelay = personaPromptDelay
     }
 
-    func handle(_ payload: [String: Any]) async -> [String: Any] {
-        let commandId = payload["commandId"] ?? NSNull()
+    func handle(_ payload: [String: Any]) async -> sending [String: Any] {
+        let commandId: Any = (payload["commandId"] as? String) ?? NSNull()
         switch payload["action"] as? String {
         case "send_text":
             return result(commandId, run: {
@@ -50,7 +50,7 @@ final class RemoteCommandHandler {
         }
     }
 
-    private func startSession(_ payload: [String: Any], commandId: Any) async -> [String: Any] {
+    private func startSession(_ payload: [String: Any], commandId: Any) async -> sending [String: Any] {
         let repoPath = payload["repoPath"] as? String ?? ""
         let prompt = payload["prompt"] as? String ?? ""
         do {
@@ -78,7 +78,7 @@ final class RemoteCommandHandler {
         return TerminalID(raw: uuid)
     }
 
-    private func result(_ commandId: Any, run: () throws -> Void) -> [String: Any] {
+    private func result(_ commandId: Any, run: () throws -> Void) -> sending [String: Any] {
         do {
             try run()
             return ["commandId": commandId, "ok": true]

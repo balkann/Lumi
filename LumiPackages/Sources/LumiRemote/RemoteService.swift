@@ -70,14 +70,18 @@ public final class RemoteService: RemoteServicing {
     }
 
     public func stop() {
+        Task { await self.shutdown() }
+    }
+
+    private func shutdown() async {
         running = false
         inboundTask?.cancel(); inboundTask = nil
         terminalTask?.cancel(); terminalTask = nil
         for (id, task) in watcherTasks { task.cancel(); watcherTasks[id] = nil }
         let currentWatchers = watchers
         watchers = [:]
-        Task { for (_, watcher) in currentWatchers { await watcher.stop() } }
-        Task { [connection] in await connection.stop() }
+        for (_, watcher) in currentWatchers { await watcher.stop() }
+        await connection.stop()
         setState(.disconnected)
     }
 
@@ -88,7 +92,7 @@ public final class RemoteService: RemoteServicing {
         await configService.save(config)
         currentConfig = config
         guard old != config else { return }
-        if running { stop() }
+        if running { await shutdown() }
         if config.enabled { await start() }
     }
 
@@ -108,9 +112,7 @@ public final class RemoteService: RemoteServicing {
                 await sendSnapshot()
             case "command":
                 let result = await commandHandler.handle(payload)
-                let resultCopy = result // copy for actor hop
-                nonisolated(unsafe) let sendableResult = resultCopy
-                await connection.send(type: "command_result", payload: sendableResult)
+                await connection.send(type: "command_result", payload: result)
             default:
                 break
             }
