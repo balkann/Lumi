@@ -25,7 +25,7 @@ sonra yeni denemeler direkt kapatılır.
 
 | Tip | Yön | Payload | Davranış |
 |---|---|---|---|
-| `snapshot` | mac→relay | Lumi'nin tam durum özeti (Plan 2 tanımlar) | Odada saklanır + telefonlara yayınlanır |
+| `snapshot` | mac→relay | Lumi'nin tam durum özeti ([aşağıya bak](#snapshot-payload-macrela-plan-2-tanımı)) | Odada saklanır + telefonlara yayınlanır |
 | `event` | mac→relay | `{kind, sessionId, ...}` | Telefonlara yayınlanır; push kuralına bakılır |
 | `command` | phone→relay | `{commandId, action, ...}` | Mac'e iletilir; mac yoksa `command_result {ok:false, error:"mac_offline"}` geri döner |
 | `command_result` | mac→relay | `{commandId, ok, error?}` | Telefonlara yayınlanır |
@@ -41,6 +41,33 @@ frame) çalışır; istemcinin uygulama seviyesinde `pong` üretmesi gerekmez �
 `event.payload.kind == "status_change"` ve `status ∈ {"waiting-unseen","error"}`
 ve odada kayıtlı cihaz varsa → APNs alert: title = `repoName` (yoksa "Lumi"),
 body = `summary` (yoksa duruma göre genel metin).
+
+## snapshot payload (mac→relay, Plan 2 tanımı)
+
+```json
+{
+  "sessions": [
+    { "id": "<uuid>", "repoPath": "/abs/path", "repoName": "repo",
+      "status": "idle|working|waiting-unseen|waiting-focused|waiting-seen|error",
+      "title": "<oscTitle, opsiyonel>" }
+  ],
+  "repos":    [ { "name": "repo", "path": "/abs/path" } ],
+  "personas": [ { "id": "reviewer", "label": "Reviewer" } ]
+}
+```
+
+`title` yalnızca terminalin bir OSC başlığı varsa bulunur.
+
+## event payload — transcript (mac→relay, Plan 2 tanımı)
+
+`status_change` dışındaki ikinci event türü. `{ "kind": "transcript", "sessionId": "<uuid>", "item": {...} }`; `item.itemType`e göre:
+
+| itemType | ek alanlar |
+|---|---|
+| `assistant_text` | `text` (string) |
+| `tool_use` | `tool` (string), `summary` (string) |
+| `question` | `questions`: `[{ "header", "question", "options": ["…"] }]` |
+| `turn_done` | (yok) |
 
 ## Komut aksiyonları (Plan 2/3 sözleşmesi)
 

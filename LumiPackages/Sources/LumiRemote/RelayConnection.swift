@@ -61,6 +61,7 @@ actor RelayConnection: RelayConnecting {
     }
 
     private func connect() {
+        receiveTask?.cancel()
         guard !stopped, let url = currentURL else { return }
         continuation?.yield(.stateChanged(.connecting))
         let wsTask = session.webSocketTask(with: url)
@@ -98,7 +99,7 @@ actor RelayConnection: RelayConnecting {
                 break
             }
         }
-        guard !stopped else { return }
+        guard !stopped, wsTask === task else { return }
         continuation?.yield(.stateChanged(.disconnected))
         scheduleReconnect()
     }

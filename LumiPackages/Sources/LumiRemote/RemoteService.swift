@@ -24,6 +24,7 @@ public final class RemoteService: RemoteServicing {
     private var watcherTasks: [TerminalID: Task<Void, Never>] = [:]
     private var lastSummary: [TerminalID: String] = [:]
     private var running = false
+    private var epoch = 0
 
     public init(
         paths: LumiPaths,
@@ -51,8 +52,11 @@ public final class RemoteService: RemoteServicing {
         guard currentConfig.enabled, !running else { return }
         guard let url = URL(string: currentConfig.relayUrl) else { return }
         running = true
+        epoch &+= 1
+        let myEpoch = epoch
 
         let inboundStream = await connection.inbound()
+        guard myEpoch == epoch else { return }
         inboundTask = Task { [weak self] in
             for await inbound in inboundStream {
                 await self?.handleInbound(inbound)
@@ -66,6 +70,7 @@ public final class RemoteService: RemoteServicing {
         }
         for meta in terminal.terminals { startWatcher(for: meta) }
         await connection.start(url: url, hello: ["role": "mac", "token": currentConfig.token])
+        guard myEpoch == epoch else { return }
         setState(.connecting)
     }
 
@@ -74,6 +79,7 @@ public final class RemoteService: RemoteServicing {
     }
 
     private func shutdown() async {
+        epoch &+= 1
         running = false
         inboundTask?.cancel(); inboundTask = nil
         terminalTask?.cancel(); terminalTask = nil
@@ -135,6 +141,7 @@ public final class RemoteService: RemoteServicing {
             let payload = SnapshotBuilder.statusChangeEvent(
                 meta: meta, status: status, repoName: repoName, summary: lastSummary[id])
             await connection.send(type: "event", payload: payload)
+            await sendSnapshot()
         default:
             break
         }

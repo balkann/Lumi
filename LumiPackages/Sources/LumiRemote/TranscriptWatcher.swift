@@ -50,16 +50,23 @@ actor TranscriptWatcher {
     }
 
     private func poll() {
-        if matchedFile == nil { tryMatch() }
+        if let best = bestCandidate() {
+            if best.0 != matchedFile {
+                // ilk eşleşme VEYA daha yeni bir oturum dosyasına geçiş
+                matchedFile = best.0
+                offset = fileSize(best.0)
+                pendingPartial = ""
+            }
+        }
         guard let file = matchedFile else { return }
         readNewLines(from: file)
     }
 
-    private func tryMatch() {
+    private func bestCandidate() -> (URL, Date)? {
         let fm = FileManager.default
         guard let entries = try? fm.contentsOfDirectory(
             at: projectDir, includingPropertiesForKeys: [.contentModificationDateKey]
-        ) else { return }
+        ) else { return nil }
         let cutoff = sessionCreatedAt.addingTimeInterval(-120)
         let candidates = entries
             .filter { $0.pathExtension == "jsonl" }
@@ -69,10 +76,11 @@ actor TranscriptWatcher {
                 return mtime >= cutoff ? (url, mtime) : nil
             }
             .sorted { $0.1 > $1.1 }
-        guard let (file, _) = candidates.first else { return }
-        matchedFile = file
-        // Eşleşme anındaki içerik "geçmiş"tir — yalnız sonrası akar.
-        offset = (try? fm.attributesOfItem(atPath: file.path)[.size] as? UInt64) ?? 0
+        return candidates.first
+    }
+
+    private func fileSize(_ url: URL) -> UInt64 {
+        (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? UInt64) ?? 0
     }
 
     private func readNewLines(from file: URL) {

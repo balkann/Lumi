@@ -112,6 +112,45 @@ final class TranscriptWatcherTests: XCTestCase {
         XCTAssertEqual(received, [.assistantText("tam")])
     }
 
+    func testSwitchesToNewerSessionFile() async throws {
+        // Dosya A ile başla, eşleşsin
+        let fileA = projectDir.appendingPathComponent("session-a.jsonl")
+        try assistantLine("eski-A").write(to: fileA, atomically: true, encoding: .utf8)
+
+        let watcher = TranscriptWatcher(
+            projectsRoot: root, repoPath: repoPath,
+            sessionCreatedAt: Date().addingTimeInterval(-60),
+            pollInterval: .milliseconds(50))
+        let stream = await watcher.items()
+
+        // A'nın eşleşmesi için bekle
+        try await Task.sleep(for: .milliseconds(150))
+
+        // Dosya B'yi A'dan kesinlikle daha yeni bir mtime ile oluştur
+        let fileB = projectDir.appendingPathComponent("session-b.jsonl")
+        try Data().write(to: fileB)
+        let mtimeA = (try? fileA.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? Date()
+        let mtimeB = mtimeA.addingTimeInterval(1)
+        try FileManager.default.setAttributes([.modificationDate: mtimeB], ofItemAtPath: fileB.path)
+
+        // B'ye yeni satır yaz
+        try await Task.sleep(for: .milliseconds(100))
+        let handle = try FileHandle(forWritingTo: fileB)
+        try handle.seekToEnd()
+        try handle.write(contentsOf: assistantLine("yeni-B").data(using: .utf8)!)
+        try handle.close()
+        // B'nin mtime'ını güncelle (write sonrası)
+        try FileManager.default.setAttributes([.modificationDate: mtimeB.addingTimeInterval(0.1)], ofItemAtPath: fileB.path)
+
+        var received: [FeedItem] = []
+        for await item in stream {
+            received.append(item)
+            break
+        }
+        await watcher.stop()
+        XCTAssertEqual(received, [.assistantText("yeni-B")], "daha yeni dosyaya geçiş yapmalı ve yeni satırları akıtmalı")
+    }
+
     func testStopFinishesStream() async throws {
         let watcher = TranscriptWatcher(
             projectsRoot: root, repoPath: repoPath,
