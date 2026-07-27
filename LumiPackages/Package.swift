@@ -10,6 +10,7 @@ let package = Package(
         .library(name: "LumiServices", targets: ["LumiServices"]),
         .library(name: "LumiState", targets: ["LumiState"]),
         .library(name: "LumiUI", targets: ["LumiUI"]),
+        .library(name: "LumiRemote", targets: ["LumiRemote"]),
         .executable(name: "Lumi", targets: ["LumiApp"]),
     ],
     dependencies: [
@@ -45,6 +46,7 @@ let package = Package(
             ]
         ),
         .target(name: "LumiState", dependencies: ["LumiKit"]),
+        .target(name: "LumiRemote", dependencies: ["LumiKit"]),
         .target(
             name: "LumiUI",
             dependencies: [
@@ -59,7 +61,7 @@ let package = Package(
         ),
         .executableTarget(
             name: "LumiApp",
-            dependencies: ["LumiKit", "LumiTerminal", "LumiServices", "LumiState", "LumiUI"],
+            dependencies: ["LumiKit", "LumiTerminal", "LumiServices", "LumiState", "LumiRemote", "LumiUI"],
             resources: [.copy("Resources/icon.png")]
         ),
         .testTarget(name: "LumiKitTests", dependencies: ["LumiKit"]),
@@ -67,5 +69,6 @@ let package = Package(
         .testTarget(name: "LumiServicesTests", dependencies: ["LumiServices"]),
         .testTarget(name: "LumiStateTests", dependencies: ["LumiState"]),
         .testTarget(name: "LumiUITests", dependencies: ["LumiUI"]),
+        .testTarget(name: "LumiRemoteTests", dependencies: ["LumiRemote"]),
     ]
 )
