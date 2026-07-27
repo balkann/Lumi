@@ -43,7 +43,7 @@ public enum FeedItem: Equatable, Sendable {
 enum TranscriptParser {
     /// cwd → ~/.claude/projects altındaki dizin adı: alfanümerik olmayan her karakter `-`.
     static func projectDirName(forCwd cwd: String) -> String {
-        String(cwd.map { $0.isLetter || $0.isNumber ? $0 : "-" })
+        String(cwd.map { $0.isASCII && ($0.isLetter || $0.isNumber) ? $0 : "-" })
     }
 
     static func parse(line: String) -> [FeedItem] {

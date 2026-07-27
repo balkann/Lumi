@@ -10,6 +10,8 @@ final class TranscriptParserTests: XCTestCase {
                        "-Users-balkan-wkspaces-sand-out")
         XCTAssertEqual(TranscriptParser.projectDirName(forCwd: "/Users/b/.unco-runner/x+y"),
                        "-Users-b--unco-runner-x-y")
+        XCTAssertEqual(TranscriptParser.projectDirName(forCwd: "/Users/b/Proje-Ağ"),
+                       "-Users-b-Proje-A-", "ASCII dışı harfler de - olmalı")
     }
 
     func testAssistantTextParsed() {
