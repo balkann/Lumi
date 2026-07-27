@@ -9,7 +9,7 @@ import LumiKit
 actor TranscriptWatcher {
     private let projectDir: URL
     private let sessionCreatedAt: Date
-    private let pollInterval: Duration
+    private nonisolated let pollInterval: Duration
 
     private var matchedFile: URL?
     private var offset: UInt64 = 0
@@ -34,9 +34,9 @@ actor TranscriptWatcher {
         self.continuation = continuation
         pollTask = Task { [weak self] in
             while !Task.isCancelled {
-                await self?.poll()
-                guard let interval = await self?.pollInterval else { return }
-                try? await Task.sleep(for: interval)
+                guard let self else { return }
+                await self.poll()
+                try? await Task.sleep(for: self.pollInterval)
             }
         }
         return stream
