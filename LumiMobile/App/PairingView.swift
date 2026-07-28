@@ -19,12 +19,14 @@ struct PairingView: View {
                     TextField("lumi-remote://pair?...", text: $pastedLink)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
+                        .accessibilityIdentifier("pairingField")
                     Button("Eşleştir") {
                         Task {
                             let ok = await model.pair(from: pastedLink)
                             showError = !ok
                         }
                     }
+                    .accessibilityIdentifier("pairButton")
                     .disabled(pastedLink.isEmpty)
                     if showError {
                         Text("Bağlantı çözümlenemedi. `lumi-remote://pair?...` biçiminde olmalı.")

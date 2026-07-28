@@ -70,6 +70,7 @@ struct SessionDetailView: View {
                 .lineLimit(1...4)
                 .textFieldStyle(.roundedBorder)
                 .disabled(!model.macOnline)
+                .accessibilityIdentifier("messageField")
             Button {
                 let text = draft
                 draft = ""
@@ -77,6 +78,7 @@ struct SessionDetailView: View {
             } label: {
                 Image(systemName: "arrow.up.circle.fill").font(.title2)
             }
+            .accessibilityIdentifier("sendButton")
             .disabled(!model.macOnline || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
         .padding(.horizontal)

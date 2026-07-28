@@ -6,6 +6,21 @@ options:
 packages:
   LumiMobileKit:
     path: LumiMobileKit
+schemes:
+  LumiMobile:
+    build:
+      targets:
+        LumiMobile: all
+        LumiMobileUITests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - LumiMobileUITests
+      environmentVariables:
+        PAIRING_STRING: $(PAIRING_STRING)
+
 targets:
   LumiMobile:
     type: application
@@ -27,3 +42,13 @@ targets:
         CFBundleURLTypes:
           - CFBundleURLName: com.lumi.LumiMobile.pair
             CFBundleURLSchemes: [lumi-remote]
+  LumiMobileUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [UITests]
+    dependencies:
+      - target: LumiMobile
+    settings:
+      base:
+        SWIFT_VERSION: "6.0"
+        GENERATE_INFOPLIST_FILE: YES
