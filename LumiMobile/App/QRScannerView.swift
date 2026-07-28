@@ -27,6 +27,7 @@ struct QRScannerView: UIViewControllerRepresentable {
 
     final class Coordinator: NSObject, DataScannerViewControllerDelegate {
         let onScan: (String) -> Void
+        private var didFire = false
 
         init(onScan: @escaping (String) -> Void) {
             self.onScan = onScan
@@ -35,9 +36,11 @@ struct QRScannerView: UIViewControllerRepresentable {
         func dataScanner(_ dataScanner: DataScannerViewController,
                          didAdd addedItems: [RecognizedItem],
                          allItems: [RecognizedItem]) {
+            if didFire { return }
             for item in addedItems {
                 if case .barcode(let barcode) = item, let value = barcode.payloadStringValue {
-                    onScan(value)
+                    didFire = true
+                    Task { @MainActor in self.onScan(value) }
                     return
                 }
             }
