@@ -3,6 +3,7 @@ import LumiMobileKit
 
 struct SessionListView: View {
     let model: AppModel
+    @State private var showNewSession = false
 
     var body: some View {
         NavigationStack {
@@ -29,6 +30,14 @@ struct SessionListView: View {
                     connectionDot
                 }
                 ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showNewSession = true
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .disabled(!model.macOnline)
+                }
+                ToolbarItem(placement: .topBarTrailing) {
                     Menu {
                         Button("Eşleştirmeyi kaldır", role: .destructive) {
                             Task { await model.unpair() }
@@ -37,6 +46,9 @@ struct SessionListView: View {
                         Image(systemName: "gearshape")
                     }
                 }
+            }
+            .sheet(isPresented: $showNewSession) {
+                NewSessionView(model: model)
             }
         }
     }
