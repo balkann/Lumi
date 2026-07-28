@@ -22,8 +22,7 @@ struct SessionListView: View {
             }
             .navigationTitle("Lumi")
             .navigationDestination(for: String.self) { sessionId in
-                // Task 7'de SessionDetailView(model: model, sessionId: sessionId) olur.
-                Text(sessionId)
+                SessionDetailView(model: model, sessionId: sessionId)
             }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
