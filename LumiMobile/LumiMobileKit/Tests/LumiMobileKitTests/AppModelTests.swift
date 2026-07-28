@@ -106,6 +106,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue((model.feeds["s1"] ?? []).isEmpty)
 
         model.handle(.event(.transcript(sessionId: "s1", item: .turnDone)))
+        // turn_done clears pinned questions; session still waiting → falls back to generic card
         XCTAssertNil(model.questionCard(for: "s1")?.questions)
     }
 
@@ -193,6 +194,9 @@ final class AppModelTests: XCTestCase {
         XCTAssertFalse(model.isPaired)
         XCTAssertNil(store.read())
         XCTAssertGreaterThanOrEqual(client.stopCount, 1)
+        // unpair() clears command state
+        XCTAssertTrue(model.lastCommandError.isEmpty)
+        XCTAssertEqual(model.startState, .idle)
     }
 
     func testStartConsumesClientEventStream() async {

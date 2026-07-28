@@ -95,6 +95,9 @@ public final class AppModel {
         sessions = []
         feeds = [:]
         activeQuestions = [:]
+        lastCommandError = [:]
+        commandTargets = [:]
+        startState = .idle
     }
 
     // MARK: Gelen mesajlar
