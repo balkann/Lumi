@@ -37,8 +37,18 @@ struct PairingView: View {
         }
     }
 
-    // Task 9'da VisionKit tarayıcısıyla doldurulur.
     @ViewBuilder private var scannerSection: some View {
-        EmptyView()
+        if QRScannerView.isAvailable {
+            Section("QR okut") {
+                QRScannerView { value in
+                    Task {
+                        let ok = await model.pair(from: value)
+                        showError = !ok
+                    }
+                }
+                .frame(height: 260)
+                .listRowInsets(EdgeInsets())
+            }
+        }
     }
 }
