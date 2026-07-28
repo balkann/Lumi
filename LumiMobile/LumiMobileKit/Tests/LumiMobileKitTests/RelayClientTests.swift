@@ -136,16 +136,58 @@ final class RelayClientTests: XCTestCase {
     func testStopClosesAndStopsReconnecting() async {
         let harness = Harness()
         let client = harness.makeClient()
+        let stream = await client.events()
+
+        // Collect events until the stream terminates (proves Finding 1 fix).
+        let collector = Task { () -> [ClientEvent] in
+            var events: [ClientEvent] = []
+            for await event in stream { events.append(event) }
+            return events
+        }
+
         await client.start(pairing: pairing)
         _ = await waitUntil { harness.connections.count >= 1 }
 
         await client.stop()
         harness.connections[0].dropConnection()
-        try? await Task.sleep(for: .milliseconds(100))
+
+        // Deterministic: wait until the client is disconnected, then yield a
+        // bounded number of times so any reconnect attempt (fake sleep = one
+        // yield) would have surfaced.
+        _ = await waitUntil { await client.state == .disconnected }
+        for _ in 0..<50 { await Task.yield() }
 
         XCTAssertEqual(harness.connections.count, 1, "stop sonrası yeniden bağlanmamalı")
         let state = await client.state
         XCTAssertEqual(state, .disconnected)
+
+        // The stream must have terminated — collector.value must return.
+        let collectedEvents = await collector.value
+        _ = collectedEvents  // stream terminated; value is available
+    }
+
+    func testStopFinishesEventStream() async {
+        let harness = Harness()
+        let client = harness.makeClient()
+        let stream = await client.events()
+
+        let collector = Task { () -> [ClientEvent] in
+            var events: [ClientEvent] = []
+            for await event in stream { events.append(event) }
+            return events
+        }
+
+        await client.start(pairing: pairing)
+        _ = await waitUntil { harness.connections.count >= 1 }
+        harness.connections[0].push(welcomeFrame)
+        _ = await waitUntil { await client.state == .connected }
+
+        await client.stop()
+
+        // collector.value must return (stream must be finished by stop()).
+        let events = await collector.value
+        XCTAssertTrue(events.contains(.stateChanged(.connected)))
+        XCTAssertTrue(events.contains(.stateChanged(.disconnected)))
     }
 
     func testSendCommandWritesFrame() async {

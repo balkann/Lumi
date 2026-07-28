@@ -79,6 +79,8 @@ public actor RelayClient: RelayClienting {
         connection = nil
         backoff.reset()
         setState(.disconnected)
+        for continuation in continuations.values { continuation.finish() }
+        continuations.removeAll()
     }
 
     public func send(command: OutgoingCommand) {
