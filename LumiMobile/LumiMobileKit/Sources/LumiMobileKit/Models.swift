@@ -1,0 +1,128 @@
+import Foundation
+
+/// Mac'in yayınladığı oturum durumu (docs/spec/50-remote-protocol.md snapshot payload).
+public enum SessionStatus: String, Sendable, Equatable {
+    case idle, working, error
+    case waitingUnseen = "waiting-unseen"
+    case waitingFocused = "waiting-focused"
+    case waitingSeen = "waiting-seen"
+
+    /// Telefon rozeti 4 duruma indirger (tasarım §2).
+    public var badge: Badge {
+        switch self {
+        case .idle: .idle
+        case .working: .working
+        case .error: .error
+        case .waitingUnseen, .waitingFocused, .waitingSeen: .waiting
+        }
+    }
+}
+
+extension SessionStatus: Decodable {
+    public init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        // Tolerans (tasarım §12.2): ileride eklenen durumlar akışı kırmasın.
+        self = SessionStatus(rawValue: raw) ?? .idle
+    }
+}
+
+public enum Badge: Sendable, Equatable { case idle, working, waiting, error }
+
+public struct SessionSummary: Decodable, Sendable, Equatable, Identifiable {
+    public let id: String
+    public let repoPath: String
+    public let repoName: String
+    public var status: SessionStatus
+    public let title: String?
+
+    public init(id: String, repoPath: String, repoName: String, status: SessionStatus, title: String? = nil) {
+        self.id = id
+        self.repoPath = repoPath
+        self.repoName = repoName
+        self.status = status
+        self.title = title
+    }
+}
+
+public struct Repo: Decodable, Sendable, Equatable, Identifiable {
+    public let name: String
+    public let path: String
+    public var id: String { path }
+
+    public init(name: String, path: String) {
+        self.name = name
+        self.path = path
+    }
+}
+
+public struct Persona: Decodable, Sendable, Equatable, Identifiable {
+    public let id: String
+    public let label: String
+
+    public init(id: String, label: String) {
+        self.id = id
+        self.label = label
+    }
+}
+
+public struct Snapshot: Decodable, Sendable, Equatable {
+    public let sessions: [SessionSummary]
+    public let repos: [Repo]
+    public let personas: [Persona]
+
+    public init(sessions: [SessionSummary], repos: [Repo], personas: [Persona]) {
+        self.sessions = sessions
+        self.repos = repos
+        self.personas = personas
+    }
+}
+
+/// Relay'in telefona ilk cevabı; `lastSeenAt` epoch milisaniye (relay `Date.now()`).
+public struct Welcome: Decodable, Sendable, Equatable {
+    public let snapshot: Snapshot?
+    public let macOnline: Bool
+    public let lastSeenAt: Double?
+
+    public init(snapshot: Snapshot?, macOnline: Bool, lastSeenAt: Double?) {
+        self.snapshot = snapshot
+        self.macOnline = macOnline
+        self.lastSeenAt = lastSeenAt
+    }
+}
+
+public struct Question: Decodable, Sendable, Equatable {
+    public let header: String
+    public let question: String
+    public let options: [String]
+
+    public init(header: String, question: String, options: [String]) {
+        self.header = header
+        self.question = question
+        self.options = options
+    }
+}
+
+/// Transcript akış öğesi (protokol `event.item.itemType`).
+public enum FeedItem: Sendable, Equatable {
+    case assistantText(String)
+    case toolUse(tool: String, summary: String)
+    case question([Question])
+    case turnDone
+}
+
+public enum RemoteEvent: Sendable, Equatable {
+    case statusChange(sessionId: String, status: SessionStatus, repoName: String, summary: String?)
+    case transcript(sessionId: String, item: FeedItem)
+}
+
+public struct CommandResult: Decodable, Sendable, Equatable {
+    public let commandId: String
+    public let ok: Bool
+    public let error: String?
+
+    public init(commandId: String, ok: Bool, error: String?) {
+        self.commandId = commandId
+        self.ok = ok
+        self.error = error
+    }
+}
