@@ -58,6 +58,13 @@ body = `summary` (yoksa duruma göre genel metin).
 
 `title` yalnızca terminalin bir OSC başlığı varsa bulunur.
 
+## event payload — history (Plan 3.5 backfill)
+
+`{ "kind": "history", "sessionId": "<uuid>", "items": [ {...}, ... ] }` —
+`items[]` elemanları transcript `item` şekliyle birebir aynıdır (`itemType` + alanlar),
+en çok 50 eleman (jsonl kuyruğunun son ~256KB'ından). Telefon, oturumun akışını bu
+listeyle DEĞİŞTİRİR. Relay bu kind'a bakmaz (push kuralı yalnız `status_change`).
+
 ## event payload — transcript (mac→relay, Plan 2 tanımı)
 
 `status_change` dışındaki ikinci event türü. `{ "kind": "transcript", "sessionId": "<uuid>", "item": {...} }`; `item.itemType`e göre:
@@ -74,3 +81,4 @@ body = `summary` (yoksa duruma göre genel metin).
 - `send_text {commandId, sessionId, text}`
 - `press_key {commandId, sessionId, key}` — key: `"1"|"2"|"3"|"enter"|"esc"`
 - `start_session {commandId, repoPath, personaId?, prompt}`
+- `get_history {commandId, sessionId}` — oturumun transcript geçmişini ister; Mac önce `event {kind:"history"}` sonra `command_result` döner (Plan 3.5). Hatalar: `session_not_found`, `no_transcript`.

@@ -117,8 +117,12 @@ public final class RemoteService: RemoteServicing {
             case "welcome":
                 await sendSnapshot()
             case "command":
-                let result = await commandHandler.handle(payload)
-                await connection.send(type: "command_result", payload: result)
+                if payload["action"] as? String == "get_history" {
+                    await handleGetHistory(payload)
+                } else {
+                    let result = await commandHandler.handle(payload)
+                    await connection.send(type: "command_result", payload: result)
+                }
             default:
                 break
             }
@@ -171,6 +175,35 @@ public final class RemoteService: RemoteServicing {
             Task { await watcher.stop() }
         }
         lastSummary[id] = nil
+    }
+
+    /// get_history (Plan 3.5): watcher'ın jsonl kuyruğunu tek `history`
+    /// event'i olarak döner. Watcher'lara erişim gerektiğinden
+    /// RemoteCommandHandler yerine burada ele alınır.
+    private func handleGetHistory(_ payload: [String: Any]) async {
+        let commandId: Any = (payload["commandId"] as? String) ?? NSNull()
+        guard let raw = payload["sessionId"] as? String,
+              let uuid = UUID(uuidString: raw),
+              let watcher = watchers[TerminalID(raw: uuid)]
+        else {
+            await connection.send(type: "command_result", payload: [
+                "commandId": commandId, "ok": false, "error": "session_not_found",
+            ])
+            return
+        }
+        let items = await watcher.historyItems(limit: 50, maxTailBytes: 262_144)
+        guard !items.isEmpty else {
+            await connection.send(type: "command_result", payload: [
+                "commandId": commandId, "ok": false, "error": "no_transcript",
+            ])
+            return
+        }
+        await connection.send(type: "event", payload: [
+            "kind": "history", "sessionId": raw, "items": items.map(\.itemPayload),
+        ])
+        await connection.send(type: "command_result", payload: [
+            "commandId": commandId, "ok": true,
+        ])
     }
 
     private func handleFeedItem(_ item: FeedItem, sessionId: TerminalID) async {

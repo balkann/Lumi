@@ -56,6 +56,22 @@ private actor FakeConnection: RelayConnecting {
         guard let r = sent.first(where: { $0.type == "command_result" }) else { return nil }
         return r.payload["commandId"] as? String
     }
+    // History event query
+    func historyEvent() -> (sessionId: String, itemCount: Int)? {
+        guard let e = sent.first(where: { $0.type == "event" && ($0.payload["kind"] as? String) == "history" })
+        else { return nil }
+        return ((e.payload["sessionId"] as? String) ?? "",
+                (e.payload["items"] as? [[String: Any]])?.count ?? -1)
+    }
+    func historyFirstItemText() -> String? {
+        guard let e = sent.first(where: { $0.type == "event" && ($0.payload["kind"] as? String) == "history" }),
+              let items = e.payload["items"] as? [[String: Any]] else { return nil }
+        return items.first?["text"] as? String
+    }
+    func commandResultError() -> String? {
+        guard let r = sent.first(where: { $0.type == "command_result" }) else { return nil }
+        return r.payload["error"] as? String
+    }
 }
 
 // FakeTerminal: RemoteCommandHandlerTests'tekiyle aynı yüzey + events push'u
@@ -244,5 +260,81 @@ final class RemoteServiceTests: XCTestCase {
         await drain()
         let stops = await connection.stops()
         XCTAssertGreaterThanOrEqual(stops, 1)
+    }
+
+    func testGetHistorySendsHistoryEventAndOkResult() async throws {
+        let connection = FakeConnection()
+        let terminal = FakeTerminal()
+        let meta = try terminal.spawn(repoPath: "/tmp/demo", task: nil, command: nil)
+        // transcript fixture'ı: transcriptsRoot/<encoded>/s1.jsonl
+        let projectDir = tempHome.appendingPathComponent("transcripts")
+            .appendingPathComponent(TranscriptParser.projectDirName(forCwd: "/tmp/demo"))
+        try FileManager.default.createDirectory(at: projectDir, withIntermediateDirectories: true)
+        let line = #"{"type":"assistant","message":{"content":[{"type":"text","text":"gecmis-mesaj"}]}}"#
+        try (line + "\n").data(using: .utf8)!.write(to: projectDir.appendingPathComponent("s1.jsonl"))
+
+        let service = makeService(connection: connection, terminal: terminal)
+        await service.start()
+        await drain()
+
+        await connection.push(.message(type: "command", payload: [
+            "commandId": "h-1", "action": "get_history", "sessionId": meta.id.description,
+        ]))
+        await drain()
+
+        let history = await connection.historyEvent()
+        XCTAssertEqual(history?.sessionId, meta.id.description)
+        XCTAssertEqual(history?.itemCount, 1)
+        let text = await connection.historyFirstItemText()
+        XCTAssertEqual(text, "gecmis-mesaj")
+        let ok = await connection.commandResultOk()
+        XCTAssertEqual(ok, true)
+        service.stop()
+        await drain()
+    }
+
+    func testGetHistoryUnknownSessionReturnsError() async {
+        let connection = FakeConnection()
+        let terminal = FakeTerminal()
+        let service = makeService(connection: connection, terminal: terminal)
+        await service.start()
+        await drain()
+
+        await connection.push(.message(type: "command", payload: [
+            "commandId": "h-2", "action": "get_history",
+            "sessionId": UUID().uuidString,
+        ]))
+        await drain()
+
+        let ok = await connection.commandResultOk()
+        XCTAssertEqual(ok, false)
+        let error = await connection.commandResultError()
+        XCTAssertEqual(error, "session_not_found")
+        let history = await connection.historyEvent()
+        XCTAssertNil(history)
+        service.stop()
+        await drain()
+    }
+
+    func testGetHistoryNoTranscriptReturnsError() async throws {
+        let connection = FakeConnection()
+        let terminal = FakeTerminal()
+        _ = try terminal.spawn(repoPath: "/tmp/bos-repo", task: nil, command: nil)
+        let service = makeService(connection: connection, terminal: terminal)
+        await service.start()
+        await drain()
+        let meta = terminal.terminals[0]
+
+        await connection.push(.message(type: "command", payload: [
+            "commandId": "h-3", "action": "get_history", "sessionId": meta.id.description,
+        ]))
+        await drain()
+
+        let ok = await connection.commandResultOk()
+        XCTAssertEqual(ok, false)
+        let error = await connection.commandResultError()
+        XCTAssertEqual(error, "no_transcript")
+        service.stop()
+        await drain()
     }
 }
