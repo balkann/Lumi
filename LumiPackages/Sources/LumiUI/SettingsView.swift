@@ -835,6 +835,7 @@ struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         if let qr = cachedPairingQR {
                             Image(nsImage: qr)
+                                .resizable()
                                 .interpolation(.none)
                                 .frame(width: 160, height: 160)
                         }
