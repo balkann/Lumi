@@ -47,6 +47,7 @@ public final class AppModel {
     private var activeQuestions: [String: [Question]] = [:]
     /// commandId → sessionId; start_session için "" (oturum henüz yok).
     private var commandTargets: [String: String] = [:]
+    private var historyCommandIds: Set<String> = []
     private static let feedCap = 200
 
     public init(client: any RelayClienting, store: any SecureStore) {
@@ -99,6 +100,7 @@ public final class AppModel {
         activeQuestions = [:]
         lastCommandError = [:]
         commandTargets = [:]
+        historyCommandIds = []
         startState = .idle
     }
 
@@ -138,7 +140,14 @@ public final class AppModel {
                 appendFeed(sessionId, item)
             }
 
+        case .event(.history(let sessionId, let items)):
+            macOnline = true
+            applyHistory(sessionId: sessionId, items: items)
+
         case .commandResult(let result):
+            if historyCommandIds.remove(result.commandId) != nil {
+                return // geçmiş isteğinin sonucu kullanıcıya yansıtılmaz (ok da olsa hata da)
+            }
             guard let target = commandTargets.removeValue(forKey: result.commandId) else { return }
             if target.isEmpty {
                 startState = result.ok ? .succeeded : .failed(result.error ?? "oturum açılamadı")
@@ -207,6 +216,49 @@ public final class AppModel {
 
     public func registerPush(deviceToken: String) async {
         await client.registerPush(deviceToken: deviceToken)
+    }
+
+    /// Oturum detayı açılınca çağrılır: transcript geçmişini ister.
+    /// Başarısızlık kullanıcıya yansıtılmaz (eski Mac `unknown_action`,
+    /// eşleşmesiz oturum `no_transcript` döndürebilir — ikisi de normaldir).
+    public func requestHistory(sessionId: String) async {
+        guard macOnline else { return }
+        commandCounter += 1
+        let commandId = "ph-\(commandCounter)"
+        historyCommandIds.insert(commandId)
+        await client.send(command: OutgoingCommand(
+            commandId: commandId, action: .getHistory(sessionId: sessionId)))
+    }
+
+    private func applyHistory(sessionId: String, items: [FeedItem]) {
+        var entries: [FeedEntry] = []
+        for item in items {
+            switch item {
+            case .question:
+                continue // sorular akışa değil karta gider
+            default:
+                feedCounter += 1
+                entries.append(FeedEntry(id: feedCounter, item: item))
+            }
+        }
+        if entries.count > Self.feedCap {
+            entries.removeFirst(entries.count - Self.feedCap)
+        }
+        feeds[sessionId] = entries
+
+        // waiting rozetli oturumda son turn_done'dan SONRAKİ soru hâlâ açıktır → sabitle
+        guard session(sessionId)?.status.badge == .waiting else { return }
+        var openQuestion: [Question]?
+        for item in items {
+            switch item {
+            case .question(let questions): openQuestion = questions
+            case .turnDone: openQuestion = nil
+            default: break
+            }
+        }
+        if let openQuestion {
+            activeQuestions[sessionId] = openQuestion
+        }
     }
 
     // MARK: Yardımcılar

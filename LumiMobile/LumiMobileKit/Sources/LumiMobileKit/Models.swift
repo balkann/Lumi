@@ -113,6 +113,7 @@ public enum FeedItem: Sendable, Equatable {
 public enum RemoteEvent: Sendable, Equatable {
     case statusChange(sessionId: String, status: SessionStatus, repoName: String, summary: String?)
     case transcript(sessionId: String, item: FeedItem)
+    case history(sessionId: String, items: [FeedItem])
 }
 
 public struct CommandResult: Decodable, Sendable, Equatable {

@@ -243,6 +243,74 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.startState, .failed("bağlantı yok"))
     }
 
+    func testHistoryReplacesFeedAndRepinsQuestion() {
+        let (model, _, _) = makeModel()
+        model.handle(.snapshot(Snapshot(sessions: [session("s1", repo: "lumi", .waitingUnseen)], repos: [], personas: [])))
+        // canlı akıştan gelmiş eski bir satır — history bunu da içerir, çiftlenmemeli
+        model.handle(.event(.transcript(sessionId: "s1", item: .assistantText("canli"))))
+
+        let question = Question(header: "İzin", question: "Devam?", options: ["Evet", "Hayır"])
+        model.handle(.event(.history(sessionId: "s1", items: [
+            .assistantText("eski-1"),
+            .turnDone,
+            .assistantText("canli"),
+            .question([question]),
+        ])))
+
+        // feed DEĞİŞTİ: history listesi (question feed'e girmez), çiftlenme yok
+        XCTAssertEqual((model.feeds["s1"] ?? []).map(\.item),
+                       [.assistantText("eski-1"), .turnDone, .assistantText("canli")])
+        // id'ler monoton
+        let ids = (model.feeds["s1"] ?? []).map(\.id)
+        XCTAssertEqual(ids, ids.sorted())
+        // waiting + son turn_done'dan sonra soru var → kart yeniden sabitlendi
+        XCTAssertEqual(model.questionCard(for: "s1")?.questions, [question])
+    }
+
+    func testHistoryDoesNotRepinWhenQuestionAnswered() {
+        let (model, _, _) = makeModel()
+        model.handle(.snapshot(Snapshot(sessions: [session("s1", repo: "lumi", .working)], repos: [], personas: [])))
+        model.handle(.event(.history(sessionId: "s1", items: [
+            .question([Question(header: "h", question: "q", options: [])]),
+            .turnDone,
+        ])))
+        // rozet waiting değil → sabitleme yok; turn_done sorudan sonra → zaten cevaplanmış
+        XCTAssertNil(model.questionCard(for: "s1"))
+    }
+
+    func testHistoryCapsAt200() {
+        let (model, _, _) = makeModel()
+        model.handle(.snapshot(Snapshot(sessions: [session("s1", repo: "lumi", .idle)], repos: [], personas: [])))
+        let items = (0..<250).map { FeedItem.assistantText("m\($0)") }
+        model.handle(.event(.history(sessionId: "s1", items: items)))
+        XCTAssertEqual(model.feeds["s1"]?.count, 200)
+        XCTAssertEqual(model.feeds["s1"]?.last?.item, .assistantText("m249"))
+    }
+
+    func testRequestHistorySendsCommandAndFailureIsSilent() async {
+        let (model, client, _) = makeModel()
+        model.handle(.snapshot(Snapshot(sessions: [session("s1", repo: "lumi", .idle)], repos: [], personas: [])))
+        model.handle(.welcome(Welcome(snapshot: nil, macOnline: true, lastSeenAt: nil)))
+
+        await model.requestHistory(sessionId: "s1")
+        XCTAssertEqual(client.commands.count, 1)
+        guard case .getHistory(let sid) = client.commands[0].action else { return XCTFail() }
+        XCTAssertEqual(sid, "s1")
+
+        // eski Mac: unknown_action → kullanıcıya YANSIMAZ
+        model.handle(.commandResult(CommandResult(commandId: client.commands[0].commandId, ok: false, error: "unknown_action")))
+        XCTAssertNil(model.lastCommandError["s1"])
+        XCTAssertEqual(model.startState, .idle)
+    }
+
+    func testRequestHistoryNoopWhenMacOffline() async {
+        let (model, client, _) = makeModel()
+        model.handle(.snapshot(Snapshot(sessions: [session("s1", repo: "lumi", .idle)], repos: [], personas: [])))
+        model.handle(.welcome(Welcome(snapshot: nil, macOnline: false, lastSeenAt: nil)))
+        await model.requestHistory(sessionId: "s1")
+        XCTAssertTrue(client.commands.isEmpty)
+    }
+
     func testDisconnectedStateSetsMacOnlineFalse() async {
         let (model, client, _) = makeModel()
         await model.start()

@@ -13,6 +13,7 @@ public enum CommandAction: Sendable, Equatable {
     case sendText(sessionId: String, text: String)
     case pressKey(sessionId: String, key: String)
     case startSession(repoPath: String, personaId: String?, prompt: String)
+    case getHistory(sessionId: String)
 }
 
 public struct OutgoingCommand: Sendable, Equatable {
@@ -71,6 +72,10 @@ public enum PhoneProtocol {
             guard let item = payload["item"] as? [String: Any],
                   let feedItem = decodeFeedItem(item) else { return nil }
             return .transcript(sessionId: sessionId, item: feedItem)
+        case "history":
+            guard let rawItems = payload["items"] as? [[String: Any]] else { return nil }
+            let items = rawItems.compactMap(decodeFeedItem)
+            return .history(sessionId: sessionId, items: items)
         default:
             return nil
         }
@@ -126,6 +131,9 @@ public enum PhoneProtocol {
             payload["repoPath"] = repoPath
             payload["prompt"] = prompt
             if let personaId { payload["personaId"] = personaId }
+        case .getHistory(let sessionId):
+            payload["action"] = "get_history"
+            payload["sessionId"] = sessionId
         }
         return frame(type: "command", payload: payload)
     }

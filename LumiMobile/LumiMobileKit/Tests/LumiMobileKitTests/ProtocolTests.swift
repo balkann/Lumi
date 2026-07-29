@@ -150,4 +150,21 @@ final class ProtocolTests: XCTestCase {
         let ping = try payload(of: PhoneProtocol.pingFrame(), expectedType: "ping")
         XCTAssertTrue(ping.isEmpty)
     }
+
+    func testDecodeHistoryEvent() {
+        let text = #"{"v":1,"type":"event","payload":{"kind":"history","sessionId":"s1","items":[{"itemType":"assistant_text","text":"eski"},{"itemType":"hologram"},{"itemType":"turn_done"}]}}"#
+        guard case .event(.history(let id, let items))? = PhoneProtocol.decodeServerMessage(text) else {
+            return XCTFail("history bekleniyordu")
+        }
+        XCTAssertEqual(id, "s1")
+        // bilinmeyen itemType atlanır, kalanlar sıralı gelir
+        XCTAssertEqual(items, [.assistantText("eski"), .turnDone])
+    }
+
+    func testGetHistoryCommandFrame() throws {
+        let cmd = OutgoingCommand(commandId: "ph-9", action: .getHistory(sessionId: "s1"))
+        let payload = try payload(of: PhoneProtocol.commandFrame(cmd), expectedType: "command")
+        XCTAssertEqual(payload["action"] as? String, "get_history")
+        XCTAssertEqual(payload["sessionId"] as? String, "s1")
+    }
 }
