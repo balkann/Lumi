@@ -25,6 +25,7 @@ struct SessionDetailView: View {
             }
             inputBar
         }
+        .task(id: sessionId) { await model.requestHistory(sessionId: sessionId) }
         .navigationTitle(model.session(sessionId)?.repoName ?? "Oturum")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
