@@ -278,6 +278,18 @@ final class AppModelTests: XCTestCase {
         XCTAssertNil(model.questionCard(for: "s1"))
     }
 
+    func testHistoryDoesNotRepinWhenWaitingButQuestionBeforeTurnDone() {
+        // rozet waiting AMA soru son turn_done'dan ÖNCE → cevaplanmış, sabitlenmez;
+        // waiting sürdüğü için jenerik kart (questions == nil) görünür
+        let (model, _, _) = makeModel()
+        model.handle(.snapshot(Snapshot(sessions: [session("s1", repo: "lumi", .waitingUnseen)], repos: [], personas: [])))
+        model.handle(.event(.history(sessionId: "s1", items: [
+            .question([Question(header: "h", question: "q", options: [])]),
+            .turnDone,
+        ])))
+        XCTAssertNil(model.questionCard(for: "s1")?.questions)
+    }
+
     func testHistoryCapsAt200() {
         let (model, _, _) = makeModel()
         model.handle(.snapshot(Snapshot(sessions: [session("s1", repo: "lumi", .idle)], repos: [], personas: [])))
