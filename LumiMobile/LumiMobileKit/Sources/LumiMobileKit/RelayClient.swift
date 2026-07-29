@@ -30,7 +30,7 @@ public protocol RelayClienting: Sendable {
     func events() async -> AsyncStream<ClientEvent>
     func start(pairing: PairingInfo) async
     func stop() async
-    func send(command: OutgoingCommand) async
+    @discardableResult func send(command: OutgoingCommand) async -> Bool
     func registerPush(deviceToken: String) async
 }
 
@@ -83,12 +83,13 @@ public actor RelayClient: RelayClienting {
         continuations.removeAll()
     }
 
-    public func send(command: OutgoingCommand) {
-        sendFrame(PhoneProtocol.commandFrame(command))
+    @discardableResult
+    public func send(command: OutgoingCommand) async -> Bool {
+        await sendFrame(PhoneProtocol.commandFrame(command))
     }
 
-    public func registerPush(deviceToken: String) {
-        sendFrame(PhoneProtocol.registerPushFrame(deviceToken: deviceToken))
+    public func registerPush(deviceToken: String) async {
+        _ = await sendFrame(PhoneProtocol.registerPushFrame(deviceToken: deviceToken))
     }
 
     // MARK: İç işleyiş
@@ -118,9 +119,14 @@ public actor RelayClient: RelayClienting {
         }
     }
 
-    private func sendFrame(_ frame: String) {
-        guard let connection else { return }
-        Task { try? await connection.send(frame) }
+    private func sendFrame(_ frame: String) async -> Bool {
+        guard let connection else { return false }
+        do {
+            try await connection.send(frame)
+            return true
+        } catch {
+            return false
+        }
     }
 
     private func setState(_ newState: ConnectionState) {

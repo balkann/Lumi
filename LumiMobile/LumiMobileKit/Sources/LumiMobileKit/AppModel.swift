@@ -64,7 +64,9 @@ public final class AppModel {
             for await event in stream {
                 guard let self else { return }
                 switch event {
-                case .stateChanged(let state): self.connection = state
+                case .stateChanged(let state):
+                    self.connection = state
+                    if state == .disconnected { self.macOnline = false }
                 case .message(let message): self.handle(message)
                 }
             }
@@ -217,7 +219,15 @@ public final class AppModel {
             lastCommandError[target] = nil
             activeQuestions[target] = nil // cevap verildi → kart kalkar
         }
-        await client.send(command: OutgoingCommand(commandId: commandId, action: action))
+        let ok = await client.send(command: OutgoingCommand(commandId: commandId, action: action))
+        if !ok {
+            commandTargets[commandId] = nil
+            if target.isEmpty {
+                startState = .failed("bağlantı yok")
+            } else {
+                lastCommandError[target] = "bağlantı yok"
+            }
+        }
     }
 
     private func apply(_ snapshot: Snapshot) {

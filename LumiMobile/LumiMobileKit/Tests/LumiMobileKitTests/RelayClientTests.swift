@@ -215,4 +215,31 @@ final class RelayClientTests: XCTestCase {
         backoff.reset()
         XCTAssertEqual(backoff.nextDelay(), 1)
     }
+
+    // MARK: Yeni testler — Fix 1+2
+
+    func testSendWithNoConnectionReturnsFalseAndRecordsNoFrame() async {
+        let harness = Harness()
+        let client = harness.makeClient()
+        // Bağlantı başlatılmadan gönderim → false dönmeli, frame kaydedilmemeli
+        let ok = await client.send(command: OutgoingCommand(commandId: "ph-1", action: .pressKey(sessionId: "s1", key: "a")))
+        XCTAssertFalse(ok, "bağlantı yokken send false dönmeli")
+        XCTAssertTrue(harness.connections.isEmpty, "bağlantı oluşturulmamalı")
+    }
+
+    func testSendAfterConnectedReturnsTrue() async {
+        let harness = Harness()
+        let client = harness.makeClient()
+        await client.start(pairing: pairing)
+        _ = await waitUntil { !harness.connections.isEmpty }
+        harness.connections[0].push(welcomeFrame)
+        _ = await waitUntil { await client.state == .connected }
+
+        let ok = await client.send(command: OutgoingCommand(commandId: "ph-1", action: .pressKey(sessionId: "s1", key: "enter")))
+        XCTAssertTrue(ok, "bağlı iken send true dönmeli")
+
+        let sent = await waitUntil { harness.connections[0].sent.count >= 2 }
+        XCTAssertTrue(sent, "frame gönderilmeli")
+        await client.stop()
+    }
 }

@@ -1,5 +1,6 @@
 import SwiftUI
 import VisionKit
+import LumiMobileKit
 
 /// VisionKit QR tarayıcısı. Yalnız gerçek cihazda çalışır
 /// (DataScannerViewController.isSupported simülatörde false).
@@ -39,9 +40,12 @@ struct QRScannerView: UIViewControllerRepresentable {
             if didFire { return }
             for item in addedItems {
                 if case .barcode(let barcode) = item, let value = barcode.payloadStringValue {
-                    didFire = true
-                    Task { @MainActor in self.onScan(value) }
-                    return
+                    if Pairing.parse(value) != nil {
+                        didFire = true
+                        Task { @MainActor in self.onScan(value) }
+                        return
+                    }
+                    // geçersiz QR: tarayıcı silahlı kalır, sonraki kareyi dener
                 }
             }
         }

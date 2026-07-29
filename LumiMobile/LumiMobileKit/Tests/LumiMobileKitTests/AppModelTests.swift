@@ -6,6 +6,7 @@ final class FakeRelayClient: RelayClienting, @unchecked Sendable {
     private var _commands: [OutgoingCommand] = []
     private var _started: [PairingInfo] = []
     private var _stopCount = 0
+    var sendResult = true
     let stream: AsyncStream<ClientEvent>
     let continuation: AsyncStream<ClientEvent>.Continuation
 
@@ -18,7 +19,13 @@ final class FakeRelayClient: RelayClienting, @unchecked Sendable {
     func events() async -> AsyncStream<ClientEvent> { stream }
     func start(pairing: PairingInfo) async { lock.withLock { _started.append(pairing) } }
     func stop() async { lock.withLock { _stopCount += 1 } }
-    func send(command: OutgoingCommand) async { lock.withLock { _commands.append(command) } }
+    @discardableResult func send(command: OutgoingCommand) async -> Bool {
+        let result = lock.withLock { () -> Bool in
+            if sendResult { _commands.append(command) }
+            return sendResult
+        }
+        return result
+    }
     func registerPush(deviceToken: String) async {}
 }
 
@@ -213,5 +220,45 @@ final class AppModelTests: XCTestCase {
         }
         XCTAssertEqual(model.sessions.count, 1)
         XCTAssertEqual(model.connection, .connected)
+    }
+
+    // MARK: Yeni testler — Fix 1+2
+
+    func testSendTextFailureReportsLastCommandError() async {
+        let (model, client, _) = makeModel()
+        client.sendResult = false
+        model.handle(.snapshot(Snapshot(sessions: [session("s1", repo: "lumi", .idle)], repos: [], personas: [])))
+
+        await model.sendText(sessionId: "s1", text: "merhaba")
+
+        XCTAssertEqual(model.lastCommandError["s1"], "bağlantı yok")
+    }
+
+    func testStartSessionFailureLandsInFailed() async {
+        let (model, client, _) = makeModel()
+        client.sendResult = false
+
+        await model.startSession(repoPath: "/r/lumi", personaId: nil, prompt: "merhaba")
+
+        XCTAssertEqual(model.startState, .failed("bağlantı yok"))
+    }
+
+    func testDisconnectedStateSetsMacOnlineFalse() async {
+        let (model, client, _) = makeModel()
+        await model.start()
+
+        // Mac çevrimiçi yap: welcome+snapshot
+        client.continuation.yield(.message(.welcome(Welcome(snapshot: nil, macOnline: true, lastSeenAt: nil))))
+        for _ in 0..<200 where !model.macOnline {
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertTrue(model.macOnline, "welcome sonrası mac online olmalı")
+
+        // Bağlantı kesildi
+        client.continuation.yield(.stateChanged(.disconnected))
+        for _ in 0..<200 where model.macOnline {
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertFalse(model.macOnline, "disconnected sonrası macOnline false olmalı")
     }
 }
