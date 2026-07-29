@@ -72,6 +72,12 @@ private actor FakeConnection: RelayConnecting {
         guard let r = sent.first(where: { $0.type == "command_result" }) else { return nil }
         return r.payload["error"] as? String
     }
+    func historyEventThenResultOrder() -> Bool? {
+        guard let eventIdx = sent.firstIndex(where: { $0.type == "event" && ($0.payload["kind"] as? String) == "history" }),
+              let resultIdx = sent.firstIndex(where: { $0.type == "command_result" })
+        else { return nil }
+        return eventIdx < resultIdx
+    }
 }
 
 // FakeTerminal: RemoteCommandHandlerTests'tekiyle aynı yüzey + events push'u
@@ -289,6 +295,8 @@ final class RemoteServiceTests: XCTestCase {
         XCTAssertEqual(text, "gecmis-mesaj")
         let ok = await connection.commandResultOk()
         XCTAssertEqual(ok, true)
+        let ordered = await connection.historyEventThenResultOrder()
+        XCTAssertEqual(ordered, true, "history event'i command_result'tan ÖNCE gitmeli")
         service.stop()
         await drain()
     }
