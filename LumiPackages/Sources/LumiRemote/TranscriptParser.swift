@@ -19,21 +19,25 @@ public enum FeedItem: Equatable, Sendable {
     case question(payload: [Question])
     case turnDone
 
-    func eventPayload(sessionId: String) -> [String: Any] {
-        var item: [String: Any]
+    /// Yalnız item sözlüğü — hem canlı `transcript` event'inde hem `history`
+    /// yanıtında aynı şekil kullanılır (protokol: items[] elemanı).
+    var itemPayload: [String: Any] {
         switch self {
         case .assistantText(let text):
-            item = ["itemType": "assistant_text", "text": text]
+            return ["itemType": "assistant_text", "text": text]
         case .toolUse(let name, let summary):
-            item = ["itemType": "tool_use", "tool": name, "summary": summary]
+            return ["itemType": "tool_use", "tool": name, "summary": summary]
         case .question(let questions):
-            item = ["itemType": "question", "questions": questions.map {
+            return ["itemType": "question", "questions": questions.map {
                 ["header": $0.header, "question": $0.question, "options": $0.options]
             }]
         case .turnDone:
-            item = ["itemType": "turn_done"]
+            return ["itemType": "turn_done"]
         }
-        return ["kind": "transcript", "sessionId": sessionId, "item": item]
+    }
+
+    func eventPayload(sessionId: String) -> [String: Any] {
+        ["kind": "transcript", "sessionId": sessionId, "item": itemPayload]
     }
 }
 

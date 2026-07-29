@@ -161,6 +161,81 @@ final class TranscriptWatcherTests: XCTestCase {
         for await _ in stream { count += 1 }
         XCTAssertEqual(count, 0, "stop() akışı sonlandırmalı")
     }
+
+    // MARK: - historyItems (Plan 3.5 backfill)
+
+    private func makeHistoryDir() throws -> (root: URL, projectDir: URL) {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("history-\(UUID().uuidString)")
+        let projectDir = root.appendingPathComponent(
+            TranscriptParser.projectDirName(forCwd: "/tmp/demo"))
+        try FileManager.default.createDirectory(at: projectDir, withIntermediateDirectories: true)
+        return (root, projectDir)
+    }
+
+    private func writeLines(_ lines: [String], to dir: URL, name: String = "s1.jsonl") throws {
+        let text = lines.joined(separator: "\n") + "\n"
+        try text.data(using: .utf8)!.write(to: dir.appendingPathComponent(name))
+    }
+
+    private let assistantLineTpl =
+        #"{"type":"assistant","message":{"content":[{"type":"text","text":"MSG"}]}}"#
+
+    func testHistoryItemsReturnsParsedTail() async throws {
+        let (root, projectDir) = try makeHistoryDir()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let lines = (1...5).map { assistantLineTpl.replacingOccurrences(of: "MSG", with: "m\($0)") }
+        try writeLines(lines, to: projectDir)
+
+        let watcher = TranscriptWatcher(
+            projectsRoot: root, repoPath: "/tmp/demo",
+            sessionCreatedAt: Date().addingTimeInterval(-60))
+        let items = await watcher.historyItems(limit: 3, maxTailBytes: 262_144)
+
+        XCTAssertEqual(items, [
+            .assistantText("m3"), .assistantText("m4"), .assistantText("m5"),
+        ])
+    }
+
+    func testHistoryItemsDropsPartialFirstLineWhenTailCut() async throws {
+        let (root, projectDir) = try makeHistoryDir()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let lines = (1...4).map { assistantLineTpl.replacingOccurrences(of: "MSG", with: "m\($0)") }
+        try writeLines(lines, to: projectDir)
+        // maxTailBytes'ı 2. satırın ortasına denk gelecek kadar küçült:
+        // son 3 satır + 2. satırın kuyruğu okunur; yarım satır atılmalı.
+        let lineBytes = (lines[0] + "\n").utf8.count
+        let tail = lineBytes * 2 + lineBytes / 2
+
+        let watcher = TranscriptWatcher(
+            projectsRoot: root, repoPath: "/tmp/demo",
+            sessionCreatedAt: Date().addingTimeInterval(-60))
+        let items = await watcher.historyItems(limit: 50, maxTailBytes: tail)
+
+        XCTAssertEqual(items, [.assistantText("m3"), .assistantText("m4")])
+    }
+
+    func testHistoryItemsEmptyWhenNoMatch() async {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("history-none-\(UUID().uuidString)")
+        let watcher = TranscriptWatcher(
+            projectsRoot: root, repoPath: "/tmp/demo",
+            sessionCreatedAt: Date())
+        let items = await watcher.historyItems(limit: 50, maxTailBytes: 262_144)
+        XCTAssertTrue(items.isEmpty)
+    }
+
+    func testItemPayloadShapes() {
+        XCTAssertEqual(
+            FeedItem.assistantText("hi").itemPayload["itemType"] as? String, "assistant_text")
+        let tool = FeedItem.toolUse(name: "Bash", summary: "swift test").itemPayload
+        XCTAssertEqual(tool["tool"] as? String, "Bash")
+        XCTAssertEqual(tool["summary"] as? String, "swift test")
+        // eventPayload sarmalaması aynı kalmalı (mevcut telefonlar kırılmasın)
+        let wrapped = FeedItem.turnDone.eventPayload(sessionId: "s1")
+        XCTAssertEqual(wrapped["kind"] as? String, "transcript")
+        XCTAssertEqual((wrapped["item"] as? [String: Any])?["itemType"] as? String, "turn_done")
+    }
 }
 
 private extension Date {
