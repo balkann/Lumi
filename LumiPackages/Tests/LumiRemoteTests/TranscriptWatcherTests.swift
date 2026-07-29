@@ -251,13 +251,12 @@ final class TranscriptWatcherTests: XCTestCase {
         }
         try writeLines(lines, to: projectDir, name: "utf8-test.jsonl")
 
-        // İlk satırın son baytının ORTASINA düşecek şekilde maxTailBytes hesapla:
-        // toplam dosya bayt sayısı - (ilk satır uzunluğu - 1)
-        // Böylece start, ilk satırın içinde 1 bayt eksik noktaya gelir.
+        // İlk satırın son "ş"nin ikinci baytının (0x9F) ORTASINA düşecek şekilde maxTailBytes hesapla:
+        // start = firstLineBytes - 9, yani son "ş"nin 0x9F baytına denk gelen geçersiz bir kesim.
         let firstLineBytes = (lines[0] + "\n").utf8.count
         let totalBytes = lines.reduce(0) { $0 + ($1 + "\n").utf8.count }
-        // start = totalBytes - maxTailBytes => firstLineBytes - 1 bayt içinde olsun
-        let maxTailBytes = totalBytes - (firstLineBytes - 1)
+        // start = totalBytes - maxTailBytes => firstLineBytes - 9 bayt içinde olsun
+        let maxTailBytes = totalBytes - firstLineBytes + 9
 
         let watcher = TranscriptWatcher(
             projectsRoot: root, repoPath: "/tmp/demo",
