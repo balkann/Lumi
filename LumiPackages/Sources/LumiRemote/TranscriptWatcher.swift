@@ -84,7 +84,7 @@ actor TranscriptWatcher {
     }
 
     /// Eşleşen jsonl'in kuyruğunu parse edip son `limit` item'ı döner (backfill).
-    /// Canlı tail durumuna (offset/pendingPartial) DOKUNMAZ — ayrı handle ile okur.
+    /// Ayrı handle ile okur; canlı tail durumuna yalnız ilk-eşleşme kurulumunda dokunur (poll() ile aynı kurulum).
     /// Henüz eşleşme yoksa o an eşleştirmeyi dener; yine yoksa [].
     func historyItems(limit: Int = 50, maxTailBytes: Int = 262_144) -> [FeedItem] {
         if matchedFile == nil, let best = bestCandidate() {
@@ -99,8 +99,11 @@ actor TranscriptWatcher {
         let size = fileSize(file)
         let start = size > UInt64(maxTailBytes) ? size - UInt64(maxTailBytes) : 0
         guard (try? handle.seek(toOffset: start)) != nil,
-              let data = try? handle.readToEnd(),
-              var chunk = String(data: data, encoding: .utf8) else { return [] }
+              let data = try? handle.readToEnd() else { return [] }
+
+        // Lossy decode: geçersiz UTF-8 baytlar (çok baytlı karakter sınırında kesim dahil)
+        // U+FFFD olur; start > 0 ise zaten ilk (yarım) satır aşağıda atılır.
+        var chunk = String(decoding: data, as: UTF8.self)
 
         // Kuyruk ortadan kesildiyse ilk satır yarımdır — at.
         if start > 0, let newline = chunk.firstIndex(of: "\n") {
@@ -110,7 +113,7 @@ actor TranscriptWatcher {
         for line in chunk.components(separatedBy: "\n") where !line.isEmpty {
             items.append(contentsOf: TranscriptParser.parse(line: line))
         }
-        return items.suffix(limit).map { $0 }
+        return Array(items.suffix(limit))
     }
 
     private func readNewLines(from file: URL) {

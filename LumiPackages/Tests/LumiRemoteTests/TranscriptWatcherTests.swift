@@ -234,7 +234,40 @@ final class TranscriptWatcherTests: XCTestCase {
         // eventPayload sarmalaması aynı kalmalı (mevcut telefonlar kırılmasın)
         let wrapped = FeedItem.turnDone.eventPayload(sessionId: "s1")
         XCTAssertEqual(wrapped["kind"] as? String, "transcript")
+        XCTAssertEqual(wrapped["sessionId"] as? String, "s1")
         XCTAssertEqual((wrapped["item"] as? [String: Any])?["itemType"] as? String, "turn_done")
+    }
+
+    /// Çok baytlı UTF-8 karakter sınırına denk gelen tail kesiminin sessiz veri
+    /// kaybına ([] dönüşüne) yol açmadığını doğrular.
+    func testHistoryItemsUtf8BoundaryDoesNotDropAllLines() async throws {
+        let (root, projectDir) = try makeHistoryDir()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        // "ş" karakteri 2 bayttır; her satır aynı uzunluktadır.
+        let multibyteText = String(repeating: "ş", count: 10)   // 20 bayt
+        let lines = (1...3).map { i in
+            assistantLineTpl.replacingOccurrences(of: "MSG", with: "\(multibyteText)-\(i)")
+        }
+        try writeLines(lines, to: projectDir, name: "utf8-test.jsonl")
+
+        // İlk satırın son baytının ORTASINA düşecek şekilde maxTailBytes hesapla:
+        // toplam dosya bayt sayısı - (ilk satır uzunluğu - 1)
+        // Böylece start, ilk satırın içinde 1 bayt eksik noktaya gelir.
+        let firstLineBytes = (lines[0] + "\n").utf8.count
+        let totalBytes = lines.reduce(0) { $0 + ($1 + "\n").utf8.count }
+        // start = totalBytes - maxTailBytes => firstLineBytes - 1 bayt içinde olsun
+        let maxTailBytes = totalBytes - (firstLineBytes - 1)
+
+        let watcher = TranscriptWatcher(
+            projectsRoot: root, repoPath: "/tmp/demo",
+            sessionCreatedAt: Date().addingTimeInterval(-60))
+        let items = await watcher.historyItems(limit: 50, maxTailBytes: maxTailBytes)
+
+        // İlk (kesik) satır atılmalı; geri kalan 2 tam satır dönmeli — [] olmamalı.
+        XCTAssertEqual(items.count, 2, "UTF-8 sınır kesimi tüm geçmişi silmemeli")
+        XCTAssertEqual(items[0], .assistantText("\(multibyteText)-2"))
+        XCTAssertEqual(items[1], .assistantText("\(multibyteText)-3"))
     }
 }
 
