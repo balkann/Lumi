@@ -49,11 +49,11 @@ private actor FakeConnection: RelayConnecting {
     }
     // Command result query
     func commandResultOk() -> Bool? {
-        guard let r = sent.first(where: { $0.type == "command_result" }) else { return nil }
+        guard let r = sent.last(where: { $0.type == "command_result" }) else { return nil }
         return r.payload["ok"] as? Bool
     }
     func commandResultId() -> String? {
-        guard let r = sent.first(where: { $0.type == "command_result" }) else { return nil }
+        guard let r = sent.last(where: { $0.type == "command_result" }) else { return nil }
         return r.payload["commandId"] as? String
     }
     // History event query
@@ -69,7 +69,7 @@ private actor FakeConnection: RelayConnecting {
         return items.first?["text"] as? String
     }
     func commandResultError() -> String? {
-        guard let r = sent.first(where: { $0.type == "command_result" }) else { return nil }
+        guard let r = sent.last(where: { $0.type == "command_result" }) else { return nil }
         return r.payload["error"] as? String
     }
     func historyEventThenResultOrder() -> Bool? {

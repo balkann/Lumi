@@ -225,6 +225,51 @@ final class TranscriptWatcherTests: XCTestCase {
         XCTAssertTrue(items.isEmpty)
     }
 
+    /// historyItems(), items() çağrılmadan (yayın başlamadan) önce çağrıldığında:
+    /// - geçmiş item'larını döner (yan-etkisiz okuma),
+    /// - sonraki items() çağrısı ve yeni satır append'i canlı teslimata yol açar
+    ///   (erken historyItems çağrısı offset'i kilitleyip çiftlenme/kaçırma yaratmaz).
+    func testHistoryItemsBeforeStreamDoesNotBreakLiveDelivery() async throws {
+        let (root, projectDir) = try makeHistoryDir()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let file = projectDir.appendingPathComponent("s-live.jsonl")
+        let existingLine = assistantLineTpl.replacingOccurrences(of: "MSG", with: "gecmis")
+        try (existingLine + "\n").data(using: .utf8)!.write(to: file)
+
+        let watcher = TranscriptWatcher(
+            projectsRoot: root, repoPath: "/tmp/demo",
+            sessionCreatedAt: Date().addingTimeInterval(-60),
+            pollInterval: .milliseconds(50))
+
+        // Yayın BAŞLAMADAN historyItems çağrılır (yan-etkisiz olmalı)
+        let history = await watcher.historyItems(limit: 50, maxTailBytes: 262_144)
+        XCTAssertEqual(history, [.assistantText("gecmis")], "geçmiş item'ları dönmeli")
+
+        // Şimdi yayını başlat
+        let stream = await watcher.items()
+
+        // Watcher'ın dosyayı eşleştirmesi için kısa bekleme
+        try await Task.sleep(for: .milliseconds(150))
+
+        // Yeni satır ekle
+        let newLine = assistantLineTpl.replacingOccurrences(of: "MSG", with: "canli")
+        let handle = try FileHandle(forWritingTo: file)
+        try handle.seekToEnd()
+        try handle.write(contentsOf: (newLine + "\n").data(using: .utf8)!)
+        try handle.close()
+
+        // Canlı satır stream'den gelmeli (erken historyItems çağrısı bunu engellememiş olmalı)
+        var received: [FeedItem] = []
+        for await item in stream {
+            received.append(item)
+            break
+        }
+        await watcher.stop()
+        XCTAssertEqual(received, [.assistantText("canli")],
+                       "erken historyItems çağrısı canlı teslimi bozmamalı")
+    }
+
     func testItemPayloadShapes() {
         XCTAssertEqual(
             FeedItem.assistantText("hi").itemPayload["itemType"] as? String, "assistant_text")

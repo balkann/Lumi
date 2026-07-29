@@ -84,16 +84,26 @@ actor TranscriptWatcher {
     }
 
     /// Eşleşen jsonl'in kuyruğunu parse edip son `limit` item'ı döner (backfill).
-    /// Ayrı handle ile okur; canlı tail durumuna yalnız ilk-eşleşme kurulumunda dokunur (poll() ile aynı kurulum).
-    /// Henüz eşleşme yoksa o an eşleştirmeyi dener; yine yoksa [].
+    /// Ayrı handle ile okur; canlı tail durumuna YALNIZCA yayın başladıktan sonra (continuation != nil)
+    /// dokunur — erken çağrı yan-etkisiz okur, böylece ilk-poll öncesi offset canlı akışla çiftlenmeye
+    /// yol açmaz. Henüz eşleşme yoksa o an eşleştirmeyi dener; yine yoksa [].
     func historyItems(limit: Int = 50, maxTailBytes: Int = 262_144) -> [FeedItem] {
-        if matchedFile == nil, let best = bestCandidate() {
-            matchedFile = best.0
-            offset = fileSize(best.0)
-            pendingPartial = ""
+        let file: URL
+        if let matched = matchedFile {
+            file = matched
+        } else if let best = bestCandidate() {
+            // Yayın başladıysa ilk-eşleşmeyi kalıcılaştır (poll() ile aynı kurulum);
+            // başlamadıysa yan etkisiz oku — erken offset canlı akışla çiftlenme yaratabilir.
+            if continuation != nil {
+                matchedFile = best.0
+                offset = fileSize(best.0)
+                pendingPartial = ""
+            }
+            file = best.0
+        } else {
+            return []
         }
-        guard let file = matchedFile,
-              let handle = try? FileHandle(forReadingFrom: file) else { return [] }
+        guard let handle = try? FileHandle(forReadingFrom: file) else { return [] }
         defer { try? handle.close() }
 
         let size = fileSize(file)
