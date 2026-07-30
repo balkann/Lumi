@@ -9,13 +9,16 @@ public struct FeedEntry: Identifiable, Sendable, Equatable {
 
 /// Oturum detayında sabitlenen cevap kartı.
 /// `questions == nil` → jenerik kart (tasarım §12.3): "izin bekliyor" + son tool_use bağlamı.
+/// `isPermission == true` → araç izni bekleniyor (Task 3); Task 4 bunu görsel olarak ayırt eder.
 public struct QuestionCard: Sendable, Equatable {
     public let questions: [Question]?
     public let context: String?
+    public let isPermission: Bool
 
-    public init(questions: [Question]?, context: String?) {
+    public init(questions: [Question]?, context: String?, isPermission: Bool = false) {
         self.questions = questions
         self.context = context
+        self.isPermission = isPermission
     }
 }
 
@@ -45,6 +48,8 @@ public final class AppModel {
     private var commandCounter = 0
     private var feedCounter = 0
     private var activeQuestions: [String: [Question]] = [:]
+    /// sessionId → araç izni bekleniyor; nil = beklemiyor.
+    private var decisionPending: [String: Bool] = [:]
     /// commandId → sessionId; start_session için "" (oturum henüz yok).
     private var commandTargets: [String: String] = [:]
     private var historyCommandIds: Set<String> = []
@@ -100,6 +105,7 @@ public final class AppModel {
         sessions = []
         feeds = [:]
         activeQuestions = [:]
+        decisionPending = [:]
         lastCommandError = [:]
         commandTargets = [:]
         commandUserMessages = [:]
@@ -129,6 +135,7 @@ public final class AppModel {
             // Soru cevaplanmış / tur ilerlemiş demektir.
             if status.badge == .working || status.badge == .idle {
                 activeQuestions[sessionId] = nil
+                decisionPending[sessionId] = nil
             }
 
         case .event(.transcript(let sessionId, let item)):
@@ -149,9 +156,9 @@ public final class AppModel {
             macOnline = true
             applyHistory(sessionId: sessionId, items: items)
 
-        case .event(.awaitingDecision):
-            // TODO(Task 3): permission-card logic — temporary no-op
-            break
+        case .event(.awaitingDecision(let sessionId, let awaiting)):
+            macOnline = true
+            decisionPending[sessionId] = awaiting ? true : nil
 
         case .commandResult(let result):
             if historyCommandIds.remove(result.commandId) != nil {
@@ -198,15 +205,25 @@ public final class AppModel {
     }
 
     public func questionCard(for sessionId: String) -> QuestionCard? {
+        // (1) Gerçek soru aktifse → soru kartı (badge bağımsız)
         if let questions = activeQuestions[sessionId] {
             return QuestionCard(questions: questions, context: nil)
         }
+        // (2) İzin kararı bekleniyor → izin kartı (badge bağımsız)
+        if decisionPending[sessionId] == true {
+            return QuestionCard(questions: nil, context: lastToolContext(sessionId), isPermission: true)
+        }
+        // (3) Waiting rozeti → jenerik kart
         guard session(sessionId)?.status.badge == .waiting else { return nil }
-        let context = (feeds[sessionId] ?? []).reversed().compactMap { entry -> String? in
+        return QuestionCard(questions: nil, context: lastToolContext(sessionId))
+    }
+
+    /// Feed'deki son tool_use öğesinin bağlam dizgesi, yoksa nil.
+    private func lastToolContext(_ sessionId: String) -> String? {
+        (feeds[sessionId] ?? []).reversed().compactMap { entry -> String? in
             if case .toolUse(let tool, let summary) = entry.item { return "\(tool): \(summary)" }
             return nil
         }.first
-        return QuestionCard(questions: nil, context: context)
     }
 
     // MARK: Komutlar
@@ -310,6 +327,7 @@ public final class AppModel {
         if !target.isEmpty {
             lastCommandError[target] = nil
             activeQuestions[target] = nil // cevap verildi → kart kalkar
+            decisionPending[target] = nil
         }
         let ok = await client.send(command: OutgoingCommand(commandId: commandId, action: action))
         if !ok {
@@ -333,6 +351,15 @@ public final class AppModel {
         feeds = feeds.filter { liveIds.contains($0.key) }
         activeQuestions = activeQuestions.filter { liveIds.contains($0.key) }
         lastCommandError = lastCommandError.filter { liveIds.contains($0.key) }
+        // decisionPending: snapshot'tan gelen awaitingDecision alanlarına göre yeniden oluştur.
+        decisionPending = decisionPending.filter { liveIds.contains($0.key) }
+        for s in snapshot.sessions where s.awaitingDecision {
+            decisionPending[s.id] = true
+        }
+        // snapshot'ta awaiting=false olan oturumların pending'ini temizle
+        for s in snapshot.sessions where !s.awaitingDecision {
+            decisionPending[s.id] = nil
+        }
     }
 
     private func appendFeed(_ sessionId: String, _ item: FeedItem) {
