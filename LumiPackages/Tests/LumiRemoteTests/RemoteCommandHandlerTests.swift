@@ -8,6 +8,7 @@ private final class FakeTerminal: TerminalServicing {
     var writes: [(TerminalID, String)] = []
     var spawns: [(repoPath: String, command: String?)] = []
     var metas: [TerminalMeta] = []
+    var kills: [TerminalID] = []
     var writeError: Error?
 
     func spawn(repoPath: String, task: String?, command: String?) throws -> TerminalMeta {
@@ -21,7 +22,7 @@ private final class FakeTerminal: TerminalServicing {
         if let writeError { throw writeError }
         writes.append((id, text))
     }
-    func kill(id: TerminalID) throws {}
+    func kill(id: TerminalID) throws { kills.append(id) }
     func killAll() {}
     func resize(id: TerminalID, cols: Int, rows: Int) {}
     func setFocused(_ id: TerminalID?) {}
@@ -154,5 +155,28 @@ final class RemoteCommandHandlerTests: XCTestCase {
         XCTAssertEqual(terminal.writes.count, 1)
         XCTAssertEqual(terminal.writes[0].1, "merhaba\r")
         XCTAssertEqual(terminal.spawns.count, 0, "persona yolu terminal.spawn kullanmaz")
+    }
+
+    func testDeleteSessionKillsTerminal() async {
+        let (handler, terminal) = makeHandler()
+        let meta = try! terminal.spawn(repoPath: "/r", task: nil, command: nil)
+        let result = await handler.handle([
+            "commandId": "d1", "action": "delete_session",
+            "sessionId": meta.id.description,
+        ])
+        XCTAssertEqual(result["ok"] as? Bool, true)
+        XCTAssertEqual(result["commandId"] as? String, "d1")
+        XCTAssertEqual(terminal.kills.count, 1)
+        XCTAssertEqual(terminal.kills[0], meta.id)
+    }
+
+    func testDeleteSessionUnknownSessionFails() async {
+        let (handler, _) = makeHandler()
+        let result = await handler.handle([
+            "commandId": "d2", "action": "delete_session",
+            "sessionId": UUID().uuidString,
+        ])
+        XCTAssertEqual(result["ok"] as? Bool, false)
+        XCTAssertEqual(result["error"] as? String, "session_not_found")
     }
 }

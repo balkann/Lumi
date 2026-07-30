@@ -82,3 +82,4 @@ listeyle DEĞİŞTİRİR. Relay bu kind'a bakmaz (push kuralı yalnız `status_c
 - `press_key {commandId, sessionId, key}` — key: `"1"|"2"|"3"|"enter"|"esc"`
 - `start_session {commandId, repoPath, personaId?, prompt}`
 - `get_history {commandId, sessionId}` — oturumun transcript geçmişini ister; Mac önce `event {kind:"history"}` sonra `command_result` döner (Plan 3.5). Hatalar: `session_not_found`, `no_transcript`.
+- `delete_session {commandId, sessionId}` — oturumu Mac'te sonlandırır (`terminal.kill`). Ardından `.exited` → yeni `snapshot` yayınlanır ve oturum telefon listesinden düşer. Hata: `session_not_found`.

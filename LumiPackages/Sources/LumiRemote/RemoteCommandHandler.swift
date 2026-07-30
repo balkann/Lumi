@@ -43,6 +43,11 @@ final class RemoteCommandHandler {
                 let id = try self.session(from: payload)
                 try self.terminal.write(id: id, text: sequence)
             })
+        case "delete_session":
+            return result(commandId, run: {
+                let id = try self.session(from: payload)
+                try self.terminal.kill(id: id)
+            })
         case "start_session":
             return await startSession(payload, commandId: commandId)
         default:
