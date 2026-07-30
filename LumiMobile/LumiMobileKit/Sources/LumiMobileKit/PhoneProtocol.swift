@@ -77,6 +77,10 @@ public enum PhoneProtocol {
             guard let rawItems = payload["items"] as? [[String: Any]] else { return nil }
             let items = rawItems.compactMap(decodeFeedItem)
             return .history(sessionId: sessionId, items: items)
+        case "awaiting_decision":
+            return .awaitingDecision(
+                sessionId: sessionId,
+                awaiting: payload["awaiting"] as? Bool ?? false)
         default:
             return nil
         }

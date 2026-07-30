@@ -6,7 +6,8 @@ enum SnapshotBuilder {
     static func snapshot(
         terminals: [TerminalMeta],
         repos: [Repo],
-        personas: [Persona]
+        personas: [Persona],
+        awaitingDecision: [TerminalID: Bool] = [:]
     ) -> [String: Any] {
         let repoNames = Dictionary(repos.map { ($0.path, $0.name) },
                                    uniquingKeysWith: { first, _ in first })
@@ -19,6 +20,7 @@ enum SnapshotBuilder {
                 "status": meta.status.rawValue,
             ]
             if let title = meta.oscTitle { entry["title"] = title }
+            if awaitingDecision[meta.id] == true { entry["awaitingDecision"] = true }
             return entry
         }
         return [
@@ -26,6 +28,10 @@ enum SnapshotBuilder {
             "repos": repos.map { ["name": $0.name, "path": $0.path] },
             "personas": personas.map { ["id": $0.id, "label": $0.label] },
         ]
+    }
+
+    static func awaitingDecisionEvent(sessionId: String, awaiting: Bool) -> [String: Any] {
+        ["kind": "awaiting_decision", "sessionId": sessionId, "awaiting": awaiting]
     }
 
     static func statusChangeEvent(

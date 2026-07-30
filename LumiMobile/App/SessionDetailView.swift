@@ -171,6 +171,20 @@ struct QuestionCardView: View {
                     }
                     .buttonStyle(.bordered)
                 }
+                enterEscRow
+            } else if card.isPermission {
+                Text("İzin isteği")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.orange)
+                if let context = card.context {
+                    Text(context)
+                        .font(.callout.monospaced())
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                permissionButton("1", "Evet")
+                permissionButton("2", "Evet, bir daha sorma")
+                permissionButton("3", "Hayır")
+                Button("Esc") { onKey("esc") }.buttonStyle(.bordered)
             } else {
                 Text("Oturum girdi bekliyor")
                     .font(.subheadline.weight(.semibold))
@@ -182,10 +196,7 @@ struct QuestionCardView: View {
                         Button(key) { onKey(key) }.buttonStyle(.bordered)
                     }
                 }
-            }
-            HStack {
-                Button("Enter") { onKey("enter") }.buttonStyle(.borderedProminent)
-                Button("Esc") { onKey("esc") }.buttonStyle(.bordered)
+                enterEscRow
             }
         }
         .disabled(disabled)
@@ -193,5 +204,22 @@ struct QuestionCardView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.orange.opacity(0.08))
         .overlay(Rectangle().frame(height: 1).foregroundStyle(.orange.opacity(0.3)), alignment: .top)
+    }
+
+    private func permissionButton(_ key: String, _ label: String) -> some View {
+        Button {
+            onKey(key)
+        } label: {
+            Text("\(key) · \(label)")
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .buttonStyle(.bordered)
+    }
+
+    private var enterEscRow: some View {
+        HStack {
+            Button("Enter") { onKey("enter") }.buttonStyle(.borderedProminent)
+            Button("Esc") { onKey("esc") }.buttonStyle(.bordered)
+        }
     }
 }

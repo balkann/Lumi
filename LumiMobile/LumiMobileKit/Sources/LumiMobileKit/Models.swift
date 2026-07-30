@@ -34,13 +34,33 @@ public struct SessionSummary: Decodable, Sendable, Equatable, Identifiable {
     public let repoName: String
     public var status: SessionStatus
     public let title: String?
+    public let awaitingDecision: Bool
 
-    public init(id: String, repoPath: String, repoName: String, status: SessionStatus, title: String? = nil) {
+    public init(id: String, repoPath: String, repoName: String,
+                status: SessionStatus, title: String? = nil,
+                awaitingDecision: Bool = false) {
         self.id = id
         self.repoPath = repoPath
         self.repoName = repoName
         self.status = status
         self.title = title
+        self.awaitingDecision = awaitingDecision
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, repoPath, repoName, status, title, awaitingDecision
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            id: try c.decode(String.self, forKey: .id),
+            repoPath: try c.decode(String.self, forKey: .repoPath),
+            repoName: try c.decode(String.self, forKey: .repoName),
+            status: try c.decode(SessionStatus.self, forKey: .status),
+            title: try c.decodeIfPresent(String.self, forKey: .title),
+            awaitingDecision: try c.decodeIfPresent(Bool.self, forKey: .awaitingDecision) ?? false
+        )
     }
 }
 
@@ -118,6 +138,7 @@ public enum RemoteEvent: Sendable, Equatable {
     case statusChange(sessionId: String, status: SessionStatus, repoName: String, summary: String?)
     case transcript(sessionId: String, item: FeedItem)
     case history(sessionId: String, items: [FeedItem])
+    case awaitingDecision(sessionId: String, awaiting: Bool)
 }
 
 public struct CommandResult: Decodable, Sendable, Equatable {

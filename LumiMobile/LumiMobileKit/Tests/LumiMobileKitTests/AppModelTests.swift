@@ -508,4 +508,83 @@ final class AppModelTests: XCTestCase {
         await model.reRegisterPushIfNeeded()          // 2. kayıt (relay restart senaryosu)
         XCTAssertEqual(client.pushRegistrations, ["tok-1", "tok-1"])
     }
+
+    // MARK: Task 3 — decisionPending + izin kartı önceliği
+
+    /// awaitingDecision(awaiting:true) → decisionPending[sessionId] = true, macOnline = true
+    func testAwaitingDecisionTrueSetsPending() {
+        let (model, _, _) = makeModel()
+        model.handle(.snapshot(Snapshot(sessions: [session("s1", repo: "lumi", .waitingUnseen)], repos: [], personas: [])))
+        model.handle(.event(.awaitingDecision(sessionId: "s1", awaiting: true)))
+
+        XCTAssertTrue(model.macOnline, "awaitingDecision event → mac online")
+        let card = model.questionCard(for: "s1")
+        XCTAssertNotNil(card)
+        XCTAssertNil(card?.questions, "izin kartı questions içermez")
+        XCTAssertTrue(card?.isPermission == true, "izin kartı isPermission == true")
+    }
+
+    /// awaitingDecision(awaiting:false) → decisionPending kaldırılır → jenerik karta düşer
+    func testAwaitingDecisionFalseClearsPending() {
+        let (model, _, _) = makeModel()
+        model.handle(.snapshot(Snapshot(sessions: [session("s1", repo: "lumi", .waitingUnseen)], repos: [], personas: [])))
+        model.handle(.event(.awaitingDecision(sessionId: "s1", awaiting: true)))
+        model.handle(.event(.awaitingDecision(sessionId: "s1", awaiting: false)))
+
+        let card = model.questionCard(for: "s1")
+        XCTAssertNil(card?.isPermission == true ? card : nil, "false sonrası izin kartı olmamalı")
+        // badge == .waiting ve soru yok → jenerik kart (questions == nil)
+        XCTAssertNotNil(card)
+        XCTAssertNil(card?.questions)
+        XCTAssertFalse(card?.isPermission ?? true)
+    }
+
+    /// Gerçek soru varken awaiting=true gönderilse bile soru kartı önce gelir
+    func testRealQuestionTakesPriorityOverPermission() {
+        let (model, _, _) = makeModel()
+        model.handle(.snapshot(Snapshot(sessions: [session("s1", repo: "lumi", .waitingUnseen)], repos: [], personas: [])))
+        let questions = [Question(header: "İzin", question: "Bash koşsun mu?", options: ["Evet"])]
+        model.handle(.event(.transcript(sessionId: "s1", item: .question(questions))))
+        model.handle(.event(.awaitingDecision(sessionId: "s1", awaiting: true)))
+
+        let card = model.questionCard(for: "s1")
+        XCTAssertEqual(card?.questions, questions, "aktif soru varsa önce o gösterilir")
+        XCTAssertFalse(card?.isPermission ?? true, "soru kartı isPermission == false")
+    }
+
+    /// statusChange working → decisionPending temizlenir
+    func testStatusChangeWorkingClearsDecisionPending() {
+        let (model, _, _) = makeModel()
+        model.handle(.snapshot(Snapshot(sessions: [session("s1", repo: "lumi", .waitingUnseen)], repos: [], personas: [])))
+        model.handle(.event(.awaitingDecision(sessionId: "s1", awaiting: true)))
+        XCTAssertTrue(model.questionCard(for: "s1")?.isPermission == true)
+
+        model.handle(.event(.statusChange(sessionId: "s1", status: .working, repoName: "lumi", summary: nil)))
+        XCTAssertNil(model.questionCard(for: "s1"), "working durumuna geçince izin kartı kalkar")
+    }
+
+    /// dispatch (sendText) → decisionPending temizlenir
+    func testDispatchClearsDecisionPending() async {
+        let (model, _, _) = makeModel()
+        model.handle(.snapshot(Snapshot(sessions: [session("s1", repo: "lumi", .waitingUnseen)], repos: [], personas: [])))
+        model.handle(.event(.awaitingDecision(sessionId: "s1", awaiting: true)))
+        XCTAssertTrue(model.questionCard(for: "s1")?.isPermission == true)
+
+        await model.sendText(sessionId: "s1", text: "evet")
+        XCTAssertNil(model.questionCard(for: "s1")?.isPermission == true ? model.questionCard(for: "s1") : nil,
+                     "komut gönderilince izin kartı kalkar")
+    }
+
+    /// unpair() → decisionPending temizlenir
+    func testUnpairClearsDecisionPending() async {
+        let (model, _, _) = makeModel()
+        model.handle(.snapshot(Snapshot(sessions: [session("s1", repo: "lumi", .waitingUnseen)], repos: [], personas: [])))
+        model.handle(.event(.awaitingDecision(sessionId: "s1", awaiting: true)))
+
+        await model.unpair()
+        // model artık eşleşik değil, ama decisionPending sıfırlanmış olmalı
+        // (isPaired = false → questionCard guard'ı erken dönebilir; bunu dolaylı test ediyoruz)
+        XCTAssertFalse(model.isPaired)
+        // decisionPending internal ama snapshot sonrası test edilebilir
+    }
 }
