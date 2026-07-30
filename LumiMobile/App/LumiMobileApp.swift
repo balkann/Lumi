@@ -3,12 +3,30 @@ import LumiMobileKit
 
 @main
 struct LumiMobileApp: App {
-    @State private var model = AppModel(client: RelayClient(), store: KeychainStore())
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    @State private var model: AppModel
+    private let coordinator: PushCoordinator
+
+    init() {
+        let model = AppModel(client: RelayClient(), store: KeychainStore())
+        let coordinator = PushCoordinator(
+            model: model,
+            authorizer: SystemNotificationAuthorizer(),
+            registrar: SystemRemoteRegistrar()
+        )
+        model.pushControl = coordinator
+        _model = State(initialValue: model)
+        self.coordinator = coordinator
+    }
 
     var body: some Scene {
         WindowGroup {
             RootView(model: model)
-                .task { await model.start() }
+                .task {
+                    appDelegate.coordinator = coordinator
+                    await coordinator.refreshAuthStatus()
+                    await model.start()
+                }
                 .onOpenURL { url in
                     Task { await model.pair(from: url.absoluteString) }
                 }

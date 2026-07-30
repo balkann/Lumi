@@ -96,6 +96,7 @@ public final class AppModel {
         consumeTask?.cancel()
         consumeTask = nil
         await start()
+        await pushControl?.onPairingSucceeded()
         return true
     }
 
