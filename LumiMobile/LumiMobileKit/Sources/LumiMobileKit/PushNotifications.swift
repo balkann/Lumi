@@ -53,3 +53,64 @@ public final class UserDefaultsPreferenceStore: PreferenceStore, @unchecked Send
     public func bool(forKey key: String) -> Bool { defaults.bool(forKey: key) }
     public func set(_ value: Bool, forKey key: String) { defaults.set(value, forKey: key) }
 }
+
+@MainActor
+public final class PushCoordinator: PushControlling {
+    private let model: AppModel
+    private let authorizer: any NotificationAuthorizing
+    private let registrar: any RemoteRegistering
+
+    public init(model: AppModel, authorizer: any NotificationAuthorizing, registrar: any RemoteRegistering) {
+        self.model = model
+        self.authorizer = authorizer
+        self.registrar = registrar
+    }
+
+    /// AppDelegate APNs token'ı verince çağrılır.
+    public func handleDeviceToken(_ hex: String) async {
+        await model.applyPushToken(hex)
+    }
+
+    public func refreshAuthStatus() async {
+        model.setNotificationAuthStatus(await authorizer.authorizationStatus())
+    }
+
+    public func onPairingSucceeded() async {
+        let status = await authorizer.authorizationStatus()
+        model.setNotificationAuthStatus(status)
+        guard status == .notDetermined else { return }
+        _ = await requestAndRegister()
+    }
+
+    public func enable() async -> EnableResult {
+        let status = await authorizer.authorizationStatus()
+        model.setNotificationAuthStatus(status)
+        switch status {
+        case .notDetermined:
+            return await requestAndRegister()
+        case .denied:
+            return .needsSettings
+        case .authorized:
+            registrar.registerForRemoteNotifications()
+            await model.markNotificationsEnabled(true)
+            return .enabled
+        }
+    }
+
+    public func disable() async {
+        await model.markNotificationsEnabled(false)
+        registrar.unregisterForRemoteNotifications()
+    }
+
+    private func requestAndRegister() async -> EnableResult {
+        let granted = await authorizer.requestAuthorization()
+        guard granted else {
+            model.setNotificationAuthStatus(.denied)
+            return .declined
+        }
+        model.setNotificationAuthStatus(.authorized)
+        registrar.registerForRemoteNotifications()
+        await model.markNotificationsEnabled(true)
+        return .enabled
+    }
+}
