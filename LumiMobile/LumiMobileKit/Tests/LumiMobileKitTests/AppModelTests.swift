@@ -587,4 +587,47 @@ final class AppModelTests: XCTestCase {
         XCTAssertFalse(model.isPaired)
         // decisionPending internal ama snapshot sonrası test edilebilir
     }
+
+    // MARK: Model seçici (Spec 3)
+
+    func testModelChangeEventSetsCurrentModel() {
+        let (model, _, _) = makeModel()
+        model.handle(.snapshot(Snapshot(sessions: [session("s1", repo: "lumi", .working)], repos: [], personas: [])))
+        model.handle(.event(.modelChange(sessionId: "s1", model: "claude-opus-4-8")))
+        XCTAssertEqual(model.currentModel(for: "s1"), "claude-opus-4-8")
+    }
+
+    func testSnapshotAppliesModel() {
+        let (model, _, _) = makeModel()
+        model.handle(.snapshot(Snapshot(sessions: [
+            SessionSummary(id: "s1", repoPath: "/r/lumi", repoName: "lumi", status: .working, model: "claude-sonnet-4-6"),
+        ], repos: [], personas: [])))
+        XCTAssertEqual(model.currentModel(for: "s1"), "claude-sonnet-4-6")
+    }
+
+    func testStatusWorkingDoesNotClearModel() {
+        let (model, _, _) = makeModel()
+        model.handle(.snapshot(Snapshot(sessions: [session("s1", repo: "lumi", .working)], repos: [], personas: [])))
+        model.handle(.event(.modelChange(sessionId: "s1", model: "claude-opus-4-8")))
+        model.handle(.event(.statusChange(sessionId: "s1", status: .idle, repoName: "lumi", summary: nil)))
+        XCTAssertEqual(model.currentModel(for: "s1"), "claude-opus-4-8", "model kalıcı bilgidir")
+    }
+
+    func testSetModelDispatchesCommand() async {
+        let (model, client, _) = makeModel()
+        model.handle(.snapshot(Snapshot(sessions: [session("s1", repo: "lumi", .working)], repos: [], personas: [])))
+        await model.setModel(sessionId: "s1", model: "sonnet")
+        XCTAssertEqual(client.commands.count, 1)
+        guard case .setModel(let sid, let m) = client.commands[0].action else { return XCTFail() }
+        XCTAssertEqual(sid, "s1")
+        XCTAssertEqual(m, "sonnet")
+    }
+
+    func testModelLabelPrettify() {
+        let (model, _, _) = makeModel()
+        XCTAssertEqual(model.modelLabel("claude-opus-4-8"), "Opus")
+        XCTAssertEqual(model.modelLabel("claude-sonnet-4-6"), "Sonnet")
+        XCTAssertEqual(model.modelLabel("claude-haiku-4-5"), "Haiku")
+        XCTAssertEqual(model.modelLabel("weird-id"), "weird-id")
+    }
 }

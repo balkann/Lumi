@@ -56,6 +56,8 @@ public final class AppModel {
     private var activeQuestions: [String: [Question]] = [:]
     /// sessionId → araç izni bekleniyor; nil = beklemiyor.
     private var decisionPending: [String: Bool] = [:]
+    /// sessionId → mevcut model id'si; kalıcı bilgi (statusChange temizlemez).
+    private var models: [String: String] = [:]
     /// commandId → sessionId; start_session için "" (oturum henüz yok).
     private var commandTargets: [String: String] = [:]
     private var historyCommandIds: Set<String> = []
@@ -117,6 +119,7 @@ public final class AppModel {
         feeds = [:]
         activeQuestions = [:]
         decisionPending = [:]
+        models = [:]
         lastCommandError = [:]
         commandTargets = [:]
         commandUserMessages = [:]
@@ -171,8 +174,9 @@ public final class AppModel {
             macOnline = true
             decisionPending[sessionId] = awaiting ? true : nil
 
-        case .event(.modelChange):
-            break // TODO(Task 4): models[sessionId] = model
+        case .event(.modelChange(let sessionId, let model)):
+            macOnline = true
+            models[sessionId] = model
 
         case .commandResult(let result):
             if historyCommandIds.remove(result.commandId) != nil {
@@ -265,6 +269,23 @@ public final class AppModel {
 
     public func deleteSession(sessionId: String) async {
         await dispatch(target: sessionId, action: .deleteSession(sessionId: sessionId))
+    }
+
+    public func currentModel(for sessionId: String) -> String? {
+        models[sessionId]
+    }
+
+    public func setModel(sessionId: String, model: String) async {
+        await dispatch(target: sessionId, action: .setModel(sessionId: sessionId, model: model))
+    }
+
+    /// Ham model id'sini kısa etikete indirger (UI).
+    public func modelLabel(_ raw: String) -> String {
+        let lower = raw.lowercased()
+        if lower.contains("opus") { return "Opus" }
+        if lower.contains("sonnet") { return "Sonnet" }
+        if lower.contains("haiku") { return "Haiku" }
+        return raw
     }
 
     public func registerPush(deviceToken: String) async {
@@ -395,6 +416,10 @@ public final class AppModel {
         feeds = feeds.filter { liveIds.contains($0.key) }
         activeQuestions = activeQuestions.filter { liveIds.contains($0.key) }
         lastCommandError = lastCommandError.filter { liveIds.contains($0.key) }
+        models = models.filter { liveIds.contains($0.key) }
+        for s in snapshot.sessions {
+            if let m = s.model { models[s.id] = m }
+        }
         // decisionPending: snapshot'tan gelen awaitingDecision alanlarına göre yeniden oluştur.
         decisionPending = decisionPending.filter { liveIds.contains($0.key) }
         for s in snapshot.sessions where s.awaitingDecision {
