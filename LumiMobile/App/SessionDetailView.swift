@@ -34,6 +34,22 @@ struct SessionDetailView: View {
                     StatusBadge(badge: session.status.badge)
                 }
             }
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button("Opus") { Task { await model.setModel(sessionId: sessionId, model: "opus") } }
+                    Button("Sonnet") { Task { await model.setModel(sessionId: sessionId, model: "sonnet") } }
+                    Button("Haiku") { Task { await model.setModel(sessionId: sessionId, model: "haiku") } }
+                    Button("Default") { Task { await model.setModel(sessionId: sessionId, model: "default") } }
+                } label: {
+                    if let raw = model.currentModel(for: sessionId) {
+                        Text(model.modelLabel(raw))
+                    } else {
+                        Image(systemName: "cpu")
+                    }
+                }
+                .disabled(!model.macOnline)
+                .accessibilityIdentifier("modelMenu")
+            }
         }
     }
 
