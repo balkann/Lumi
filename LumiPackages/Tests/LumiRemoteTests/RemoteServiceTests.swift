@@ -78,6 +78,17 @@ private actor FakeConnection: RelayConnecting {
         else { return nil }
         return eventIdx < resultIdx
     }
+    func awaitingEvent() -> (sessionId: String, awaiting: Bool)? {
+        guard let e = sent.first(where: { $0.type == "event" && ($0.payload["kind"] as? String) == "awaiting_decision" })
+        else { return nil }
+        return ((e.payload["sessionId"] as? String) ?? "", (e.payload["awaiting"] as? Bool) ?? false)
+    }
+    func snapshotFirstSessionAwaiting() -> Bool? {
+        guard let snap = sent.last(where: { $0.type == "snapshot" }),
+              let sessions = snap.payload["sessions"] as? [[String: Any]],
+              let first = sessions.first else { return nil }
+        return (first["awaitingDecision"] as? Bool) ?? false
+    }
 }
 
 // FakeTerminal: RemoteCommandHandlerTests'tekiyle aynı yüzey + events push'u
@@ -344,5 +355,54 @@ final class RemoteServiceTests: XCTestCase {
         XCTAssertEqual(error, "no_transcript")
         service.stop()
         await drain()
+    }
+
+    func testAwaitingDecisionChangeSendsEvent() async throws {
+        let connection = FakeConnection()
+        let terminal = FakeTerminal()
+        let meta = try terminal.spawn(repoPath: "/tmp/demo", task: nil, command: nil)
+        let service = makeService(connection: connection, terminal: terminal)
+        await service.start(); await drain()
+
+        terminal.pushEvent(.awaitingDecisionChanged(meta.id, true))
+        await drain()
+
+        let ev = await connection.awaitingEvent()
+        XCTAssertEqual(ev?.sessionId, meta.id.description)
+        XCTAssertEqual(ev?.awaiting, true)
+        service.stop()
+    }
+
+    func testSnapshotCarriesAwaitingDecision() async throws {
+        let connection = FakeConnection()
+        let terminal = FakeTerminal()
+        _ = try terminal.spawn(repoPath: "/tmp/demo", task: nil, command: nil)
+        let meta = terminal.metas[0]
+        let service = makeService(connection: connection, terminal: terminal)
+        await service.start(); await drain()
+
+        terminal.pushEvent(.awaitingDecisionChanged(meta.id, true))
+        await drain()
+        await connection.push(.message(type: "welcome", payload: ["phoneCount": 0]))
+        await drain()
+
+        let awaiting = await connection.snapshotFirstSessionAwaiting()
+        XCTAssertEqual(awaiting, true)
+        service.stop()
+    }
+
+    func testExitClearsAwaitingDecision() async throws {
+        let connection = FakeConnection()
+        let terminal = FakeTerminal()
+        let meta = try terminal.spawn(repoPath: "/tmp/demo", task: nil, command: nil)
+        let service = makeService(connection: connection, terminal: terminal)
+        await service.start(); await drain()
+
+        terminal.pushEvent(.awaitingDecisionChanged(meta.id, true)); await drain()
+        terminal.pushEvent(.exited(meta.id, code: 0)); await drain() // stopWatcher temizler + snapshot yollar
+
+        let awaiting = await connection.snapshotFirstSessionAwaiting()
+        XCTAssertEqual(awaiting, false)
+        service.stop()
     }
 }

@@ -23,6 +23,7 @@ public final class RemoteService: RemoteServicing {
     private var watchers: [TerminalID: TranscriptWatcher] = [:]
     private var watcherTasks: [TerminalID: Task<Void, Never>] = [:]
     private var lastSummary: [TerminalID: String] = [:]
+    private var awaitingDecision: [TerminalID: Bool] = [:]
     private var running = false
     private var epoch = 0
 
@@ -146,6 +147,11 @@ public final class RemoteService: RemoteServicing {
                 meta: meta, status: status, repoName: repoName, summary: lastSummary[id])
             await connection.send(type: "event", payload: payload)
             await sendSnapshot()
+        case .awaitingDecisionChanged(let id, let awaiting):
+            awaitingDecision[id] = awaiting
+            guard let meta = terminal.terminals.first(where: { $0.id == id }) else { return }
+            await connection.send(type: "event", payload:
+                SnapshotBuilder.awaitingDecisionEvent(sessionId: meta.id.description, awaiting: awaiting))
         default:
             break
         }
@@ -175,6 +181,7 @@ public final class RemoteService: RemoteServicing {
             Task { await watcher.stop() }
         }
         lastSummary[id] = nil
+        awaitingDecision[id] = nil
     }
 
     /// get_history (Plan 3.5): watcher'ın jsonl kuyruğunu tek `history`
@@ -224,7 +231,8 @@ public final class RemoteService: RemoteServicing {
         let repoList = await repos.repos()
         let personaList = await personas.personas(projectPath: nil)
         let payload = SnapshotBuilder.snapshot(
-            terminals: terminal.terminals, repos: repoList, personas: personaList)
+            terminals: terminal.terminals, repos: repoList, personas: personaList,
+            awaitingDecision: awaitingDecision)
         await connection.send(type: "snapshot", payload: payload)
     }
 
