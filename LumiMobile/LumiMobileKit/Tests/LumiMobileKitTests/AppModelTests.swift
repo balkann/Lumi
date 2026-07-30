@@ -426,6 +426,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(client.commands.count, 1)
         guard case .deleteSession(let sid) = client.commands[0].action else { return XCTFail() }
         XCTAssertEqual(sid, "s1")
+        XCTAssertEqual(model.sessions.count, 1, "deleteSession iyimser yerel kaldırma yapmaz — snapshot bekler")
     }
 
     func testDisconnectedStateSetsMacOnlineFalse() async {

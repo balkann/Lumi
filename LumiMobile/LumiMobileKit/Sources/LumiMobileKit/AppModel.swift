@@ -354,6 +354,8 @@ public final class AppModel {
         return id
     }
 
+    /// `entryId` feedCap=200 kesimi ya da başka bir nedenle feed'den çıkmışsa tarama
+    /// hiçbir şey bulmaz ve sessizce döner — bu bir hata değil, kasıtlı no-op'tur.
     private func setUserMessageStatus(_ entryId: Int, _ status: SendStatus) {
         for (sessionId, feed) in feeds {
             guard let idx = feed.firstIndex(where: { $0.id == entryId }),
