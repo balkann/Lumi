@@ -151,6 +151,15 @@ final class ProtocolTests: XCTestCase {
         XCTAssertTrue(ping.isEmpty)
     }
 
+    func testUnregisterPushFrame() {
+        let frame = PhoneProtocol.unregisterPushFrame(deviceToken: "abc123")
+        let data = frame.data(using: .utf8)!
+        let obj = try! JSONSerialization.jsonObject(with: data) as! [String: Any]
+        XCTAssertEqual(obj["v"] as? Int, 1)
+        XCTAssertEqual(obj["type"] as? String, "unregister_push")
+        XCTAssertEqual((obj["payload"] as? [String: Any])?["deviceToken"] as? String, "abc123")
+    }
+
     func testDecodeHistoryEvent() {
         let text = #"{"v":1,"type":"event","payload":{"kind":"history","sessionId":"s1","items":[{"itemType":"assistant_text","text":"eski"},{"itemType":"hologram"},{"itemType":"turn_done"}]}}"#
         guard case .event(.history(let id, let items))? = PhoneProtocol.decodeServerMessage(text) else {

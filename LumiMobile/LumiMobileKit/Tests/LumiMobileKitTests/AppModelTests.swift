@@ -26,7 +26,12 @@ final class FakeRelayClient: RelayClienting, @unchecked Sendable {
         }
         return result
     }
-    func registerPush(deviceToken: String) async {}
+    private var _pushRegistrations: [String] = []
+    private var _pushUnregistrations: [String] = []
+    var pushRegistrations: [String] { lock.withLock { _pushRegistrations } }
+    var pushUnregistrations: [String] { lock.withLock { _pushUnregistrations } }
+    func registerPush(deviceToken: String) async { lock.withLock { _pushRegistrations.append(deviceToken) } }
+    func unregisterPush(deviceToken: String) async { lock.withLock { _pushUnregistrations.append(deviceToken) } }
 }
 
 @MainActor

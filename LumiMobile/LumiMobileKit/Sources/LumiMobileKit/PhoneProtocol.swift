@@ -116,6 +116,10 @@ public enum PhoneProtocol {
         frame(type: "register_push", payload: ["deviceToken": deviceToken])
     }
 
+    public static func unregisterPushFrame(deviceToken: String) -> String {
+        frame(type: "unregister_push", payload: ["deviceToken": deviceToken])
+    }
+
     public static func commandFrame(_ command: OutgoingCommand) -> String {
         var payload: [String: Any] = ["commandId": command.commandId]
         switch command.action {

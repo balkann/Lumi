@@ -32,6 +32,7 @@ public protocol RelayClienting: Sendable {
     func stop() async
     @discardableResult func send(command: OutgoingCommand) async -> Bool
     func registerPush(deviceToken: String) async
+    func unregisterPush(deviceToken: String) async
 }
 
 /// Relay'e telefon rolüyle bağlanan istemci: hello → welcome → mesaj akışı;
@@ -90,6 +91,10 @@ public actor RelayClient: RelayClienting {
 
     public func registerPush(deviceToken: String) async {
         _ = await sendFrame(PhoneProtocol.registerPushFrame(deviceToken: deviceToken))
+    }
+
+    public func unregisterPush(deviceToken: String) async {
+        _ = await sendFrame(PhoneProtocol.unregisterPushFrame(deviceToken: deviceToken))
     }
 
     // MARK: İç işleyiş
