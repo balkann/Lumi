@@ -51,7 +51,8 @@ body = `summary` (yoksa duruma göre genel metin).
     { "id": "<uuid>", "repoPath": "/abs/path", "repoName": "repo",
       "status": "idle|working|waiting-unseen|waiting-focused|waiting-seen|error",
       "title": "<oscTitle, opsiyonel>",
-      "awaitingDecision": "<bool, opsiyonel>" }
+      "awaitingDecision": "<bool, opsiyonel>",
+      "model": "<string, opsiyonel>" }
   ],
   "repos":    [ { "name": "repo", "path": "/abs/path" } ],
   "personas": [ { "id": "reviewer", "label": "Reviewer" } ]
@@ -60,9 +61,13 @@ body = `summary` (yoksa duruma göre genel metin).
 
 `title` yalnızca terminalin bir OSC başlığı varsa bulunur.
 `awaitingDecision` yalnızca `true` olduğunda bulunur (yoksa → `false`); oturum bir tool izni/kararı bekliyorsa `true`.
+`model` yalnızca Mac transcript'ten bir model gördüğünde bulunur (yoksa → bilinmiyor); son bilinen çalışan model adı.
 
 ### `awaiting_decision`
 `{ "kind": "awaiting_decision", "sessionId": "<uuid>", "awaiting": bool }` — Mac bir tool için izin (karar) beklemeye başlayınca `true`, çözülünce `false`. Status'ten ayrı sinyaldir (OSC "needs your permission"); rozet OSC başlığına bağlı olduğundan bu daha güvenilirdir. Relay bu kind'a bakmaz (push kuralı yalnız `status_change`).
+
+### `model_change`
+`{ "kind": "model_change", "sessionId": "<uuid>", "model": string }` — Mac, son assistant transcript kaydının `message.model` alanından çıkardığı güncel modeli, değiştiğinde bildirir. Relay bakmaz (push yalnız `status_change`).
 
 ## event payload — history (Plan 3.5 backfill)
 

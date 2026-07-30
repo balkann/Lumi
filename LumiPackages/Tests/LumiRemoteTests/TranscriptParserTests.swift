@@ -68,4 +68,17 @@ final class TranscriptParserTests: XCTestCase {
         XCTAssertEqual(inner["tool"] as? String, "Bash")
         XCTAssertEqual(inner["summary"] as? String, "swift test")
     }
+
+    func testParseExtractsModelFromAssistant() {
+        let line = #"{"type":"assistant","message":{"model":"claude-opus-4-8","content":[{"type":"text","text":"hi"}]}}"#
+        let items = TranscriptParser.parse(line: line)
+        XCTAssertTrue(items.contains(.model("claude-opus-4-8")), "model çıkarılmalı")
+        XCTAssertTrue(items.contains(.assistantText("hi")))
+    }
+
+    func testParseNoModelWhenAbsent() {
+        let line = #"{"type":"assistant","message":{"content":[{"type":"text","text":"hi"}]}}"#
+        let items = TranscriptParser.parse(line: line)
+        XCTAssertFalse(items.contains { if case .model = $0 { return true }; return false })
+    }
 }

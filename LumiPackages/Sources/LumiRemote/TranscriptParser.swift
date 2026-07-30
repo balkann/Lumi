@@ -18,6 +18,7 @@ public enum FeedItem: Equatable, Sendable {
     case toolUse(name: String, summary: String)
     case question(payload: [Question])
     case turnDone
+    case model(String)
 
     /// Yalnız item sözlüğü — hem canlı `transcript` event'inde hem `history`
     /// yanıtında aynı şekil kullanılır (protokol: items[] elemanı).
@@ -33,6 +34,8 @@ public enum FeedItem: Equatable, Sendable {
             }]
         case .turnDone:
             return ["itemType": "turn_done"]
+        case .model(let model):
+            return ["itemType": "model", "model": model]
         }
     }
 
@@ -60,6 +63,9 @@ enum TranscriptParser {
               let content = message["content"] as? [[String: Any]] else { return [] }
 
         var items: [FeedItem] = []
+        if let model = message["model"] as? String, !model.isEmpty {
+            items.append(.model(model))
+        }
         for block in content {
             switch block["type"] as? String {
             case "text":

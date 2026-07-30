@@ -24,6 +24,7 @@ public final class RemoteService: RemoteServicing {
     private var watcherTasks: [TerminalID: Task<Void, Never>] = [:]
     private var lastSummary: [TerminalID: String] = [:]
     private var awaitingDecision: [TerminalID: Bool] = [:]
+    private var currentModel: [TerminalID: String] = [:]
     private var running = false
     private var epoch = 0
 
@@ -182,6 +183,7 @@ public final class RemoteService: RemoteServicing {
         }
         lastSummary[id] = nil
         awaitingDecision[id] = nil
+        currentModel[id] = nil
     }
 
     /// get_history (Plan 3.5): watcher'ın jsonl kuyruğunu tek `history`
@@ -206,19 +208,27 @@ public final class RemoteService: RemoteServicing {
             return
         }
         await connection.send(type: "event", payload: [
-            "kind": "history", "sessionId": raw, "items": items.map(\.itemPayload),
+            "kind": "history", "sessionId": raw,
+            "items": items.filter { if case .model = $0 { return false }; return true }.map(\.itemPayload),
         ])
         await connection.send(type: "command_result", payload: [
             "commandId": commandId, "ok": true,
         ])
     }
 
-    private func handleFeedItem(_ item: FeedItem, sessionId: TerminalID) async {
+    func handleFeedItem(_ item: FeedItem, sessionId: TerminalID) async {
         switch item {
         case .question(let questions):
             lastSummary[sessionId] = questions.first?.question
         case .toolUse(let name, let summary):
             lastSummary[sessionId] = summary.isEmpty ? name : "\(name): \(summary)"
+        case .model(let model):
+            // model sinyaldir, transcript öğesi değil → telefona transcript olarak gitmez
+            guard currentModel[sessionId] != model else { return }
+            currentModel[sessionId] = model
+            await connection.send(type: "event",
+                payload: SnapshotBuilder.modelChangeEvent(sessionId: sessionId.description, model: model))
+            return
         default:
             break
         }
@@ -232,7 +242,7 @@ public final class RemoteService: RemoteServicing {
         let personaList = await personas.personas(projectPath: nil)
         let payload = SnapshotBuilder.snapshot(
             terminals: terminal.terminals, repos: repoList, personas: personaList,
-            awaitingDecision: awaitingDecision)
+            awaitingDecision: awaitingDecision, currentModel: currentModel)
         await connection.send(type: "snapshot", payload: payload)
     }
 

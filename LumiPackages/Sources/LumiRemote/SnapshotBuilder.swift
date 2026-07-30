@@ -7,7 +7,8 @@ enum SnapshotBuilder {
         terminals: [TerminalMeta],
         repos: [Repo],
         personas: [Persona],
-        awaitingDecision: [TerminalID: Bool] = [:]
+        awaitingDecision: [TerminalID: Bool] = [:],
+        currentModel: [TerminalID: String] = [:]
     ) -> [String: Any] {
         let repoNames = Dictionary(repos.map { ($0.path, $0.name) },
                                    uniquingKeysWith: { first, _ in first })
@@ -21,6 +22,7 @@ enum SnapshotBuilder {
             ]
             if let title = meta.oscTitle { entry["title"] = title }
             if awaitingDecision[meta.id] == true { entry["awaitingDecision"] = true }
+            if let model = currentModel[meta.id] { entry["model"] = model }
             return entry
         }
         return [
@@ -32,6 +34,10 @@ enum SnapshotBuilder {
 
     static func awaitingDecisionEvent(sessionId: String, awaiting: Bool) -> [String: Any] {
         ["kind": "awaiting_decision", "sessionId": sessionId, "awaiting": awaiting]
+    }
+
+    static func modelChangeEvent(sessionId: String, model: String) -> [String: Any] {
+        ["kind": "model_change", "sessionId": sessionId, "model": model]
     }
 
     static func statusChangeEvent(

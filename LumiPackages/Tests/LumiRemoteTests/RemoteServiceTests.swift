@@ -89,6 +89,20 @@ private actor FakeConnection: RelayConnecting {
               let first = sessions.first else { return nil }
         return (first["awaitingDecision"] as? Bool) ?? false
     }
+    func modelChangeEvent() -> (sessionId: String, model: String)? {
+        guard let e = sent.first(where: { $0.type == "event" && ($0.payload["kind"] as? String) == "model_change" })
+        else { return nil }
+        return ((e.payload["sessionId"] as? String) ?? "", (e.payload["model"] as? String) ?? "")
+    }
+    func modelChangeEventCount() -> Int {
+        sent.filter { $0.type == "event" && ($0.payload["kind"] as? String) == "model_change" }.count
+    }
+    func snapshotFirstSessionModel() -> String? {
+        guard let snap = sent.last(where: { $0.type == "snapshot" }),
+              let sessions = snap.payload["sessions"] as? [[String: Any]],
+              let first = sessions.first else { return nil }
+        return first["model"] as? String
+    }
 }
 
 // FakeTerminal: RemoteCommandHandlerTests'tekiyle aynı yüzey + events push'u
@@ -404,5 +418,61 @@ final class RemoteServiceTests: XCTestCase {
         let awaiting = await connection.snapshotFirstSessionAwaiting()
         XCTAssertEqual(awaiting, false)
         service.stop()
+    }
+
+    func testModelChangeEventShape() {
+        let e = SnapshotBuilder.modelChangeEvent(sessionId: "s1", model: "claude-opus-4-8")
+        XCTAssertEqual(e["kind"] as? String, "model_change")
+        XCTAssertEqual(e["sessionId"] as? String, "s1")
+        XCTAssertEqual(e["model"] as? String, "claude-opus-4-8")
+    }
+
+    func testModelFeedItemEmitsChangeOnceAndSnapshotCarriesIt() async throws {
+        let connection = FakeConnection()
+        let terminal = FakeTerminal()
+        let meta = try terminal.spawn(repoPath: "/tmp/demo", task: nil, command: nil)
+        let service = makeService(connection: connection, terminal: terminal)
+        await service.start(); await drain()
+
+        await service.handleFeedItem(.model("claude-opus-4-8"), sessionId: meta.id)
+        let ev = await connection.modelChangeEvent()
+        XCTAssertEqual(ev?.sessionId, meta.id.description)
+        XCTAssertEqual(ev?.model, "claude-opus-4-8")
+
+        // aynı model tekrar → yeni event yok
+        await service.handleFeedItem(.model("claude-opus-4-8"), sessionId: meta.id)
+        let eventCount = await connection.modelChangeEventCount()
+        XCTAssertEqual(eventCount, 1)
+
+        // snapshot güncel modeli taşır
+        await connection.push(.message(type: "welcome", payload: ["phoneCount": 0]))
+        await drain()
+        let snapshotModel = await connection.snapshotFirstSessionModel()
+        XCTAssertEqual(snapshotModel, "claude-opus-4-8")
+        service.stop()
+    }
+
+    func testGetHistoryExcludesModelItem() async throws {
+        let connection = FakeConnection()
+        let terminal = FakeTerminal()
+        let meta = try terminal.spawn(repoPath: "/tmp/demo", task: nil, command: nil)
+        let projectDir = tempHome.appendingPathComponent("transcripts")
+            .appendingPathComponent(TranscriptParser.projectDirName(forCwd: "/tmp/demo"))
+        try FileManager.default.createDirectory(at: projectDir, withIntermediateDirectories: true)
+        let line = #"{"type":"assistant","message":{"model":"claude-opus-4-8","content":[{"type":"text","text":"gecmis"}]}}"#
+        try (line + "\n").data(using: .utf8)!.write(to: projectDir.appendingPathComponent("s1.jsonl"))
+
+        let service = makeService(connection: connection, terminal: terminal)
+        await service.start(); await drain()
+        await connection.push(.message(type: "command", payload: [
+            "commandId": "h-9", "action": "get_history", "sessionId": meta.id.description,
+        ]))
+        await drain()
+
+        let history = await connection.historyEvent()
+        XCTAssertEqual(history?.itemCount, 1, "model öğesi history'den elenmeli, yalnız metin kalmalı")
+        let firstText = await connection.historyFirstItemText()
+        XCTAssertEqual(firstText, "gecmis")
+        service.stop(); await drain()
     }
 }
