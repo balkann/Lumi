@@ -228,6 +228,10 @@ public final class AppModel {
         startState = .idle
     }
 
+    public func deleteSession(sessionId: String) async {
+        await dispatch(target: sessionId, action: .deleteSession(sessionId: sessionId))
+    }
+
     public func registerPush(deviceToken: String) async {
         await client.registerPush(deviceToken: deviceToken)
     }

@@ -419,6 +419,15 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.feeds["s1"]?.first?.item, .userMessage(text: "merhaba", status: .sent))
     }
 
+    func testDeleteSessionDispatchesCommand() async {
+        let (model, client, _) = makeModel()
+        model.handle(.snapshot(Snapshot(sessions: [session("s1", repo: "lumi", .idle)], repos: [], personas: [])))
+        await model.deleteSession(sessionId: "s1")
+        XCTAssertEqual(client.commands.count, 1)
+        guard case .deleteSession(let sid) = client.commands[0].action else { return XCTFail() }
+        XCTAssertEqual(sid, "s1")
+    }
+
     func testDisconnectedStateSetsMacOnlineFalse() async {
         let (model, client, _) = makeModel()
         await model.start()

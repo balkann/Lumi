@@ -14,6 +14,7 @@ public enum CommandAction: Sendable, Equatable {
     case pressKey(sessionId: String, key: String)
     case startSession(repoPath: String, personaId: String?, prompt: String)
     case getHistory(sessionId: String)
+    case deleteSession(sessionId: String)
 }
 
 public struct OutgoingCommand: Sendable, Equatable {
@@ -133,6 +134,9 @@ public enum PhoneProtocol {
             if let personaId { payload["personaId"] = personaId }
         case .getHistory(let sessionId):
             payload["action"] = "get_history"
+            payload["sessionId"] = sessionId
+        case .deleteSession(let sessionId):
+            payload["action"] = "delete_session"
             payload["sessionId"] = sessionId
         }
         return frame(type: "command", payload: payload)

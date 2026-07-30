@@ -167,4 +167,16 @@ final class ProtocolTests: XCTestCase {
         XCTAssertEqual(payload["action"] as? String, "get_history")
         XCTAssertEqual(payload["sessionId"] as? String, "s1")
     }
+
+    func testEncodeDeleteSessionCommand() throws {
+        let frame = PhoneProtocol.commandFrame(
+            OutgoingCommand(commandId: "c9", action: .deleteSession(sessionId: "s1")))
+        let data = try XCTUnwrap(frame.data(using: .utf8))
+        let dict = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(dict["type"] as? String, "command")
+        let payload = try XCTUnwrap(dict["payload"] as? [String: Any])
+        XCTAssertEqual(payload["action"] as? String, "delete_session")
+        XCTAssertEqual(payload["sessionId"] as? String, "s1")
+        XCTAssertEqual(payload["commandId"] as? String, "c9")
+    }
 }
