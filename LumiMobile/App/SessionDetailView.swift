@@ -49,7 +49,8 @@ struct SessionDetailView: View {
                             .padding(.top, 24)
                     }
                     ForEach(feed) { entry in
-                        FeedEntryView(entry: entry).id(entry.id)
+                        FeedEntryView(entry: entry, onRetry: retryClosure(for: entry))
+                            .id(entry.id)
                     }
                 }
                 .padding()
@@ -67,16 +68,13 @@ struct SessionDetailView: View {
 
     private var inputBar: some View {
         HStack(spacing: 8) {
-            TextField(model.macOnline ? "Mesaj yaz…" : "Mac çevrimdışı", text: $draft, axis: .vertical)
-                .lineLimit(1...4)
+            TextField(model.macOnline ? "Mesaj yaz…" : "Mac çevrimdışı", text: $draft)
                 .textFieldStyle(.roundedBorder)
+                .submitLabel(.send)
+                .onSubmit(send)
                 .disabled(!model.macOnline)
                 .accessibilityIdentifier("messageField")
-            Button {
-                let text = draft
-                draft = ""
-                Task { await model.sendText(sessionId: sessionId, text: text) }
-            } label: {
+            Button(action: send) {
                 Image(systemName: "arrow.up.circle.fill").font(.title2)
             }
             .accessibilityIdentifier("sendButton")
@@ -86,10 +84,23 @@ struct SessionDetailView: View {
         .padding(.vertical, 8)
         .background(.bar)
     }
+
+    private func send() {
+        let text = draft
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        draft = ""
+        Task { await model.sendText(sessionId: sessionId, text: text) }
+    }
+
+    private func retryClosure(for entry: FeedEntry) -> (() -> Void)? {
+        guard case .userMessage(_, .failed) = entry.item else { return nil }
+        return { Task { await model.retrySend(sessionId: sessionId, entryId: entry.id) } }
+    }
 }
 
 struct FeedEntryView: View {
     let entry: FeedEntry
+    var onRetry: (() -> Void)? = nil
 
     var body: some View {
         switch entry.item {
@@ -107,6 +118,32 @@ struct FeedEntryView: View {
         case .question:
             // Sorular akışta değil sabit kartta gösterilir (AppModel bunları feed'e koymaz).
             EmptyView()
+        case .userMessage(let text, let status):
+            HStack(alignment: .bottom, spacing: 6) {
+                Spacer(minLength: 40)
+                Text(text)
+                    .font(.body)
+                    .padding(.horizontal, 12).padding(.vertical, 8)
+                    .background(.tint.opacity(0.15), in: RoundedRectangle(cornerRadius: 14))
+                sendStatusIcon(status)
+            }
+            .frame(maxWidth: .infinity, alignment: .trailing)
+        }
+    }
+
+    @ViewBuilder
+    private func sendStatusIcon(_ status: SendStatus) -> some View {
+        switch status {
+        case .sending:
+            Image(systemName: "clock").font(.caption2).foregroundStyle(.secondary)
+        case .sent:
+            Image(systemName: "checkmark").font(.caption2).foregroundStyle(.secondary)
+        case .failed:
+            Button { onRetry?() } label: {
+                Image(systemName: "exclamationmark.circle.fill").font(.caption)
+            }
+            .buttonStyle(.plain).foregroundStyle(.red)
+            .accessibilityLabel("Tekrar gönder")
         }
     }
 }
