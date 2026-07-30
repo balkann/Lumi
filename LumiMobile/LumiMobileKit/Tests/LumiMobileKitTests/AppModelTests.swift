@@ -395,6 +395,30 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.feeds["s1"]?.last?.id, userEntryId)
     }
 
+    // MARK: Task 3 — retrySend
+
+    func testRetrySendResendsFailedBubble() async {
+        let (model, client, _) = makeModel()
+        client.sendResult = false
+        model.handle(.snapshot(Snapshot(sessions: [session("s1", repo: "lumi", .idle)], repos: [], personas: [])))
+        await model.sendText(sessionId: "s1", text: "merhaba")
+        let entryId = model.feeds["s1"]!.first!.id
+        XCTAssertEqual(model.feeds["s1"]?.first?.item, .userMessage(text: "merhaba", status: .failed))
+
+        // bağlantı geri geldi → tekrar dene
+        client.sendResult = true
+        await model.retrySend(sessionId: "s1", entryId: entryId)
+
+        // aynı bubble tekrar sending'e döndü, YENİ bubble eklenmedi
+        XCTAssertEqual(model.feeds["s1"]?.count, 1)
+        XCTAssertEqual(model.feeds["s1"]?.first?.item, .userMessage(text: "merhaba", status: .sending))
+        XCTAssertEqual(client.commands.count, 1)
+
+        // yeni komutun sonucu bubble'ı sent yapar
+        model.handle(.commandResult(CommandResult(commandId: client.commands[0].commandId, ok: true, error: nil)))
+        XCTAssertEqual(model.feeds["s1"]?.first?.item, .userMessage(text: "merhaba", status: .sent))
+    }
+
     func testDisconnectedStateSetsMacOnlineFalse() async {
         let (model, client, _) = makeModel()
         await model.start()

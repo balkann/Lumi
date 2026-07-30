@@ -232,6 +232,17 @@ public final class AppModel {
         await client.registerPush(deviceToken: deviceToken)
     }
 
+    /// Başarısız bir kullanıcı mesajı baloncuğuna dokununca aynı entry'yi tekrar gönderir.
+    public func retrySend(sessionId: String, entryId: Int) async {
+        guard let feed = feeds[sessionId],
+              let idx = feed.firstIndex(where: { $0.id == entryId }),
+              case .userMessage(let text, _) = feed[idx].item else { return }
+        setUserMessageStatus(entryId, .sending)
+        await dispatch(target: sessionId,
+                       action: .sendText(sessionId: sessionId, text: text),
+                       userMessageEntryId: entryId)
+    }
+
     /// Oturum detayı açılınca çağrılır: transcript geçmişini ister.
     /// Başarısızlık kullanıcıya yansıtılmaz (eski Mac `unknown_action`,
     /// eşleşmesiz oturum `no_transcript` döndürebilir — ikisi de normaldir).
