@@ -164,3 +164,27 @@ test('register_push cihaz token\'ını odaya ekler; geçersizi yok sayar', () =>
   bridge.handleMessage(phoneSession, env('register_push', {}))
   expect([...registry.get(TOKEN)!.pushTokens]).toEqual(['device-token-abc'])
 })
+
+test('register_push sonra unregister_push token odadan silinir', () => {
+  const { bridge, phoneSession, registry } = paired()
+  bridge.handleMessage(phoneSession, env('register_push', { deviceToken: 'device-token-abc' }))
+  expect([...registry.get(TOKEN)!.pushTokens]).toEqual(['device-token-abc'])
+  bridge.handleMessage(phoneSession, env('unregister_push', { deviceToken: 'device-token-abc' }))
+  expect(registry.get(TOKEN)!.pushTokens.size).toBe(0)
+})
+
+test('unregister_push bilinmeyen token no-op, hata vermez', () => {
+  const { bridge, phoneSession, registry } = paired()
+  bridge.handleMessage(phoneSession, env('unregister_push', { deviceToken: 'yok' }))
+  expect(registry.get(TOKEN)!.pushTokens.size).toBe(0)
+})
+
+test('unregister_push sonrası status_change push tetiklemez', () => {
+  const { bridge, macSession, phoneSession, push, registry } = paired()
+  bridge.handleMessage(phoneSession, env('register_push', { deviceToken: 'device-token-abc' }))
+  bridge.handleMessage(phoneSession, env('unregister_push', { deviceToken: 'device-token-abc' }))
+  bridge.handleMessage(macSession, env('event', {
+    kind: 'status_change', sessionId: 's1', status: 'waiting-unseen', repoName: 'Lumi',
+  }))
+  expect(push.calls).toHaveLength(0)
+})

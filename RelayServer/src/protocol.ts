@@ -15,7 +15,7 @@ export interface HelloPayload {
 
 const KNOWN_TYPES = new Set([
   'hello', 'welcome', 'snapshot', 'event', 'command', 'command_result',
-  'register_push', 'ping', 'pong',
+  'register_push', 'unregister_push', 'ping', 'pong',
 ])
 
 const MIN_TOKEN_LENGTH = 16

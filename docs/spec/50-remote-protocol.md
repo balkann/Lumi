@@ -30,6 +30,7 @@ sonra yeni denemeler direkt kapatılır.
 | `command` | phone→relay | `{commandId, action, ...}` | Mac'e iletilir; mac yoksa `command_result {ok:false, error:"mac_offline"}` geri döner |
 | `command_result` | mac→relay | `{commandId, ok, error?}` | Telefonlara yayınlanır |
 | `register_push` | phone→relay | `{deviceToken: string}` | Odaya APNs cihaz token'ı ekler |
+| `unregister_push` | phone→relay | `{deviceToken: string}` | Odadan APNs cihaz token'ını siler (toggle kapatma) |
 | `ping` / `pong` | her iki yön | `{}` | Uygulama seviyesi canlılık |
 
 Not: Relay'in 30 sn'lik canlılık denetimi transport seviyesinde (WS ping/pong

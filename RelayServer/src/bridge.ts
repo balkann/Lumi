@@ -78,6 +78,11 @@ export class Bridge {
           room.pushTokens.add(env.payload.deviceToken)
         }
         break
+      case 'unregister_push':
+        if (typeof env.payload.deviceToken === 'string' && env.payload.deviceToken.length > 0) {
+          room.pushTokens.delete(env.payload.deviceToken)
+        }
+        break
     }
   }
 
