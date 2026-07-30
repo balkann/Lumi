@@ -50,6 +50,15 @@ final class RemoteCommandHandler {
             })
         case "start_session":
             return await startSession(payload, commandId: commandId)
+        case "set_model":
+            let model = payload["model"] as? String ?? ""
+            guard Self.allowedModels.contains(model) else {
+                return ["commandId": commandId, "ok": false, "error": "unknown_model"]
+            }
+            return result(commandId, run: {
+                let id = try self.session(from: payload)
+                try self.terminal.write(id: id, text: "/model \(model)\r")
+            })
         default:
             return ["commandId": commandId, "ok": false, "error": "unknown_action"]
         }
@@ -93,6 +102,8 @@ final class RemoteCommandHandler {
             return ["commandId": commandId, "ok": false, "error": "\(error)"]
         }
     }
+
+    private static let allowedModels: Set<String> = ["opus", "sonnet", "haiku", "default"]
 
     private enum CommandError: Error { case sessionNotFound }
 }

@@ -94,3 +94,4 @@ listeyle DEĞİŞTİRİR. Relay bu kind'a bakmaz (push kuralı yalnız `status_c
 - `start_session {commandId, repoPath, personaId?, prompt}`
 - `get_history {commandId, sessionId}` — oturumun transcript geçmişini ister; Mac önce `event {kind:"history"}` sonra `command_result` döner (Plan 3.5). Hatalar: `session_not_found`, `no_transcript`.
 - `delete_session {commandId, sessionId}` — oturumu Mac'te sonlandırır (`terminal.kill`). Ardından `.exited` → yeni `snapshot` yayınlanır ve oturum telefon listesinden düşer. Hata: `session_not_found`.
+- `set_model {commandId, sessionId, model}` — çalışan oturumun modelini değiştirir; Mac terminale `/model <model>` yazar. `model` ∈ `opus|sonnet|haiku|default`. Hatalar: `session_not_found`, `unknown_model`.

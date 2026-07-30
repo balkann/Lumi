@@ -179,4 +179,37 @@ final class RemoteCommandHandlerTests: XCTestCase {
         XCTAssertEqual(result["ok"] as? Bool, false)
         XCTAssertEqual(result["error"] as? String, "session_not_found")
     }
+
+    func testSetModelWritesSlashModel() async {
+        let (handler, terminal) = makeHandler()
+        let meta = try! terminal.spawn(repoPath: "/r", task: nil, command: nil)
+        let result = await handler.handle([
+            "commandId": "m1", "action": "set_model",
+            "sessionId": meta.id.description, "model": "opus",
+        ])
+        XCTAssertEqual(result["ok"] as? Bool, true)
+        XCTAssertEqual(terminal.writes.last?.1, "/model opus\r")
+    }
+
+    func testSetModelUnknownModelRejected() async {
+        let (handler, terminal) = makeHandler()
+        let meta = try! terminal.spawn(repoPath: "/r", task: nil, command: nil)
+        let result = await handler.handle([
+            "commandId": "m2", "action": "set_model",
+            "sessionId": meta.id.description, "model": "gpt-4",
+        ])
+        XCTAssertEqual(result["ok"] as? Bool, false)
+        XCTAssertEqual(result["error"] as? String, "unknown_model")
+        XCTAssertTrue(terminal.writes.isEmpty, "geçersiz model terminale yazılmamalı")
+    }
+
+    func testSetModelUnknownSessionFails() async {
+        let (handler, _) = makeHandler()
+        let result = await handler.handle([
+            "commandId": "m3", "action": "set_model",
+            "sessionId": UUID().uuidString, "model": "sonnet",
+        ])
+        XCTAssertEqual(result["ok"] as? Bool, false)
+        XCTAssertEqual(result["error"] as? String, "session_not_found")
+    }
 }
