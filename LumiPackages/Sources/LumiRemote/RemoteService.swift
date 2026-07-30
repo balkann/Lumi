@@ -224,6 +224,9 @@ public final class RemoteService: RemoteServicing {
             lastSummary[sessionId] = summary.isEmpty ? name : "\(name): \(summary)"
         case .model(let model):
             // model sinyaldir, transcript öğesi değil → telefona transcript olarak gitmez
+            // Değer, asistan jsonl çıktısındaki message.model'dan okunur; set_model komutu
+            // sonrası yeni model ancak bir sonraki asistan mesajında görünür (kasıtlı gecikme —
+            // telefon istenen değil, fiilen çalışan modeli gösterir).
             guard currentModel[sessionId] != model else { return }
             currentModel[sessionId] = model
             await connection.send(type: "event",
