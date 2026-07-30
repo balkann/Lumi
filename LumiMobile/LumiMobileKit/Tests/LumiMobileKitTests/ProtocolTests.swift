@@ -179,4 +179,37 @@ final class ProtocolTests: XCTestCase {
         XCTAssertEqual(payload["sessionId"] as? String, "s1")
         XCTAssertEqual(payload["commandId"] as? String, "c9")
     }
+
+    func testDecodeAwaitingDecisionEvent() {
+        let text = #"{"v":1,"type":"event","payload":{"kind":"awaiting_decision","sessionId":"s1","awaiting":true}}"#
+        guard case .event(.awaitingDecision(let id, let awaiting))? = PhoneProtocol.decodeServerMessage(text) else {
+            return XCTFail("awaiting_decision bekleniyordu")
+        }
+        XCTAssertEqual(id, "s1")
+        XCTAssertTrue(awaiting)
+    }
+
+    func testDecodeAwaitingDecisionMissingAwaitingDefaultsFalse() {
+        let text = #"{"v":1,"type":"event","payload":{"kind":"awaiting_decision","sessionId":"s1"}}"#
+        guard case .event(.awaitingDecision(_, let awaiting))? = PhoneProtocol.decodeServerMessage(text) else {
+            return XCTFail("awaiting_decision bekleniyordu")
+        }
+        XCTAssertFalse(awaiting)
+    }
+
+    func testDecodeSnapshotSessionAwaitingDecision() {
+        let text = #"{"v":1,"type":"snapshot","payload":{"sessions":[{"id":"s1","repoPath":"/r","repoName":"r","status":"waiting-unseen","awaitingDecision":true}],"repos":[],"personas":[]}}"#
+        guard case .snapshot(let snapshot)? = PhoneProtocol.decodeServerMessage(text) else {
+            return XCTFail("snapshot bekleniyordu")
+        }
+        XCTAssertTrue(snapshot.sessions[0].awaitingDecision)
+    }
+
+    func testDecodeSnapshotSessionAwaitingDefaultsFalseWhenAbsent() {
+        let text = #"{"v":1,"type":"snapshot","payload":{"sessions":[{"id":"s1","repoPath":"/r","repoName":"r","status":"idle"}],"repos":[],"personas":[]}}"#
+        guard case .snapshot(let snapshot)? = PhoneProtocol.decodeServerMessage(text) else {
+            return XCTFail("snapshot bekleniyordu")
+        }
+        XCTAssertFalse(snapshot.sessions[0].awaitingDecision)
+    }
 }

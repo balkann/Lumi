@@ -149,6 +149,10 @@ public final class AppModel {
             macOnline = true
             applyHistory(sessionId: sessionId, items: items)
 
+        case .event(.awaitingDecision):
+            // TODO(Task 3): permission-card logic — temporary no-op
+            break
+
         case .commandResult(let result):
             if historyCommandIds.remove(result.commandId) != nil {
                 return // geçmiş isteğinin sonucu kullanıcıya yansıtılmaz (ok da olsa hata da)
