@@ -4,6 +4,7 @@ import LumiMobileKit
 struct SessionListView: View {
     let model: AppModel
     @State private var showNewSession = false
+    @State private var pendingDelete: SessionSummary?
 
     var body: some View {
         NavigationStack {
@@ -15,11 +16,34 @@ struct SessionListView: View {
                     NavigationLink(value: session.id) {
                         SessionRow(session: session)
                     }
+                    .swipeActions(edge: .trailing) {
+                        Button(role: .destructive) {
+                            pendingDelete = session
+                        } label: {
+                            Label("Sil", systemImage: "trash")
+                        }
+                    }
                 }
                 if model.orderedSessions.isEmpty {
                     Text("Aktif oturum yok")
                         .foregroundStyle(.secondary)
                 }
+            }
+            .confirmationDialog(
+                "Oturum sonlandırılsın mı?",
+                isPresented: Binding(
+                    get: { pendingDelete != nil },
+                    set: { if !$0 { pendingDelete = nil } }
+                ),
+                presenting: pendingDelete
+            ) { session in
+                Button("Sonlandır", role: .destructive) {
+                    Task { await model.deleteSession(sessionId: session.id) }
+                    pendingDelete = nil
+                }
+                Button("Vazgeç", role: .cancel) { pendingDelete = nil }
+            } message: { session in
+                Text("\(session.repoName) oturumu Mac'te sonlandırılacak.")
             }
             .navigationTitle("Lumi")
             .navigationDestination(for: String.self) { sessionId in
