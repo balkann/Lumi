@@ -28,7 +28,7 @@ struct SystemRemoteRegistrar: RemoteRegistering {
 }
 
 /// APNs callback'lerini PushCoordinator'a köprüler.
-final class AppDelegate: NSObject, UIApplicationDelegate {
+@MainActor final class AppDelegate: NSObject, UIApplicationDelegate {
     var coordinator: PushCoordinator?
 
     func application(_ application: UIApplication,
