@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import LumiMobileKit
 
 struct SessionListView: View {
@@ -63,6 +64,21 @@ struct SessionListView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
+                        Toggle("Bildirimler", isOn: Binding(
+                            get: { model.notificationsEnabled },
+                            set: { isOn in
+                                Task {
+                                    if isOn {
+                                        if await model.enableNotifications() == .needsSettings,
+                                           let url = URL(string: UIApplication.openSettingsURLString) {
+                                            await UIApplication.shared.open(url)
+                                        }
+                                    } else {
+                                        await model.disableNotifications()
+                                    }
+                                }
+                            }
+                        ))
                         Button("Eşleştirmeyi kaldır", role: .destructive) {
                             Task { await model.unpair() }
                         }
