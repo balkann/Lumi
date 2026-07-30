@@ -15,6 +15,7 @@ public enum CommandAction: Sendable, Equatable {
     case startSession(repoPath: String, personaId: String?, prompt: String)
     case getHistory(sessionId: String)
     case deleteSession(sessionId: String)
+    case setModel(sessionId: String, model: String)
 }
 
 public struct OutgoingCommand: Sendable, Equatable {
@@ -81,6 +82,9 @@ public enum PhoneProtocol {
             return .awaitingDecision(
                 sessionId: sessionId,
                 awaiting: payload["awaiting"] as? Bool ?? false)
+        case "model_change":
+            guard let model = payload["model"] as? String else { return nil }
+            return .modelChange(sessionId: sessionId, model: model)
         default:
             return nil
         }
@@ -146,6 +150,10 @@ public enum PhoneProtocol {
         case .deleteSession(let sessionId):
             payload["action"] = "delete_session"
             payload["sessionId"] = sessionId
+        case .setModel(let sessionId, let model):
+            payload["action"] = "set_model"
+            payload["sessionId"] = sessionId
+            payload["model"] = model
         }
         return frame(type: "command", payload: payload)
     }

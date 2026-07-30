@@ -171,6 +171,9 @@ public final class AppModel {
             macOnline = true
             decisionPending[sessionId] = awaiting ? true : nil
 
+        case .event(.modelChange):
+            break // TODO(Task 4): models[sessionId] = model
+
         case .commandResult(let result):
             if historyCommandIds.remove(result.commandId) != nil {
                 return // geçmiş isteğinin sonucu kullanıcıya yansıtılmaz (ok da olsa hata da)

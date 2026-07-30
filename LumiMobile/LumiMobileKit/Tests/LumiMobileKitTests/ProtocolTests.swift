@@ -221,4 +221,41 @@ final class ProtocolTests: XCTestCase {
         }
         XCTAssertFalse(snapshot.sessions[0].awaitingDecision)
     }
+
+    func testDecodeModelChangeEvent() {
+        let text = #"{"v":1,"type":"event","payload":{"kind":"model_change","sessionId":"s1","model":"claude-opus-4-8"}}"#
+        guard case .event(.modelChange(let id, let model))? = PhoneProtocol.decodeServerMessage(text) else {
+            return XCTFail("model_change bekleniyordu")
+        }
+        XCTAssertEqual(id, "s1")
+        XCTAssertEqual(model, "claude-opus-4-8")
+    }
+
+    func testDecodeSnapshotSessionModel() {
+        let text = #"{"v":1,"type":"snapshot","payload":{"sessions":[{"id":"s1","repoPath":"/r","repoName":"r","status":"working","model":"claude-sonnet-4-6"}],"repos":[],"personas":[]}}"#
+        guard case .snapshot(let snapshot)? = PhoneProtocol.decodeServerMessage(text) else {
+            return XCTFail("snapshot bekleniyordu")
+        }
+        XCTAssertEqual(snapshot.sessions[0].model, "claude-sonnet-4-6")
+    }
+
+    func testDecodeSnapshotSessionModelNilWhenAbsent() {
+        let text = #"{"v":1,"type":"snapshot","payload":{"sessions":[{"id":"s1","repoPath":"/r","repoName":"r","status":"idle"}],"repos":[],"personas":[]}}"#
+        guard case .snapshot(let snapshot)? = PhoneProtocol.decodeServerMessage(text) else {
+            return XCTFail("snapshot bekleniyordu")
+        }
+        XCTAssertNil(snapshot.sessions[0].model)
+    }
+
+    func testEncodeSetModelCommand() throws {
+        let frame = PhoneProtocol.commandFrame(
+            OutgoingCommand(commandId: "m9", action: .setModel(sessionId: "s1", model: "sonnet")))
+        let data = try XCTUnwrap(frame.data(using: .utf8))
+        let dict = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let payload = try XCTUnwrap(dict["payload"] as? [String: Any])
+        XCTAssertEqual(payload["action"] as? String, "set_model")
+        XCTAssertEqual(payload["sessionId"] as? String, "s1")
+        XCTAssertEqual(payload["model"] as? String, "sonnet")
+        XCTAssertEqual(payload["commandId"] as? String, "m9")
+    }
 }
