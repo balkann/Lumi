@@ -44,6 +44,15 @@ private func makeModel(paired: Bool = true) -> (AppModel, FakeRelayClient, InMem
     return (AppModel(client: client, store: store), client, store)
 }
 
+@MainActor
+private func makeModelP(paired: Bool = true) -> (AppModel, FakeRelayClient, InMemoryPreferenceStore) {
+    let client = FakeRelayClient()
+    let store = InMemorySecureStore()
+    let prefs = InMemoryPreferenceStore()
+    if paired { store.write(PairingInfo(relayUrl: "wss://r.example", token: "0123456789abcdef")) }
+    return (AppModel(client: client, store: store, prefs: prefs), client, prefs)
+}
+
 private func session(_ id: String, repo: String, _ status: SessionStatus) -> SessionSummary {
     SessionSummary(id: id, repoPath: "/r/\(repo)", repoName: repo, status: status)
 }
@@ -451,5 +460,52 @@ final class AppModelTests: XCTestCase {
             try? await Task.sleep(for: .milliseconds(10))
         }
         XCTAssertFalse(model.macOnline, "disconnected sonrası macOnline false olmalı")
+    }
+
+    // MARK: Task 4 — push state
+
+    func testApplyPushTokenRegistersWhenEnabled() async {
+        let (model, client, prefs) = makeModelP()
+        prefs.set(true, forKey: "notificationsEnabled")
+        // enabled'ı prefs'ten okuması için taze model:
+        let model2 = AppModel(client: client, store: InMemorySecureStore(), prefs: prefs)
+        XCTAssertTrue(model2.notificationsEnabled)
+        await model2.applyPushToken("tok-1")
+        XCTAssertEqual(client.pushRegistrations, ["tok-1"])
+        _ = model
+    }
+
+    func testApplyPushTokenNoRegisterWhenDisabled() async {
+        let (model, client, _) = makeModelP()
+        XCTAssertFalse(model.notificationsEnabled)
+        await model.applyPushToken("tok-1")
+        XCTAssertTrue(client.pushRegistrations.isEmpty)
+    }
+
+    func testMarkEnabledTrueRegistersTokenAndPersists() async {
+        let (model, client, prefs) = makeModelP()
+        await model.applyPushToken("tok-1")           // disabled → kayıt yok
+        await model.markNotificationsEnabled(true)
+        XCTAssertTrue(model.notificationsEnabled)
+        XCTAssertTrue(prefs.bool(forKey: "notificationsEnabled"))
+        XCTAssertEqual(client.pushRegistrations, ["tok-1"])
+    }
+
+    func testMarkEnabledFalseUnregistersToken() async {
+        let (model, client, prefs) = makeModelP()
+        await model.applyPushToken("tok-1")
+        await model.markNotificationsEnabled(true)
+        await model.markNotificationsEnabled(false)
+        XCTAssertFalse(model.notificationsEnabled)
+        XCTAssertFalse(prefs.bool(forKey: "notificationsEnabled"))
+        XCTAssertEqual(client.pushUnregistrations, ["tok-1"])
+    }
+
+    func testReRegisterAfterWelcomeWhenEnabled() async {
+        let (model, client, _) = makeModelP()
+        await model.applyPushToken("tok-1")
+        await model.markNotificationsEnabled(true)   // 1. kayıt
+        await model.reRegisterPushIfNeeded()          // 2. kayıt (relay restart senaryosu)
+        XCTAssertEqual(client.pushRegistrations, ["tok-1", "tok-1"])
     }
 }

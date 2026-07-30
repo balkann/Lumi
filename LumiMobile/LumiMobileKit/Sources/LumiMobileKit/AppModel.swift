@@ -38,9 +38,15 @@ public final class AppModel {
     public private(set) var feeds: [String: [FeedEntry]] = [:]
     public private(set) var lastCommandError: [String: String] = [:]
     public private(set) var startState: StartSessionState = .idle
+    public private(set) var notificationsEnabled: Bool
+    public private(set) var notificationAuthStatus: NotificationAuthStatus = .notDetermined
+    public weak var pushControl: (any PushControlling)?
 
     private let client: any RelayClienting
     private let store: any SecureStore
+    private let prefs: any PreferenceStore
+    private var latestPushToken: String?
+    private static let notificationsKey = "notificationsEnabled"
     private var consumeTask: Task<Void, Never>?
     private var commandCounter = 0
     private var feedCounter = 0
@@ -52,10 +58,12 @@ public final class AppModel {
     private var commandUserMessages: [String: Int] = [:]
     private static let feedCap = 200
 
-    public init(client: any RelayClienting, store: any SecureStore) {
+    public init(client: any RelayClienting, store: any SecureStore, prefs: any PreferenceStore = UserDefaultsPreferenceStore()) {
         self.client = client
         self.store = store
+        self.prefs = prefs
         self.isPaired = store.read() != nil
+        self.notificationsEnabled = prefs.bool(forKey: Self.notificationsKey)
     }
 
     // MARK: Yaşam döngüsü
@@ -70,7 +78,9 @@ public final class AppModel {
                 case .stateChanged(let state):
                     self.connection = state
                     if state == .disconnected { self.macOnline = false }
-                case .message(let message): self.handle(message)
+                case .message(let message):
+                    self.handle(message)
+                    if case .welcome = message { await self.reRegisterPushIfNeeded() }
                 }
             }
         }
@@ -234,6 +244,36 @@ public final class AppModel {
 
     public func registerPush(deviceToken: String) async {
         await client.registerPush(deviceToken: deviceToken)
+    }
+
+    public func applyPushToken(_ hex: String) async {
+        latestPushToken = hex
+        if notificationsEnabled { await client.registerPush(deviceToken: hex) }
+    }
+
+    public func setNotificationAuthStatus(_ status: NotificationAuthStatus) {
+        notificationAuthStatus = status
+    }
+
+    public func markNotificationsEnabled(_ on: Bool) async {
+        notificationsEnabled = on
+        prefs.set(on, forKey: Self.notificationsKey)
+        guard let token = latestPushToken else { return }
+        if on { await client.registerPush(deviceToken: token) }
+        else { await client.unregisterPush(deviceToken: token) }
+    }
+
+    public func enableNotifications() async -> EnableResult {
+        await pushControl?.enable() ?? .declined
+    }
+
+    public func disableNotifications() async {
+        await pushControl?.disable()
+    }
+
+    public func reRegisterPushIfNeeded() async {
+        guard notificationsEnabled, let token = latestPushToken else { return }
+        await client.registerPush(deviceToken: token)
     }
 
     /// Başarısız bir kullanıcı mesajı baloncuğuna dokununca aynı entry'yi tekrar gönderir.
