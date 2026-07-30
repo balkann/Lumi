@@ -248,13 +248,19 @@ public final class AppModel {
         var entries: [FeedEntry] = []
         for item in items {
             switch item {
-            case .question:
-                continue // sorular akışa değil karta gider
+            case .question, .userMessage:
+                continue // sorular karta gider; userMessage transcript'te olmaz
             default:
                 feedCounter += 1
                 entries.append(FeedEntry(id: feedCounter, item: item))
             }
         }
+        // yerelde eklenen kullanıcı mesajlarını koru (id/status ile) — history'nin sonuna
+        let userEntries = (feeds[sessionId] ?? []).filter {
+            if case .userMessage = $0.item { return true }
+            return false
+        }
+        entries.append(contentsOf: userEntries)
         if entries.count > Self.feedCap {
             entries.removeFirst(entries.count - Self.feedCap)
         }

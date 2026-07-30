@@ -373,6 +373,28 @@ final class AppModelTests: XCTestCase {
         XCTAssertNil(model.lastCommandError["s1"], "send_text hatası bubble'a yansır, lastCommandError'a değil")
     }
 
+    func testHistoryPreservesLocalUserMessages() async {
+        let (model, _, _) = makeModel()
+        model.handle(.snapshot(Snapshot(sessions: [session("s1", repo: "lumi", .idle)], repos: [], personas: [])))
+        // kullanıcı bir mesaj göndersin (iyimser bubble feed'e girsin)
+        await model.sendText(sessionId: "s1", text: "kullanici-mesaji")
+        let userEntryId = model.feeds["s1"]!.first!.id
+
+        // sonra history gelsin (transcript kullanıcı mesajını İÇERMEZ)
+        model.handle(.event(.history(sessionId: "s1", items: [
+            .assistantText("eski-1"), .turnDone,
+        ])))
+
+        let items = (model.feeds["s1"] ?? []).map(\.item)
+        XCTAssertEqual(items, [
+            .assistantText("eski-1"),
+            .turnDone,
+            .userMessage(text: "kullanici-mesaji", status: .sending),
+        ])
+        // korunan entry'nin id'si değişmedi (commandUserMessages eşlemesi geçerli kalır)
+        XCTAssertEqual(model.feeds["s1"]?.last?.id, userEntryId)
+    }
+
     func testDisconnectedStateSetsMacOnlineFalse() async {
         let (model, client, _) = makeModel()
         await model.start()
