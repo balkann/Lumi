@@ -102,12 +102,16 @@ public struct Question: Decodable, Sendable, Equatable {
     }
 }
 
+public enum SendStatus: Sendable, Equatable { case sending, sent, failed }
+
 /// Transcript akış öğesi (protokol `event.item.itemType`).
 public enum FeedItem: Sendable, Equatable {
     case assistantText(String)
     case toolUse(tool: String, summary: String)
     case question([Question])
     case turnDone
+    /// Yalnız yerel: kullanıcının gönderdiği mesaj (protokol decode'u üretmez).
+    case userMessage(text: String, status: SendStatus)
 }
 
 public enum RemoteEvent: Sendable, Equatable {

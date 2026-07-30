@@ -48,6 +48,8 @@ public final class AppModel {
     /// commandId → sessionId; start_session için "" (oturum henüz yok).
     private var commandTargets: [String: String] = [:]
     private var historyCommandIds: Set<String> = []
+    /// commandId → gönderilen kullanıcı mesajının FeedEntry.id'si (durum güncellemesi için).
+    private var commandUserMessages: [String: Int] = [:]
     private static let feedCap = 200
 
     public init(client: any RelayClienting, store: any SecureStore) {
@@ -100,6 +102,7 @@ public final class AppModel {
         activeQuestions = [:]
         lastCommandError = [:]
         commandTargets = [:]
+        commandUserMessages = [:]
         historyCommandIds = []
         startState = .idle
     }
@@ -138,6 +141,8 @@ public final class AppModel {
                 appendFeed(sessionId, item)
             case .assistantText, .toolUse:
                 appendFeed(sessionId, item)
+            case .userMessage:
+                break // transcript kullanıcı mesajı üretmez
             }
 
         case .event(.history(let sessionId, let items)):
@@ -147,6 +152,11 @@ public final class AppModel {
         case .commandResult(let result):
             if historyCommandIds.remove(result.commandId) != nil {
                 return // geçmiş isteğinin sonucu kullanıcıya yansıtılmaz (ok da olsa hata da)
+            }
+            if let entryId = commandUserMessages.removeValue(forKey: result.commandId) {
+                commandTargets.removeValue(forKey: result.commandId)
+                setUserMessageStatus(entryId, result.ok ? .sent : .failed)
+                return
             }
             guard let target = commandTargets.removeValue(forKey: result.commandId) else { return }
             if target.isEmpty {
@@ -198,7 +208,11 @@ public final class AppModel {
     // MARK: Komutlar
 
     public func sendText(sessionId: String, text: String) async {
-        await dispatch(target: sessionId, action: .sendText(sessionId: sessionId, text: text))
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        let entryId = appendUserMessage(sessionId, text: text)
+        await dispatch(target: sessionId,
+                       action: .sendText(sessionId: sessionId, text: text),
+                       userMessageEntryId: entryId)
     }
 
     public func pressKey(sessionId: String, key: String) async {
@@ -263,10 +277,11 @@ public final class AppModel {
 
     // MARK: Yardımcılar
 
-    private func dispatch(target: String, action: CommandAction) async {
+    private func dispatch(target: String, action: CommandAction, userMessageEntryId: Int? = nil) async {
         commandCounter += 1
         let commandId = "ph-\(commandCounter)"
         commandTargets[commandId] = target
+        if let userMessageEntryId { commandUserMessages[commandId] = userMessageEntryId }
         if !target.isEmpty {
             lastCommandError[target] = nil
             activeQuestions[target] = nil // cevap verildi → kart kalkar
@@ -274,7 +289,10 @@ public final class AppModel {
         let ok = await client.send(command: OutgoingCommand(commandId: commandId, action: action))
         if !ok {
             commandTargets[commandId] = nil
-            if target.isEmpty {
+            commandUserMessages[commandId] = nil
+            if let userMessageEntryId {
+                setUserMessageStatus(userMessageEntryId, .failed)
+            } else if target.isEmpty {
                 startState = .failed("bağlantı yok")
             } else {
                 lastCommandError[target] = "bağlantı yok"
@@ -300,5 +318,27 @@ public final class AppModel {
             feed.removeFirst(feed.count - Self.feedCap)
         }
         feeds[sessionId] = feed
+    }
+
+    @discardableResult
+    private func appendUserMessage(_ sessionId: String, text: String) -> Int {
+        feedCounter += 1
+        let id = feedCounter
+        var feed = feeds[sessionId] ?? []
+        feed.append(FeedEntry(id: id, item: .userMessage(text: text, status: .sending)))
+        if feed.count > Self.feedCap {
+            feed.removeFirst(feed.count - Self.feedCap)
+        }
+        feeds[sessionId] = feed
+        return id
+    }
+
+    private func setUserMessageStatus(_ entryId: Int, _ status: SendStatus) {
+        for (sessionId, feed) in feeds {
+            guard let idx = feed.firstIndex(where: { $0.id == entryId }),
+                  case .userMessage(let text, _) = feed[idx].item else { continue }
+            feeds[sessionId]?[idx] = FeedEntry(id: entryId, item: .userMessage(text: text, status: status))
+            return
+        }
     }
 }

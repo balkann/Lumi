@@ -224,14 +224,15 @@ final class AppModelTests: XCTestCase {
 
     // MARK: Yeni testler — Fix 1+2
 
-    func testSendTextFailureReportsLastCommandError() async {
+    func testSendTextFailureMarksBubbleFailed() async {
         let (model, client, _) = makeModel()
         client.sendResult = false
         model.handle(.snapshot(Snapshot(sessions: [session("s1", repo: "lumi", .idle)], repos: [], personas: [])))
 
         await model.sendText(sessionId: "s1", text: "merhaba")
 
-        XCTAssertEqual(model.lastCommandError["s1"], "bağlantı yok")
+        XCTAssertEqual(model.feeds["s1"]?.first?.item, .userMessage(text: "merhaba", status: .failed))
+        XCTAssertNil(model.lastCommandError["s1"])
     }
 
     func testStartSessionFailureLandsInFailed() async {
@@ -321,6 +322,55 @@ final class AppModelTests: XCTestCase {
         model.handle(.welcome(Welcome(snapshot: nil, macOnline: false, lastSeenAt: nil)))
         await model.requestHistory(sessionId: "s1")
         XCTAssertTrue(client.commands.isEmpty)
+    }
+
+    // MARK: Yeni — gönderilen mesaj görünürlüğü + durum
+
+    func testSendTextAppendsOptimisticSendingBubble() async {
+        let (model, client, _) = makeModel()
+        model.handle(.snapshot(Snapshot(sessions: [session("s1", repo: "lumi", .idle)], repos: [], personas: [])))
+
+        await model.sendText(sessionId: "s1", text: "merhaba")
+
+        let feed = model.feeds["s1"] ?? []
+        XCTAssertEqual(feed.count, 1)
+        XCTAssertEqual(feed[0].item, .userMessage(text: "merhaba", status: .sending))
+        XCTAssertEqual(client.commands.count, 1)
+        guard case .sendText(let sid, let text) = client.commands[0].action else { return XCTFail() }
+        XCTAssertEqual(sid, "s1")
+        XCTAssertEqual(text, "merhaba")
+    }
+
+    func testSendTextEmptyIsNoop() async {
+        let (model, client, _) = makeModel()
+        model.handle(.snapshot(Snapshot(sessions: [session("s1", repo: "lumi", .idle)], repos: [], personas: [])))
+        await model.sendText(sessionId: "s1", text: "   \n ")
+        XCTAssertTrue((model.feeds["s1"] ?? []).isEmpty)
+        XCTAssertTrue(client.commands.isEmpty)
+    }
+
+    func testCommandResultOkMarksBubbleSent() async {
+        let (model, client, _) = makeModel()
+        model.handle(.snapshot(Snapshot(sessions: [session("s1", repo: "lumi", .idle)], repos: [], personas: [])))
+        await model.sendText(sessionId: "s1", text: "merhaba")
+        let commandId = client.commands[0].commandId
+
+        model.handle(.commandResult(CommandResult(commandId: commandId, ok: true, error: nil)))
+
+        XCTAssertEqual(model.feeds["s1"]?.first?.item, .userMessage(text: "merhaba", status: .sent))
+        XCTAssertNil(model.lastCommandError["s1"], "send_text lastCommandError kullanmaz")
+    }
+
+    func testCommandResultFailureMarksBubbleFailed() async {
+        let (model, client, _) = makeModel()
+        model.handle(.snapshot(Snapshot(sessions: [session("s1", repo: "lumi", .idle)], repos: [], personas: [])))
+        await model.sendText(sessionId: "s1", text: "merhaba")
+        let commandId = client.commands[0].commandId
+
+        model.handle(.commandResult(CommandResult(commandId: commandId, ok: false, error: "terminal kapandı")))
+
+        XCTAssertEqual(model.feeds["s1"]?.first?.item, .userMessage(text: "merhaba", status: .failed))
+        XCTAssertNil(model.lastCommandError["s1"], "send_text hatası bubble'a yansır, lastCommandError'a değil")
     }
 
     func testDisconnectedStateSetsMacOnlineFalse() async {
