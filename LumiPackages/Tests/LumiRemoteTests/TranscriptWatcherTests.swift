@@ -162,6 +162,43 @@ final class TranscriptWatcherTests: XCTestCase {
         XCTAssertEqual(count, 0, "stop() akışı sonlandırmalı")
     }
 
+    // MARK: - sessionId ile kesin eşleşme (fix-transcript-match)
+
+    func testExactSessionIdFileWinsOverNewerHeuristic() async throws {
+        let sid = "abcdef01-1111-4222-8333-abcdef012345"
+        // Doğru oturumun dosyası: <sid>.jsonl
+        let exact = projectDir.appendingPathComponent("\(sid).jsonl")
+        try assistantLine("dogru-oturum").write(to: exact, atomically: true, encoding: .utf8)
+        // Daha YENİ mtime'lı başka bir oturum dosyası — heuristik bunu seçerdi
+        let other = projectDir.appendingPathComponent("\(UUID().uuidString).jsonl")
+        try assistantLine("yanlis-yeni-oturum").write(to: other, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes(
+            [.modificationDate: Date().addingTimeInterval(60)], ofItemAtPath: other.path)
+
+        let watcher = TranscriptWatcher(
+            projectsRoot: root, repoPath: repoPath,
+            sessionCreatedAt: Date().addingTimeInterval(-60),
+            sessionId: sid)
+        let items = await watcher.historyItems()
+        XCTAssertEqual(items, [.assistantText("dogru-oturum")],
+                       "sessionId verildiğinde tam <sid>.jsonl eşlenmeli, daha yeni başka dosya değil")
+    }
+
+    func testFallsBackToHeuristicWhenExactFileAbsent() async throws {
+        let sid = "11111111-1111-4111-8111-111111111111"
+        // <sid>.jsonl YOK; yalnız bir heuristik dosya var
+        let other = projectDir.appendingPathComponent("only.jsonl")
+        try assistantLine("heuristik").write(to: other, atomically: true, encoding: .utf8)
+
+        let watcher = TranscriptWatcher(
+            projectsRoot: root, repoPath: repoPath,
+            sessionCreatedAt: Date().addingTimeInterval(-60),
+            sessionId: sid)
+        let items = await watcher.historyItems()
+        XCTAssertEqual(items, [.assistantText("heuristik")],
+                       "exact dosya yoksa heuristik eşleşmeye düşmeli")
+    }
+
     // MARK: - historyItems (Plan 3.5 backfill)
 
     private func makeHistoryDir() throws -> (root: URL, projectDir: URL) {

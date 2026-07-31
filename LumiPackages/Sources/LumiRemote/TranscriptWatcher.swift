@@ -3,12 +3,16 @@ import LumiKit
 
 /// Bir terminal oturumunun Claude Code transcript'ini izler (spec §4.2).
 /// Dosya sistemi olayı yerine basit polling: 1.5 sn'de bir dizin/dosya kontrolü.
-/// Eşleşme: repo cwd'sinin proje dizinindeki, oturum başlangıcından (−120 sn
+/// Eşleşme: `sessionId` verildiyse (Lumi'nin başlattığı claude oturumu, bkz.
+/// `ClaudeSessionID`) ve `<sessionId>.jsonl` diskte varsa KESİN o dosya —
+/// aynı repoda çoklu oturumda yanlış/eski transcript eşleşmesini önler. Yoksa
+/// heuristik: repo cwd'sinin proje dizinindeki, oturum başlangıcından (−120 sn
 /// tolerans) yeni, en güncel mtime'lı jsonl. Eşleşemezse akış boş kalır —
 /// "yalnız durum modu" (spec §5); her poll'da yeniden denenir.
 actor TranscriptWatcher {
     private let projectDir: URL
     private let sessionCreatedAt: Date
+    private let exactFile: URL?
     private nonisolated let pollInterval: Duration
 
     private var matchedFile: URL?
@@ -21,11 +25,14 @@ actor TranscriptWatcher {
         projectsRoot: URL,
         repoPath: String,
         sessionCreatedAt: Date,
+        sessionId: String? = nil,
         pollInterval: Duration = .milliseconds(1500)
     ) {
-        self.projectDir = projectsRoot
+        let dir = projectsRoot
             .appendingPathComponent(TranscriptParser.projectDirName(forCwd: repoPath))
+        self.projectDir = dir
         self.sessionCreatedAt = sessionCreatedAt
+        self.exactFile = sessionId.map { dir.appendingPathComponent("\($0).jsonl") }
         self.pollInterval = pollInterval
     }
 
@@ -50,16 +57,25 @@ actor TranscriptWatcher {
     }
 
     private func poll() {
-        if let best = bestCandidate() {
-            if best.0 != matchedFile {
-                // ilk eşleşme VEYA daha yeni bir oturum dosyasına geçiş
-                matchedFile = best.0
-                offset = fileSize(best.0)
+        if let best = resolvedCandidate() {
+            if best != matchedFile {
+                // ilk eşleşme VEYA daha güncel/kesin oturum dosyasına geçiş
+                matchedFile = best
+                offset = fileSize(best)
                 pendingPartial = ""
             }
         }
         guard let file = matchedFile else { return }
         readNewLines(from: file)
+    }
+
+    /// Kesin eşleşme (varsa) > heuristik: `exactFile` diskte varsa her zaman onu döner,
+    /// yoksa `bestCandidate()` heuristiğine düşer.
+    private func resolvedCandidate() -> URL? {
+        if let exactFile, FileManager.default.fileExists(atPath: exactFile.path) {
+            return exactFile
+        }
+        return bestCandidate()?.0
     }
 
     private func bestCandidate() -> (URL, Date)? {
@@ -89,7 +105,16 @@ actor TranscriptWatcher {
     /// yol açmaz. Henüz eşleşme yoksa o an eşleştirmeyi dener; yine yoksa [].
     func historyItems(limit: Int = 50, maxTailBytes: Int = 262_144) -> [FeedItem] {
         let file: URL
-        if let matched = matchedFile {
+        if let exactFile, FileManager.default.fileExists(atPath: exactFile.path) {
+            // Kesin oturum dosyası her zaman kazanır (bayat matchedFile'ı bile ez);
+            // yayın başladıysa canlı tail'i de bu dosyaya kilitle.
+            if continuation != nil, exactFile != matchedFile {
+                matchedFile = exactFile
+                offset = fileSize(exactFile)
+                pendingPartial = ""
+            }
+            file = exactFile
+        } else if let matched = matchedFile {
             file = matched
         } else if let best = bestCandidate() {
             // Yayın başladıysa ilk-eşleşmeyi kalıcılaştır (poll() ile aynı kurulum);

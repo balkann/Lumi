@@ -165,7 +165,10 @@ public final class RemoteService: RemoteServicing {
         let watcher = TranscriptWatcher(
             projectsRoot: transcriptsRoot,
             repoPath: meta.repoPath,
-            sessionCreatedAt: meta.createdAt)
+            sessionCreatedAt: meta.createdAt,
+            // terminal id'si = claude --session-id (ClaudeSessionID enjeksiyonu) →
+            // watcher <id>.jsonl'i kesin eşler; yoksa mtime heuristiğine düşer.
+            sessionId: meta.id.raw.uuidString.lowercased())
         watchers[meta.id] = watcher
         let sessionId = meta.id
         watcherTasks[sessionId] = Task { [weak self] in

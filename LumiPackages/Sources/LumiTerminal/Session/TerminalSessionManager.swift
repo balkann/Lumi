@@ -126,7 +126,11 @@ public final class TerminalSessionManager: TerminalServicing {
         )
         broadcaster.send(.spawned(session.meta))
         if let command {
-            session.write(command + "\r")
+            // claude başlatan komuta terminalin id'sini --session-id olarak enjekte et →
+            // transcript dosyası <terminalID>.jsonl olur, TranscriptWatcher kesin eşler.
+            let launch = ClaudeSessionID.inject(
+                into: command, sessionId: session.id.raw.uuidString.lowercased())
+            session.write(launch + "\r")
         }
         return session.meta
     }
