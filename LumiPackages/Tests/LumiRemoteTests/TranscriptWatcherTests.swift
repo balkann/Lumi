@@ -1,5 +1,6 @@
 import Foundation
 import XCTest
+import LumiKit
 @testable import LumiRemote
 
 final class TranscriptWatcherTests: XCTestCase {
@@ -151,6 +152,116 @@ final class TranscriptWatcherTests: XCTestCase {
         XCTAssertEqual(received, [.assistantText("yeni-B")], "daha yeni dosyaya geçiş yapmalı ve yeni satırları akıtmalı")
     }
 
+    /// Aynı repoda eş zamanlı iki terminal (2 tab): her watcher ortak bir
+    /// `TranscriptClaimRegistry` üzerinden KENDİ jsonl'ine (birthtime≈createdAt)
+    /// bağlanmalı; birinin satırı diğerinin akışına SIZMAMALI (asıl bug).
+    func testConcurrentSessionsBindToOwnFileByBirthtime() async throws {
+        let registry = TranscriptClaimRegistry()
+        let now = Date()
+        let createdA = now.addingTimeInterval(-30)   // önce açılan tab
+        let createdB = now.addingTimeInterval(-20)   // 10 sn sonra açılan tab
+        let ownerA = TerminalID()
+        let ownerB = TerminalID()
+
+        // Her tab'ın kendi jsonl'i, terminalinden ~1 sn sonra doğmuş (birthtime).
+        let fileA = projectDir.appendingPathComponent("\(UUID().uuidString).jsonl")
+        let fileB = projectDir.appendingPathComponent("\(UUID().uuidString).jsonl")
+        try Data().write(to: fileA)   // fileA önce → daha eski mtime
+        try Data().write(to: fileB)   // fileB sonra → daha yeni mtime (sezgisel bunu seçerdi)
+        try FileManager.default.setAttributes(
+            [.creationDate: createdA.addingTimeInterval(1)], ofItemAtPath: fileA.path)
+        try FileManager.default.setAttributes(
+            [.creationDate: createdB.addingTimeInterval(1)], ofItemAtPath: fileB.path)
+
+        await registry.register(owner: ownerA, dir: projectDir, createdAt: createdA)
+        await registry.register(owner: ownerB, dir: projectDir, createdAt: createdB)
+
+        let watcherA = TranscriptWatcher(
+            projectsRoot: root, repoPath: repoPath, sessionCreatedAt: createdA,
+            pollInterval: .milliseconds(50), owner: ownerA, registry: registry)
+        let watcherB = TranscriptWatcher(
+            projectsRoot: root, repoPath: repoPath, sessionCreatedAt: createdB,
+            pollInterval: .milliseconds(50), owner: ownerB, registry: registry)
+        let streamA = await watcherA.items()
+        let streamB = await watcherB.items()
+
+        try await Task.sleep(for: .milliseconds(150))  // eşleşme otursun
+
+        // Her dosyaya kendi mesajını yaz (fileB'yi sonra → en yeni mtime).
+        let ha = try FileHandle(forWritingTo: fileA); try ha.seekToEnd()
+        try ha.write(contentsOf: assistantLine("mesaj-A").data(using: .utf8)!); try ha.close()
+        let hb = try FileHandle(forWritingTo: fileB); try hb.seekToEnd()
+        try hb.write(contentsOf: assistantLine("mesaj-B").data(using: .utf8)!); try hb.close()
+
+        var a: FeedItem?
+        for await item in streamA { a = item; break }
+        var b: FeedItem?
+        for await item in streamB { b = item; break }
+        await watcherA.stop(); await watcherB.stop()
+
+        XCTAssertEqual(a, .assistantText("mesaj-A"), "A yalnız kendi dosyasını okumalı")
+        XCTAssertEqual(b, .assistantText("mesaj-B"), "B yalnız kendi dosyasını okumalı")
+    }
+
+    /// Gerçek senaryonun özü (unco-forge'da 49 jsonl): eski oturum dosyaları
+    /// SON yazılmış (yeni mtime) olsa bile, birthtime'ları güncel terminallerin
+    /// createdAt'inden çok eski olduğu için hiçbir tab'a atanmamalı. Çoklu-oturum
+    /// modu mtime yerine birthtime kullandığından her tab yalnız kendi taze
+    /// dosyasını okur.
+    func testConcurrentSessionsIgnoreOldSessionFilesDespiteNewerMtime() async throws {
+        let registry = TranscriptClaimRegistry()
+        let now = Date()
+        let createdA = now.addingTimeInterval(-20)
+        let createdB = now.addingTimeInterval(-10)
+        let ownerA = TerminalID()
+        let ownerB = TerminalID()
+
+        // Eski oturum dosyaları: birthtime 1 saat önce, ama mtime "şimdi" (write).
+        for i in 0..<3 {
+            let old = projectDir.appendingPathComponent("old-\(i).jsonl")
+            try assistantLine("eski-\(i)").write(to: old, atomically: true, encoding: .utf8)
+            try FileManager.default.setAttributes(
+                [.creationDate: now.addingTimeInterval(-3600)], ofItemAtPath: old.path)
+        }
+        // Her tab'ın taze dosyası (birthtime ≈ createdAt).
+        let fileA = projectDir.appendingPathComponent("\(UUID().uuidString).jsonl")
+        let fileB = projectDir.appendingPathComponent("\(UUID().uuidString).jsonl")
+        try Data().write(to: fileA)
+        try Data().write(to: fileB)
+        try FileManager.default.setAttributes(
+            [.creationDate: createdA.addingTimeInterval(1)], ofItemAtPath: fileA.path)
+        try FileManager.default.setAttributes(
+            [.creationDate: createdB.addingTimeInterval(1)], ofItemAtPath: fileB.path)
+
+        await registry.register(owner: ownerA, dir: projectDir, createdAt: createdA)
+        await registry.register(owner: ownerB, dir: projectDir, createdAt: createdB)
+
+        let watcherA = TranscriptWatcher(
+            projectsRoot: root, repoPath: repoPath, sessionCreatedAt: createdA,
+            pollInterval: .milliseconds(50), owner: ownerA, registry: registry)
+        let watcherB = TranscriptWatcher(
+            projectsRoot: root, repoPath: repoPath, sessionCreatedAt: createdB,
+            pollInterval: .milliseconds(50), owner: ownerB, registry: registry)
+        let streamA = await watcherA.items()
+        let streamB = await watcherB.items()
+
+        try await Task.sleep(for: .milliseconds(150))
+
+        let ha = try FileHandle(forWritingTo: fileA); try ha.seekToEnd()
+        try ha.write(contentsOf: assistantLine("mesaj-A").data(using: .utf8)!); try ha.close()
+        let hb = try FileHandle(forWritingTo: fileB); try hb.seekToEnd()
+        try hb.write(contentsOf: assistantLine("mesaj-B").data(using: .utf8)!); try hb.close()
+
+        var a: FeedItem?
+        for await item in streamA { a = item; break }
+        var b: FeedItem?
+        for await item in streamB { b = item; break }
+        await watcherA.stop(); await watcherB.stop()
+
+        XCTAssertEqual(a, .assistantText("mesaj-A"), "eski dosyalar (yeni mtime) atanmamalı; A kendi taze dosyasını okumalı")
+        XCTAssertEqual(b, .assistantText("mesaj-B"), "B kendi taze dosyasını okumalı")
+    }
+
     func testStopFinishesStream() async throws {
         let watcher = TranscriptWatcher(
             projectsRoot: root, repoPath: repoPath,
@@ -213,6 +324,28 @@ final class TranscriptWatcherTests: XCTestCase {
         let items = await watcher.historyItems(limit: 50, maxTailBytes: tail)
 
         XCTAssertEqual(items, [.assistantText("m3"), .assistantText("m4")])
+    }
+
+    /// Restart senaryosu: Lumi yeniden başlayınca terminaller sıfırdan yaratılır ve
+    /// `sessionCreatedAt` "şimdi"ye sıfırlanır; oturum-öncesi transcript ise cutoff'tan
+    /// (createdAt−120s) eskidir. Cutoff'u geçen jsonl yoksa dizindeki EN YENİ jsonl'e
+    /// düşülmeli — aksi halde telefon oturumu açınca backfill boş gelir (bug).
+    func testHistoryItemsFallsBackToNewestWhenAllOlderThanSession() async throws {
+        let (root, projectDir) = try makeHistoryDir()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let lines = (1...3).map { assistantLineTpl.replacingOccurrences(of: "MSG", with: "m\($0)") }
+        try writeLines(lines, to: projectDir, name: "old-session.jsonl")
+        let old = projectDir.appendingPathComponent("old-session.jsonl")
+        try FileManager.default.setAttributes(
+            [.modificationDate: Date().addingTimeInterval(-3600)], ofItemAtPath: old.path)
+
+        let watcher = TranscriptWatcher(
+            projectsRoot: root, repoPath: "/tmp/demo",
+            sessionCreatedAt: Date())  // transcript'ten çok sonra (restart)
+        let items = await watcher.historyItems(limit: 50, maxTailBytes: 262_144)
+
+        XCTAssertEqual(items, [.assistantText("m1"), .assistantText("m2"), .assistantText("m3")],
+                       "cutoff'u geçen jsonl yoksa en yeni jsonl'e düşülmeli (restart backfill)")
     }
 
     func testHistoryItemsEmptyWhenNoMatch() async {

@@ -182,9 +182,18 @@ dokunulmaz; remote yapılandırması yeni ve ayrı bir dosyada (`remote.json`) y
 
 ## 12. Açık noktalar / bilinçli riskler
 
-1. **jsonl eşleştirme kesinliği:** cwd + zaman sezgiseli aynı repoda eşzamanlı
-   birden çok oturumda yanlış eşleşebilir; v1'de kabul edilen risk, gözlemlenirse
-   hook tabanlı oturum-id bildirimi (elenen B yaklaşımı) nokta çözüm olarak eklenir.
+1. **jsonl eşleştirme kesinliği:** ~~cwd + zaman sezgiseli aynı repoda eşzamanlı
+   birden çok oturumda yanlış eşleşebilir; v1'de kabul edilen risk~~ **[ÇÖZÜLDÜ]**
+   Gözlemlendi (aynı repoda N tab → mesajlar tab'lar arası sızıyordu). Hook yerine
+   **birthtime↔createdAt tekil-sahiplik** nokta çözümü uygulandı (`TranscriptClaimRegistry`):
+   jsonl'in dosya-yaratılma anı (birthtime) ≈ Claude oturumunun başlangıcı ≈ terminalin
+   `createdAt`'i olduğundan, her terminal `createdAt`'inden hemen sonra doğmuş,
+   başka terminalce sahiplenilmemiş jsonl'e tekil atanır. Atama kayıtlı terminaller +
+   dizin içeriğinden her poll'da deterministik hesaplanır (claim state yok → yarış yok).
+   Eski oturum dosyaları (birthtime ≪ güncel createdAt'ler) elenir; bu, mtime sezgiselinin
+   ıskaladığı "zaten-açık tab'lar" durumunu da doğru çözer. Tek terminal → mevcut mtime
+   sezgiseli (restart fallback dahil) korunur. Kalan kabul edilen kırılganlık: iki tab'ın
+   ~saniye-altı arayla açılması (birthtime ayrımı belirsizleşir).
 2. **Transcript formatı Anthropic'in iç formatı:** sürüm güncellemelerinde
    kırılabilir; parse katmanı toleranslı yazılır, bilinmeyen kayıtlar atlanır.
 3. **İzin istemlerinin metni transcript'te olmayabilir:** izin diyaloğu CLI'ın

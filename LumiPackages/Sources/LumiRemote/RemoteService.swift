@@ -1,6 +1,28 @@
 import Foundation
 import LumiKit
 
+/// Tanı günlüğü — yalnız `LUMI_REMOTE_DEBUG` ortam değişkeni set edildiğinde
+/// stderr'e yazar (üretimde sessiz). Telefon↔Mac boru hattının hangi sınırda
+/// koptuğunu tek bir tekrar-üretim koşusunda göstermek için (transcript takibi
+/// tanısı). Kaldırılabilir; davranışa etkisi yok.
+let remoteDebugEnabled = ProcessInfo.processInfo.environment["LUMI_REMOTE_DEBUG"] != nil
+let remoteDebugLogURL = FileManager.default.homeDirectoryForCurrentUser
+    .appendingPathComponent("lumi-remote-debug.log")
+func rlog(_ message: @autoclosure () -> String) {
+    guard remoteDebugEnabled else { return }
+    let line = "[LUMI-REMOTE] \(message())\n"
+    FileHandle.standardError.write(Data(line.utf8))
+    // Ayrıca sabit bir dosyaya ekle — GUI app terminalden başlatılmasa da
+    // (~/lumi-remote-debug.log) okunabilsin.
+    if let handle = try? FileHandle(forWritingTo: remoteDebugLogURL) {
+        defer { try? handle.close() }
+        _ = try? handle.seekToEnd()
+        handle.write(Data(line.utf8))
+    } else {
+        try? Data(line.utf8).write(to: remoteDebugLogURL)
+    }
+}
+
 /// LumiRemote orkestratörü (spec §4.2): config'i okur, relay bağlantısını
 /// yönetir, terminal olaylarını + transcript akışını relay'e çevirir ve
 /// telefon komutlarını uygular. Servis→store sınırı: EventBroadcaster.
@@ -22,6 +44,9 @@ public final class RemoteService: RemoteServicing {
     private var terminalTask: Task<Void, Never>?
     private var watchers: [TerminalID: TranscriptWatcher] = [:]
     private var watcherTasks: [TerminalID: Task<Void, Never>] = [:]
+    /// Aynı repoda eş zamanlı terminallerin jsonl'lerini birthtime≈createdAt ile
+    /// tekil ayrıştırır (aksi halde mtime sezgiseli tab'lar arası mesaj sızdırır).
+    private let claimRegistry = TranscriptClaimRegistry()
     private var lastSummary: [TerminalID: String] = [:]
     private var awaitingDecision: [TerminalID: Bool] = [:]
     private var running = false
@@ -69,7 +94,7 @@ public final class RemoteService: RemoteServicing {
                 await self?.handleTerminalEvent(event)
             }
         }
-        for meta in terminal.terminals { startWatcher(for: meta) }
+        for meta in terminal.terminals { await startWatcher(for: meta) }
         await connection.start(url: url, hello: ["role": "mac", "token": currentConfig.token])
         guard myEpoch == epoch else { return }
         setState(.connecting)
@@ -87,7 +112,10 @@ public final class RemoteService: RemoteServicing {
         for (id, task) in watcherTasks { task.cancel(); watcherTasks[id] = nil }
         let currentWatchers = watchers
         watchers = [:]
-        for (_, watcher) in currentWatchers { await watcher.stop() }
+        for (id, watcher) in currentWatchers {
+            await watcher.stop()
+            await claimRegistry.unregister(owner: id)
+        }
         await connection.stop()
         setState(.disconnected)
     }
@@ -114,6 +142,7 @@ public final class RemoteService: RemoteServicing {
         case .stateChanged(let newState):
             setState(newState)
         case .message(let type, let payload):
+            rlog("inbound message type=\(type) action=\(payload["action"] as? String ?? "-") session=\(payload["sessionId"] as? String ?? "-")")
             switch type {
             case "welcome":
                 await sendSnapshot()
@@ -135,10 +164,10 @@ public final class RemoteService: RemoteServicing {
     private func handleTerminalEvent(_ event: TerminalEvent) async {
         switch event {
         case .spawned(let meta):
-            startWatcher(for: meta)
+            await startWatcher(for: meta)
             await sendSnapshot()
         case .exited(let id, _):
-            stopWatcher(for: id)
+            await stopWatcher(for: id)
             await sendSnapshot()
         case .statusChanged(let id, let status):
             guard let meta = terminal.terminals.first(where: { $0.id == id }) else { return }
@@ -159,13 +188,21 @@ public final class RemoteService: RemoteServicing {
 
     // MARK: - Transcript
 
-    private func startWatcher(for meta: TerminalMeta) {
+    private func startWatcher(for meta: TerminalMeta) async {
         guard watchers[meta.id] == nil else { return }
+        // Kaydı watcher poll etmeye başlamadan ÖNCE yap: aynı repodaki kardeşler
+        // ilk poll'dan itibaren görünür olsun (yoksa tek-oturum sezgiseline düşülür).
+        let dir = transcriptsRoot.appendingPathComponent(
+            TranscriptParser.projectDirName(forCwd: meta.repoPath))
+        await claimRegistry.register(owner: meta.id, dir: dir, createdAt: meta.createdAt)
         let watcher = TranscriptWatcher(
             projectsRoot: transcriptsRoot,
             repoPath: meta.repoPath,
-            sessionCreatedAt: meta.createdAt)
+            sessionCreatedAt: meta.createdAt,
+            owner: meta.id,
+            registry: claimRegistry)
         watchers[meta.id] = watcher
+        rlog("watcher started session=\(meta.id.description) repo=\(meta.repoPath)")
         let sessionId = meta.id
         watcherTasks[sessionId] = Task { [weak self] in
             let stream = await watcher.items()
@@ -175,11 +212,12 @@ public final class RemoteService: RemoteServicing {
         }
     }
 
-    private func stopWatcher(for id: TerminalID) {
+    private func stopWatcher(for id: TerminalID) async {
         watcherTasks[id]?.cancel(); watcherTasks[id] = nil
         if let watcher = watchers.removeValue(forKey: id) {
-            Task { await watcher.stop() }
+            await watcher.stop()
         }
+        await claimRegistry.unregister(owner: id)
         lastSummary[id] = nil
         awaitingDecision[id] = nil
     }
@@ -193,12 +231,14 @@ public final class RemoteService: RemoteServicing {
               let uuid = UUID(uuidString: raw),
               let watcher = watchers[TerminalID(raw: uuid)]
         else {
+            rlog("get_history session=\(payload["sessionId"] as? String ?? "-") -> session_not_found (watchers=\(watchers.keys.map(\.description)))")
             await connection.send(type: "command_result", payload: [
                 "commandId": commandId, "ok": false, "error": "session_not_found",
             ])
             return
         }
         let items = await watcher.historyItems(limit: 50, maxTailBytes: 262_144)
+        rlog("get_history session=\(raw) -> \(items.count) item")
         guard !items.isEmpty else {
             await connection.send(type: "command_result", payload: [
                 "commandId": commandId, "ok": false, "error": "no_transcript",
@@ -222,6 +262,7 @@ public final class RemoteService: RemoteServicing {
         default:
             break
         }
+        rlog("live item session=\(sessionId.description) -> \(item.itemPayload["itemType"] ?? "?")")
         await connection.send(type: "event", payload: item.eventPayload(sessionId: sessionId.description))
     }
 
@@ -233,6 +274,7 @@ public final class RemoteService: RemoteServicing {
         let payload = SnapshotBuilder.snapshot(
             terminals: terminal.terminals, repos: repoList, personas: personaList,
             awaitingDecision: awaitingDecision)
+        rlog("snapshot -> \(terminal.terminals.count) session, watchers=\(watchers.count)")
         await connection.send(type: "snapshot", payload: payload)
     }
 
