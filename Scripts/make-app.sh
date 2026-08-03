@@ -76,6 +76,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>NSMicrophoneUsageDescription</key>
     <string>Lumi needs microphone access for Claude Code voice mode.</string>
 </dict>
+</plist>
 PLIST
 
 # Entitlements (spec/30): yalnız audio-input — V8'e özgü JIT/unsigned-memory/
