@@ -3,17 +3,32 @@ import LumiKit
 
 /// Bir terminal oturumunun Claude Code transcript'ini izler (spec §4.2).
 /// Dosya sistemi olayı yerine basit polling: 1.5 sn'de bir dizin/dosya kontrolü.
-/// Eşleşme: `sessionId` verildiyse (Lumi'nin başlattığı claude oturumu, bkz.
-/// `ClaudeSessionID`) ve `<sessionId>.jsonl` diskte varsa KESİN o dosya —
-/// aynı repoda çoklu oturumda yanlış/eski transcript eşleşmesini önler. Yoksa
-/// heuristik: repo cwd'sinin proje dizinindeki, oturum başlangıcından (−120 sn
-/// tolerans) yeni, en güncel mtime'lı jsonl. Eşleşemezse akış boş kalır —
-/// "yalnız durum modu" (spec §5); her poll'da yeniden denenir.
+///
+/// Eşleşme öncelik sırası (bkz. `resolveMatch`):
+/// 1. **Kesin (session-id):** `sessionId` verildiyse (Lumi'nin başlattığı claude
+///    oturumu, bkz. `ClaudeSessionID`) ve `<sessionId>.jsonl` diskte varsa KESİN
+///    o dosya — deterministik, çoklu-oturumda yanlış/eski eşleşmeyi önler.
+/// 2. **Çoklu-oturum (owner+registry):** kesin dosya yoksa, aynı repoda eş zamanlı
+///    tab'ları `TranscriptClaimRegistry` birthtime≈createdAt ile tekil sahiplikle
+///    ayırır (session-id'siz komutlar — codex/bash/eski oturumlar — için crosstalk'ı
+///    engeller; mtime sezgiseli tek başına mesajları tab'lar arası sızdırır).
+/// 3. **Tek-oturum sezgiseli:** kardeş yoksa/standalone — proje dizininde önce oturum
+///    başlangıcından (−120 sn tolerans) yeni, en güncel mtime'lı jsonl; öyle biri
+///    yoksa dizindeki en yeni jsonl'e düşülür (restart'ta `sessionCreatedAt`
+///    sıfırlandığında oturum-öncesi transcript'in kaybolmaması için).
+///
+/// Eşleşen jsonl yoksa akış boş kalır — "yalnız durum modu" (spec §5); her poll'da
+/// yeniden denenir.
 actor TranscriptWatcher {
     private let projectDir: URL
     private let sessionCreatedAt: Date
     private let exactFile: URL?
     private nonisolated let pollInterval: Duration
+    /// Aynı repoda eş zamanlı terminalleri ayırt etmek için tekil-sahiplik
+    /// koordinatörü + bu terminalin kimliği. İkisi de verildiğinde çoklu-oturum
+    /// modu; nil ise (standalone/test) tek-oturum mtime sezgiseli kullanılır.
+    private let owner: TerminalID?
+    private let registry: TranscriptClaimRegistry?
 
     private var matchedFile: URL?
     private var offset: UInt64 = 0
@@ -26,7 +41,9 @@ actor TranscriptWatcher {
         repoPath: String,
         sessionCreatedAt: Date,
         sessionId: String? = nil,
-        pollInterval: Duration = .milliseconds(1500)
+        pollInterval: Duration = .milliseconds(1500),
+        owner: TerminalID? = nil,
+        registry: TranscriptClaimRegistry? = nil
     ) {
         let dir = projectsRoot
             .appendingPathComponent(TranscriptParser.projectDirName(forCwd: repoPath))
@@ -34,6 +51,8 @@ actor TranscriptWatcher {
         self.sessionCreatedAt = sessionCreatedAt
         self.exactFile = sessionId.map { dir.appendingPathComponent("\($0).jsonl") }
         self.pollInterval = pollInterval
+        self.owner = owner
+        self.registry = registry
     }
 
     func items() -> AsyncStream<FeedItem> {
@@ -56,43 +75,58 @@ actor TranscriptWatcher {
         continuation = nil
     }
 
-    private func poll() {
-        if let best = resolvedCandidate() {
-            if best != matchedFile {
-                // ilk eşleşme VEYA daha güncel/kesin oturum dosyasına geçiş
-                matchedFile = best
-                offset = fileSize(best)
-                pendingPartial = ""
-            }
+    private func poll() async {
+        if let match = await resolveMatch(), match != matchedFile {
+            // ilk eşleşme VEYA daha güncel/kesin oturum dosyasına geçiş
+            matchedFile = match
+            offset = fileSize(match)
+            pendingPartial = ""
         }
         guard let file = matchedFile else { return }
         readNewLines(from: file)
     }
 
-    /// Kesin eşleşme (varsa) > heuristik: `exactFile` diskte varsa her zaman onu döner,
-    /// yoksa `bestCandidate()` heuristiğine düşer.
-    private func resolvedCandidate() -> URL? {
+    /// Bu terminalin bağlanacağı jsonl (öncelik sırası tip yorumunda):
+    /// 1. `exactFile` (session-id) diskte varsa — kesin, deterministik.
+    /// 2. Çoklu-oturum tekil-sahiplik (owner+registry) — kardeş tab ayrımı.
+    /// 3. Tek-oturum mtime sezgiseli (+ restart fallback).
+    private func resolveMatch() async -> URL? {
         if let exactFile, FileManager.default.fileExists(atPath: exactFile.path) {
             return exactFile
         }
-        return bestCandidate()?.0
+        if let owner, let registry {
+            switch await registry.assignment(for: owner) {
+            case .file(let url): return url
+            case .unassigned: return nil
+            case .solo: break  // tek terminal → aşağıdaki sezgisele düş
+            }
+        }
+        return heuristicMatch()
     }
 
-    private func bestCandidate() -> (URL, Date)? {
+    /// Tek-oturum sezgiseli: proje dizininde önce oturum başlangıcından (−120 sn
+    /// tolerans) yeni, en güncel mtime'lı jsonl; öyle biri yoksa dizindeki en yeni
+    /// jsonl'e düşülür (restart'ta `sessionCreatedAt` sıfırlandığında oturum-öncesi
+    /// transcript'in kaybolmaması için).
+    private func heuristicMatch() -> URL? {
+        let cutoff = sessionCreatedAt.addingTimeInterval(-120)
+        let candidates = sortedByMtime()
+        return (candidates.first { $0.1 >= cutoff } ?? candidates.first)?.0
+    }
+
+    private func sortedByMtime() -> [(URL, Date)] {
         let fm = FileManager.default
         guard let entries = try? fm.contentsOfDirectory(
             at: projectDir, includingPropertiesForKeys: [.contentModificationDateKey]
-        ) else { return nil }
-        let cutoff = sessionCreatedAt.addingTimeInterval(-120)
-        let candidates = entries
+        ) else { return [] }
+        return entries
             .filter { $0.pathExtension == "jsonl" }
             .compactMap { url -> (URL, Date)? in
                 guard let mtime = try? url.resourceValues(forKeys: [.contentModificationDateKey])
                     .contentModificationDate else { return nil }
-                return mtime >= cutoff ? (url, mtime) : nil
+                return (url, mtime)
             }
             .sorted { $0.1 > $1.1 }
-        return candidates.first
     }
 
     private func fileSize(_ url: URL) -> UInt64 {
@@ -103,7 +137,9 @@ actor TranscriptWatcher {
     /// Ayrı handle ile okur; canlı tail durumuna YALNIZCA yayın başladıktan sonra (continuation != nil)
     /// dokunur — erken çağrı yan-etkisiz okur, böylece ilk-poll öncesi offset canlı akışla çiftlenmeye
     /// yol açmaz. Henüz eşleşme yoksa o an eşleştirmeyi dener; yine yoksa [].
-    func historyItems(limit: Int = 50, maxTailBytes: Int = 262_144) -> [FeedItem] {
+    func historyItems(limit: Int = 50, maxTailBytes: Int = 262_144) async -> [FeedItem] {
+        let resolved = await resolveMatch()
+        rlog("historyItems projectDir=\(projectDir.path) exists=\(FileManager.default.fileExists(atPath: projectDir.path)) matched=\(matchedFile?.lastPathComponent ?? "-") candidate=\(resolved?.lastPathComponent ?? "-")")
         let file: URL
         if let exactFile, FileManager.default.fileExists(atPath: exactFile.path) {
             // Kesin oturum dosyası her zaman kazanır (bayat matchedFile'ı bile ez);
@@ -116,15 +152,15 @@ actor TranscriptWatcher {
             file = exactFile
         } else if let matched = matchedFile {
             file = matched
-        } else if let best = bestCandidate() {
+        } else if let resolved {
             // Yayın başladıysa ilk-eşleşmeyi kalıcılaştır (poll() ile aynı kurulum);
             // başlamadıysa yan etkisiz oku — erken offset canlı akışla çiftlenme yaratabilir.
             if continuation != nil {
-                matchedFile = best.0
-                offset = fileSize(best.0)
+                matchedFile = resolved
+                offset = fileSize(resolved)
                 pendingPartial = ""
             }
-            file = best.0
+            file = resolved
         } else {
             return []
         }
