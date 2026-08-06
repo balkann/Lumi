@@ -258,4 +258,17 @@ final class ProtocolTests: XCTestCase {
         XCTAssertEqual(payload["model"] as? String, "sonnet")
         XCTAssertEqual(payload["commandId"] as? String, "m9")
     }
+
+    func testSnapshotDecodesActivePrompt() {
+        let json = """
+        {"v":1,"type":"snapshot","payload":{"sessions":[
+          {"id":"s1","repoPath":"/r","repoName":"r","status":"waiting-unseen",
+           "activePrompt":[{"header":"İzin isteği","question":"Do you want to proceed?","options":["Yes","No"]}]}
+        ],"repos":[],"personas":[]}}
+        """
+        guard case .snapshot(let snap)? = PhoneProtocol.decodeServerMessage(json) else {
+            return XCTFail("snapshot decode edilemedi")
+        }
+        XCTAssertEqual(snap.sessions.first?.activePrompt?.first?.options, ["Yes", "No"])
+    }
 }
