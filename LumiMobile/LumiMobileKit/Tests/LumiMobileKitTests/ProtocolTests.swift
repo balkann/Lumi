@@ -258,4 +258,22 @@ final class ProtocolTests: XCTestCase {
         XCTAssertEqual(payload["model"] as? String, "sonnet")
         XCTAssertEqual(payload["commandId"] as? String, "m9")
     }
+
+    func testDecodesMirrorableFalseInSnapshot() {
+        let text = #"{"v":1,"type":"snapshot","payload":{"sessions":[{"id":"s1","repoPath":"/r","repoName":"r","status":"idle","mirrorable":false}],"repos":[],"personas":[]}}"#
+        guard case .snapshot(let snap)? = PhoneProtocol.decodeServerMessage(text) else { return XCTFail() }
+        XCTAssertEqual(snap.sessions.first?.mirrorable, false)
+    }
+
+    func testMirrorableDefaultsTrueWhenAbsent() {
+        let text = #"{"v":1,"type":"snapshot","payload":{"sessions":[{"id":"s1","repoPath":"/r","repoName":"r","status":"idle"}],"repos":[],"personas":[]}}"#
+        guard case .snapshot(let snap)? = PhoneProtocol.decodeServerMessage(text) else { return XCTFail() }
+        XCTAssertEqual(snap.sessions.first?.mirrorable, true)
+    }
+
+    func testDecodesTranscriptResetEvent() {
+        let text = #"{"v":1,"type":"event","payload":{"kind":"transcript_reset","sessionId":"s1"}}"#
+        guard case .event(.transcriptReset(let sid))? = PhoneProtocol.decodeServerMessage(text) else { return XCTFail() }
+        XCTAssertEqual(sid, "s1")
+    }
 }

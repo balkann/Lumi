@@ -56,7 +56,10 @@ final class AppContainer {
         usageService = UsageService()
         activityMonitor = SystemActivityMonitor()
         sessionStarter = SessionStarterService()
-        terminal = TerminalSessionManager()
+        let claudeSettingsPath = try? TranscriptSettingsInstaller(
+            lumiRoot: FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".lumi")
+        ).install().path
+        terminal = TerminalSessionManager(claudeSettingsPath: claudeSettingsPath)
         personaService = PersonaService(
             paths: paths,
             seedDirectory: LumiServicesResources.defaultPersonasDirectory,

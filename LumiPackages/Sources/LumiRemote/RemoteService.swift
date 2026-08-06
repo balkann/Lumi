@@ -44,9 +44,8 @@ public final class RemoteService: RemoteServicing {
     private var terminalTask: Task<Void, Never>?
     private var watchers: [TerminalID: TranscriptWatcher] = [:]
     private var watcherTasks: [TerminalID: Task<Void, Never>] = [:]
-    /// Aynı repoda eş zamanlı terminallerin jsonl'lerini birthtime≈createdAt ile
-    /// tekil ayrıştırır (aksi halde mtime sezgiseli tab'lar arası mesaj sızdırır).
-    private let claimRegistry = TranscriptClaimRegistry()
+    private let pointerStore: TranscriptPointerStore
+    private var mirrorable: [TerminalID: Bool] = [:]
     private var lastSummary: [TerminalID: String] = [:]
     private var awaitingDecision: [TerminalID: Bool] = [:]
     private var currentModel: [TerminalID: String] = [:]
@@ -59,7 +58,8 @@ public final class RemoteService: RemoteServicing {
         repos: any RepoServicing,
         personas: any PersonaServicing,
         connection: (any RelayConnecting)? = nil,
-        transcriptsRoot: URL? = nil
+        transcriptsRoot: URL? = nil,
+        pointerStore: TranscriptPointerStore? = nil
     ) {
         self.configService = RemoteConfigService(paths: paths)
         self.terminal = terminal
@@ -70,6 +70,9 @@ public final class RemoteService: RemoteServicing {
         self.transcriptsRoot = transcriptsRoot
             ?? FileManager.default.homeDirectoryForCurrentUser
                 .appendingPathComponent(".claude/projects")
+        self.pointerStore = pointerStore ?? TranscriptPointerStore(
+            mapDir: FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent(".lumi/transcript-map"))
     }
 
     public func events() -> AsyncStream<RemoteEvent> { broadcaster.stream() }
@@ -113,9 +116,8 @@ public final class RemoteService: RemoteServicing {
         for (id, task) in watcherTasks { task.cancel(); watcherTasks[id] = nil }
         let currentWatchers = watchers
         watchers = [:]
-        for (id, watcher) in currentWatchers {
+        for (_, watcher) in currentWatchers {
             await watcher.stop()
-            await claimRegistry.unregister(owner: id)
         }
         await connection.stop()
         setState(.disconnected)
@@ -191,21 +193,10 @@ public final class RemoteService: RemoteServicing {
 
     private func startWatcher(for meta: TerminalMeta) async {
         guard watchers[meta.id] == nil else { return }
-        // Kaydı watcher poll etmeye başlamadan ÖNCE yap: aynı repodaki kardeşler
-        // ilk poll'dan itibaren görünür olsun (yoksa tek-oturum sezgiseline düşülür).
-        let dir = transcriptsRoot.appendingPathComponent(
-            TranscriptParser.projectDirName(forCwd: meta.repoPath))
-        await claimRegistry.register(owner: meta.id, dir: dir, createdAt: meta.createdAt)
         let watcher = TranscriptWatcher(
             projectsRoot: transcriptsRoot,
-            repoPath: meta.repoPath,
-            sessionCreatedAt: meta.createdAt,
-            // terminal id'si = claude --session-id (ClaudeSessionID enjeksiyonu) →
-            // watcher <id>.jsonl'i KESİN eşler; yoksa registry (kardeş tab ayrımı),
-            // o da yoksa mtime heuristiğine düşer.
-            sessionId: meta.id.raw.uuidString.lowercased(),
-            owner: meta.id,
-            registry: claimRegistry)
+            terminalID: meta.id.raw.uuidString.lowercased(),
+            pointerStore: pointerStore)
         watchers[meta.id] = watcher
         rlog("watcher started session=\(meta.id.description) repo=\(meta.repoPath)")
         let sessionId = meta.id
@@ -222,7 +213,7 @@ public final class RemoteService: RemoteServicing {
         if let watcher = watchers.removeValue(forKey: id) {
             await watcher.stop()
         }
-        await claimRegistry.unregister(owner: id)
+        mirrorable[id] = nil
         lastSummary[id] = nil
         awaitingDecision[id] = nil
         currentModel[id] = nil
@@ -261,6 +252,21 @@ public final class RemoteService: RemoteServicing {
     }
 
     func handleFeedItem(_ item: FeedItem, sessionId: TerminalID) async {
+        // Kontrol sinyalleri — normal transcript akışından önce işlenir.
+        switch item {
+        case .sessionReset:
+            lastSummary[sessionId] = nil
+            await connection.send(type: "event",
+                payload: SnapshotBuilder.transcriptResetEvent(sessionId: sessionId.description))
+            return
+        case .mirrorUnavailable:
+            guard mirrorable[sessionId] != false else { return }
+            mirrorable[sessionId] = false
+            await sendSnapshot()
+            return
+        default:
+            break
+        }
         switch item {
         case .question(let questions):
             lastSummary[sessionId] = questions.first?.question
@@ -290,7 +296,8 @@ public final class RemoteService: RemoteServicing {
         let personaList = await personas.personas(projectPath: nil)
         let payload = SnapshotBuilder.snapshot(
             terminals: terminal.terminals, repos: repoList, personas: personaList,
-            awaitingDecision: awaitingDecision, currentModel: currentModel)
+            awaitingDecision: awaitingDecision, currentModel: currentModel,
+            mirrorable: mirrorable)
         rlog("snapshot -> \(terminal.terminals.count) session, watchers=\(watchers.count)")
         await connection.send(type: "snapshot", payload: payload)
     }

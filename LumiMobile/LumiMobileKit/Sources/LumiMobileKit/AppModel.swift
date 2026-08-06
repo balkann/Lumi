@@ -178,6 +178,12 @@ public final class AppModel {
             macOnline = true
             models[sessionId] = model
 
+        case .event(.transcriptReset(let sessionId)):
+            macOnline = true
+            feeds[sessionId] = []
+            activeQuestions[sessionId] = nil
+            Task { [weak self] in await self?.requestHistory(sessionId: sessionId) }
+
         case .commandResult(let result):
             if historyCommandIds.remove(result.commandId) != nil {
                 return // geçmiş isteğinin sonucu kullanıcıya yansıtılmaz (ok da olsa hata da)

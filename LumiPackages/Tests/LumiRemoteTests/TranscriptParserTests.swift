@@ -81,4 +81,9 @@ final class TranscriptParserTests: XCTestCase {
         let items = TranscriptParser.parse(line: line)
         XCTAssertFalse(items.contains { if case .model = $0 { return true }; return false })
     }
+
+    func testControlItemsHaveEmptyPayload() {
+        XCTAssertTrue(FeedItem.sessionReset.itemPayload.isEmpty)
+        XCTAssertTrue(FeedItem.mirrorUnavailable.itemPayload.isEmpty)
+    }
 }

@@ -630,4 +630,44 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.modelLabel("claude-haiku-4-5"), "Haiku")
         XCTAssertEqual(model.modelLabel("weird-id"), "weird-id")
     }
+
+    // MARK: Task 9 — transcript_reset sonrası get_history (spec §5.5)
+
+    func testTranscriptResetClearsFeedAndRequestsHistory() async throws {
+        let (model, client, _) = makeModel()
+        // İki oturum: hedef s1, kardeş s2
+        model.handle(.snapshot(Snapshot(sessions: [
+            session("s1", repo: "lumi", .working),
+            session("s2", repo: "other", .working),
+        ], repos: [], personas: [])))
+        // Mac online yap (requestHistory için gerekli)
+        model.handle(.welcome(Welcome(snapshot: nil, macOnline: true, lastSeenAt: nil)))
+        // Her iki oturuma feed doldur
+        model.handle(.event(.transcript(sessionId: "s1", item: .assistantText("s1-msg"))))
+        model.handle(.event(.transcript(sessionId: "s2", item: .assistantText("s2-msg"))))
+        XCTAssertFalse((model.feeds["s1"] ?? []).isEmpty, "ön koşul: s1 feed dolu")
+        XCTAssertFalse((model.feeds["s2"] ?? []).isEmpty, "ön koşul: s2 feed dolu")
+
+        // transcript_reset olayını işle
+        model.handle(.event(.transcriptReset(sessionId: "s1")))
+
+        // Senkron: s1 feed temizlendi, s2 dokunulmadı
+        XCTAssertTrue((model.feeds["s1"] ?? []).isEmpty, "s1 feed sıfırlanmış olmalı")
+        XCTAssertEqual((model.feeds["s2"] ?? []).map(\.item), [.assistantText("s2-msg")],
+                       "s2 feed değişmemeli (kardeş izolasyonu)")
+
+        // Asenkron: requestHistory içindeki Task'ın tamamlanmasını bekle
+        // Task.yield() aktörü bırakır; Task.sleep küçük bir pencere açar — aynı pattern
+        // testStartConsumesClientEventStream'de kullanılıyor.
+        for _ in 0..<200 where client.commands.isEmpty {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        // get_history komutu gönderilmiş olmalı
+        XCTAssertEqual(client.commands.count, 1, "get_history komutu gönderilmeli")
+        guard case .getHistory(let sid) = client.commands.first?.action else {
+            return XCTFail("gönderilen komut get_history değil: \(String(describing: client.commands.first?.action))")
+        }
+        XCTAssertEqual(sid, "s1", "get_history s1 için istenmeli")
+    }
 }

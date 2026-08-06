@@ -36,10 +36,12 @@ public struct SessionSummary: Decodable, Sendable, Equatable, Identifiable {
     public let title: String?
     public let awaitingDecision: Bool
     public let model: String?
+    public let mirrorable: Bool
 
     public init(id: String, repoPath: String, repoName: String,
                 status: SessionStatus, title: String? = nil,
-                awaitingDecision: Bool = false, model: String? = nil) {
+                awaitingDecision: Bool = false, model: String? = nil,
+                mirrorable: Bool = true) {
         self.id = id
         self.repoPath = repoPath
         self.repoName = repoName
@@ -47,10 +49,11 @@ public struct SessionSummary: Decodable, Sendable, Equatable, Identifiable {
         self.title = title
         self.awaitingDecision = awaitingDecision
         self.model = model
+        self.mirrorable = mirrorable
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, repoPath, repoName, status, title, awaitingDecision, model
+        case id, repoPath, repoName, status, title, awaitingDecision, model, mirrorable
     }
 
     public init(from decoder: Decoder) throws {
@@ -62,7 +65,8 @@ public struct SessionSummary: Decodable, Sendable, Equatable, Identifiable {
             status: try c.decode(SessionStatus.self, forKey: .status),
             title: try c.decodeIfPresent(String.self, forKey: .title),
             awaitingDecision: try c.decodeIfPresent(Bool.self, forKey: .awaitingDecision) ?? false,
-            model: try c.decodeIfPresent(String.self, forKey: .model)
+            model: try c.decodeIfPresent(String.self, forKey: .model),
+            mirrorable: (try? c.decode(Bool.self, forKey: .mirrorable)) ?? true
         )
     }
 }
@@ -143,6 +147,7 @@ public enum RemoteEvent: Sendable, Equatable {
     case history(sessionId: String, items: [FeedItem])
     case awaitingDecision(sessionId: String, awaiting: Bool)
     case modelChange(sessionId: String, model: String)
+    case transcriptReset(sessionId: String)
 }
 
 public struct CommandResult: Decodable, Sendable, Equatable {

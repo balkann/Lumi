@@ -48,13 +48,18 @@ public final class TerminalSessionManager: TerminalServicing {
     }
     private var keyMonitor: Any?
     private var mouseMonitor: Any?
+    private let claudeSettingsPath: String?
 
     /// Terminal NSView'ına tıklayınca store odağının senkronlanması için köprü
     /// (Electron'daki karta-tıkla → setActiveTerminal paritesi, spec/20 §9).
     public var onTerminalViewFocused: ((TerminalID) -> Void)?
 
-    public init(font: NSFont = .monospacedSystemFont(ofSize: 13, weight: .regular)) {
+    public init(
+        font: NSFont = .monospacedSystemFont(ofSize: 13, weight: .regular),
+        claudeSettingsPath: String? = nil
+    ) {
         self.font = font
+        self.claudeSettingsPath = claudeSettingsPath
         installNaturalEditingMonitor()
         installFocusClickMonitor()
     }
@@ -128,8 +133,11 @@ public final class TerminalSessionManager: TerminalServicing {
         if let command {
             // claude başlatan komuta terminalin id'sini --session-id olarak enjekte et →
             // transcript dosyası <terminalID>.jsonl olur, TranscriptWatcher kesin eşler.
-            let launch = ClaudeSessionID.inject(
+            var launch = ClaudeSessionID.inject(
                 into: command, sessionId: session.id.raw.uuidString.lowercased())
+            if let claudeSettingsPath {
+                launch = ClaudeSettingsFlag.inject(into: launch, settingsPath: claudeSettingsPath)
+            }
             session.write(launch + "\r")
         }
         return session.meta
