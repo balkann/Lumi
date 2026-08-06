@@ -5,12 +5,12 @@ import Foundation
 /// (startup/resume/clear/compact/fork) bu dosyayı atomik overwrite eder → pointer
 /// her zaman güncel dosyayı gösterir (/clear'da yeni dosya, worktree'de doğru dizin).
 /// Saf/senkron okuma; dosya var/yok kararı watcher'a aittir.
-struct TranscriptPointerStore: Sendable {
-    let mapDir: URL
+public struct TranscriptPointerStore: Sendable {
+    public let mapDir: URL
 
-    init(mapDir: URL) { self.mapDir = mapDir }
+    public init(mapDir: URL) { self.mapDir = mapDir }
 
-    func transcriptPath(for terminalID: String) -> URL? {
+    public func transcriptPath(for terminalID: String) -> URL? {
         let pointer = mapDir.appendingPathComponent("\(terminalID).json")
         guard let data = try? Data(contentsOf: pointer),
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],

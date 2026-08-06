@@ -8,7 +8,8 @@ enum SnapshotBuilder {
         repos: [Repo],
         personas: [Persona],
         awaitingDecision: [TerminalID: Bool] = [:],
-        currentModel: [TerminalID: String] = [:]
+        currentModel: [TerminalID: String] = [:],
+        mirrorable: [TerminalID: Bool] = [:]
     ) -> [String: Any] {
         let repoNames = Dictionary(repos.map { ($0.path, $0.name) },
                                    uniquingKeysWith: { first, _ in first })
@@ -23,6 +24,7 @@ enum SnapshotBuilder {
             if let title = meta.oscTitle { entry["title"] = title }
             if awaitingDecision[meta.id] == true { entry["awaitingDecision"] = true }
             if let model = currentModel[meta.id] { entry["model"] = model }
+            if mirrorable[meta.id] == false { entry["mirrorable"] = false }
             return entry
         }
         return [
@@ -30,6 +32,10 @@ enum SnapshotBuilder {
             "repos": repos.map { ["name": $0.name, "path": $0.path] },
             "personas": personas.map { ["id": $0.id, "label": $0.label] },
         ]
+    }
+
+    static func transcriptResetEvent(sessionId: String) -> [String: Any] {
+        ["kind": "transcript_reset", "sessionId": sessionId]
     }
 
     static func awaitingDecisionEvent(sessionId: String, awaiting: Bool) -> [String: Any] {

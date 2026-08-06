@@ -64,4 +64,27 @@ final class SnapshotBuilderTests: XCTestCase {
         let sessions = try XCTUnwrap(snap["sessions"] as? [[String: Any]])
         XCTAssertEqual(sessions[0]["repoName"] as? String, "demo", "ilk kayıt kazanmalı")
     }
+
+    func testSnapshotMarksNotMirrorable() {
+        let id = TerminalID()
+        let m = TerminalMeta(id: id, name: "t", repoPath: "/r", createdAt: Date())
+        let snap = SnapshotBuilder.snapshot(
+            terminals: [m], repos: [], personas: [], mirrorable: [id: false])
+        let session = (snap["sessions"] as! [[String: Any]]).first!
+        XCTAssertEqual(session["mirrorable"] as? Bool, false)
+    }
+
+    func testSnapshotOmitsMirrorableWhenTrue() {
+        let id = TerminalID()
+        let m = TerminalMeta(id: id, name: "t", repoPath: "/r", createdAt: Date())
+        let snap = SnapshotBuilder.snapshot(terminals: [m], repos: [], personas: [])
+        let session = (snap["sessions"] as! [[String: Any]]).first!
+        XCTAssertNil(session["mirrorable"], "mirrorable yalnız false iken bulunur")
+    }
+
+    func testTranscriptResetEventShape() {
+        let e = SnapshotBuilder.transcriptResetEvent(sessionId: "s1")
+        XCTAssertEqual(e["kind"] as? String, "transcript_reset")
+        XCTAssertEqual(e["sessionId"] as? String, "s1")
+    }
 }

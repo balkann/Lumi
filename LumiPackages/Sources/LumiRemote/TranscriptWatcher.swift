@@ -1,58 +1,45 @@
 import Foundation
 import LumiKit
 
-/// Bir terminal oturumunun Claude Code transcript'ini izler (spec §4.2).
-/// Dosya sistemi olayı yerine basit polling: 1.5 sn'de bir dizin/dosya kontrolü.
+/// Bir terminalin Claude Code transcript'ini izler (spec §4.2), DETERMİNİSTİK eşleşme.
+/// 1.5 sn polling. Eşleşme (bkz. `resolveMatch`):
+/// 1. **Pointer:** SessionStart hook'unun yazdığı `<tid>.json` → `transcript_path`
+///    (dosya diskte varsa). /clear/resume/compact/fork ve worktree bununla çözülür.
+/// 2. **Fallback (global exactFile):** pointer yoksa (hook henüz tetiklenmedi/kurulu
+///    değil), tüm `<projectsRoot>/*/` altında `<tid>.jsonl` ara. id global unique →
+///    en çok bir sonuç; worktree'yi hook olmadan da bulur (ilk oturum köprüsü).
+/// 3. Aksi halde nil → grace sonrası bir kez `.mirrorUnavailable` yayılır (not-mirrored).
 ///
-/// Eşleşme öncelik sırası (bkz. `resolveMatch`):
-/// 1. **Kesin (session-id):** `sessionId` verildiyse (Lumi'nin başlattığı claude
-///    oturumu, bkz. `ClaudeSessionID`) ve `<sessionId>.jsonl` diskte varsa KESİN
-///    o dosya — deterministik, çoklu-oturumda yanlış/eski eşleşmeyi önler.
-/// 2. **Çoklu-oturum (owner+registry):** kesin dosya yoksa, aynı repoda eş zamanlı
-///    tab'ları `TranscriptClaimRegistry` birthtime≈createdAt ile tekil sahiplikle
-///    ayırır (session-id'siz komutlar — codex/bash/eski oturumlar — için crosstalk'ı
-///    engeller; mtime sezgiseli tek başına mesajları tab'lar arası sızdırır).
-/// 3. **Tek-oturum sezgiseli:** kardeş yoksa/standalone — proje dizininde önce oturum
-///    başlangıcından (−120 sn tolerans) yeni, en güncel mtime'lı jsonl; öyle biri
-///    yoksa dizindeki en yeni jsonl'e düşülür (restart'ta `sessionCreatedAt`
-///    sıfırlandığında oturum-öncesi transcript'in kaybolmaması için).
-///
-/// Eşleşen jsonl yoksa akış boş kalır — "yalnız durum modu" (spec §5); her poll'da
-/// yeniden denenir.
+/// Aktif dosya değişince (ilk eşleşme sonrası farklı dosya) `.sessionReset` yayılır →
+/// RemoteService `transcript_reset` yollar → telefon feed'i temizler.
 actor TranscriptWatcher {
-    private let projectDir: URL
-    private let sessionCreatedAt: Date
-    private let exactFile: URL?
+    private let projectsRoot: URL
+    private let terminalID: String
+    private let pointerStore: TranscriptPointerStore
     private nonisolated let pollInterval: Duration
-    /// Aynı repoda eş zamanlı terminalleri ayırt etmek için tekil-sahiplik
-    /// koordinatörü + bu terminalin kimliği. İkisi de verildiğinde çoklu-oturum
-    /// modu; nil ise (standalone/test) tek-oturum mtime sezgiseli kullanılır.
-    private let owner: TerminalID?
-    private let registry: TranscriptClaimRegistry?
+    private let notMirrorableAfterPolls: Int
 
     private var matchedFile: URL?
     private var offset: UInt64 = 0
     private var pendingPartial = ""
     private var pollTask: Task<Void, Never>?
     private var continuation: AsyncStream<FeedItem>.Continuation?
+    private var everMatched = false
+    private var emptyPolls = 0
+    private var emittedUnavailable = false
 
     init(
         projectsRoot: URL,
-        repoPath: String,
-        sessionCreatedAt: Date,
-        sessionId: String? = nil,
+        terminalID: String,
+        pointerStore: TranscriptPointerStore,
         pollInterval: Duration = .milliseconds(1500),
-        owner: TerminalID? = nil,
-        registry: TranscriptClaimRegistry? = nil
+        notMirrorableAfterPolls: Int = 4
     ) {
-        let dir = projectsRoot
-            .appendingPathComponent(TranscriptParser.projectDirName(forCwd: repoPath))
-        self.projectDir = dir
-        self.sessionCreatedAt = sessionCreatedAt
-        self.exactFile = sessionId.map { dir.appendingPathComponent("\($0).jsonl") }
+        self.projectsRoot = projectsRoot
+        self.terminalID = terminalID.lowercased()
+        self.pointerStore = pointerStore
         self.pollInterval = pollInterval
-        self.owner = owner
-        self.registry = registry
+        self.notMirrorableAfterPolls = notMirrorableAfterPolls
     }
 
     func items() -> AsyncStream<FeedItem> {
@@ -69,64 +56,63 @@ actor TranscriptWatcher {
     }
 
     func stop() {
-        pollTask?.cancel()
-        pollTask = nil
-        continuation?.finish()
-        continuation = nil
+        pollTask?.cancel(); pollTask = nil
+        continuation?.finish(); continuation = nil
     }
 
     private func poll() async {
-        if let match = await resolveMatch(), match != matchedFile {
-            // ilk eşleşme VEYA daha güncel/kesin oturum dosyasına geçiş
-            matchedFile = match
-            offset = fileSize(match)
-            pendingPartial = ""
+        let match = resolveMatch()
+        if let match {
+            emptyPolls = 0
+            if match != matchedFile {
+                let wasMatched = matchedFile != nil
+                matchedFile = match
+                // İlk eşleşmede: mevcut içeriği atla (sadece yeni satırları tail'le).
+                // Dosya değişiminde (/clear, resume, fork): yeni dosyanın başından oku.
+                offset = wasMatched ? 0 : fileSize(match)
+                pendingPartial = ""
+                if wasMatched {
+                    // Aktif dosya değişti (/clear, resume, fork) → reset sinyali.
+                    continuation?.yield(.sessionReset)
+                }
+                everMatched = true
+                emittedUnavailable = false
+            }
+        } else {
+            // Eşleşme yok. Fresh oturumda pointer/dosya birkaç poll gecikebilir → grace.
+            if matchedFile == nil, !everMatched, !emittedUnavailable {
+                emptyPolls += 1
+                if emptyPolls >= notMirrorableAfterPolls {
+                    emittedUnavailable = true
+                    continuation?.yield(.mirrorUnavailable)
+                }
+            }
+            return
         }
         guard let file = matchedFile else { return }
         readNewLines(from: file)
     }
 
-    /// Bu terminalin bağlanacağı jsonl (öncelik sırası tip yorumunda):
-    /// 1. `exactFile` (session-id) diskte varsa — kesin, deterministik.
-    /// 2. Çoklu-oturum tekil-sahiplik (owner+registry) — kardeş tab ayrımı.
-    /// 3. Tek-oturum mtime sezgiseli (+ restart fallback).
-    private func resolveMatch() async -> URL? {
-        if let exactFile, FileManager.default.fileExists(atPath: exactFile.path) {
-            return exactFile
+    /// 1) pointer (dosya varsa) → 2) global <tid>.jsonl → nil.
+    private func resolveMatch() -> URL? {
+        if let p = pointerStore.transcriptPath(for: terminalID),
+           FileManager.default.fileExists(atPath: p.path) {
+            return p
         }
-        if let owner, let registry {
-            switch await registry.assignment(for: owner) {
-            case .file(let url): return url
-            case .unassigned: return nil
-            case .solo: break  // tek terminal → aşağıdaki sezgisele düş
-            }
-        }
-        return heuristicMatch()
+        return globalExactFile()
     }
 
-    /// Tek-oturum sezgiseli: proje dizininde önce oturum başlangıcından (−120 sn
-    /// tolerans) yeni, en güncel mtime'lı jsonl; öyle biri yoksa dizindeki en yeni
-    /// jsonl'e düşülür (restart'ta `sessionCreatedAt` sıfırlandığında oturum-öncesi
-    /// transcript'in kaybolmaması için).
-    private func heuristicMatch() -> URL? {
-        let cutoff = sessionCreatedAt.addingTimeInterval(-120)
-        let candidates = sortedByMtime()
-        return (candidates.first { $0.1 >= cutoff } ?? candidates.first)?.0
-    }
-
-    private func sortedByMtime() -> [(URL, Date)] {
+    /// Tüm proje dizinlerinde `<tid>.jsonl` ara (id global unique → tek sonuç).
+    private func globalExactFile() -> URL? {
         let fm = FileManager.default
-        guard let entries = try? fm.contentsOfDirectory(
-            at: projectDir, includingPropertiesForKeys: [.contentModificationDateKey]
-        ) else { return [] }
-        return entries
-            .filter { $0.pathExtension == "jsonl" }
-            .compactMap { url -> (URL, Date)? in
-                guard let mtime = try? url.resourceValues(forKeys: [.contentModificationDateKey])
-                    .contentModificationDate else { return nil }
-                return (url, mtime)
-            }
-            .sorted { $0.1 > $1.1 }
+        guard let dirs = try? fm.contentsOfDirectory(
+            at: projectsRoot, includingPropertiesForKeys: nil) else { return nil }
+        let name = "\(terminalID).jsonl"
+        for dir in dirs {
+            let candidate = dir.appendingPathComponent(name)
+            if fm.fileExists(atPath: candidate.path) { return candidate }
+        }
+        return nil
     }
 
     private func fileSize(_ url: URL) -> UInt64 {
@@ -134,31 +120,19 @@ actor TranscriptWatcher {
     }
 
     /// Eşleşen jsonl'in kuyruğunu parse edip son `limit` item'ı döner (backfill).
-    /// Ayrı handle ile okur; canlı tail durumuna YALNIZCA yayın başladıktan sonra (continuation != nil)
-    /// dokunur — erken çağrı yan-etkisiz okur, böylece ilk-poll öncesi offset canlı akışla çiftlenmeye
-    /// yol açmaz. Henüz eşleşme yoksa o an eşleştirmeyi dener; yine yoksa [].
+    /// Yayın başladıysa (continuation != nil) ilk eşleşmeyi kalıcılaştırır.
     func historyItems(limit: Int = 50, maxTailBytes: Int = 262_144) async -> [FeedItem] {
-        let resolved = await resolveMatch()
-        rlog("historyItems projectDir=\(projectDir.path) exists=\(FileManager.default.fileExists(atPath: projectDir.path)) matched=\(matchedFile?.lastPathComponent ?? "-") candidate=\(resolved?.lastPathComponent ?? "-")")
+        let resolved = resolveMatch()
+        rlog("historyItems tid=\(terminalID) matched=\(matchedFile?.lastPathComponent ?? "-") candidate=\(resolved?.lastPathComponent ?? "-")")
         let file: URL
-        if let exactFile, FileManager.default.fileExists(atPath: exactFile.path) {
-            // Kesin oturum dosyası her zaman kazanır (bayat matchedFile'ı bile ez);
-            // yayın başladıysa canlı tail'i de bu dosyaya kilitle.
-            if continuation != nil, exactFile != matchedFile {
-                matchedFile = exactFile
-                offset = fileSize(exactFile)
-                pendingPartial = ""
-            }
-            file = exactFile
-        } else if let matched = matchedFile {
+        if let matched = matchedFile, FileManager.default.fileExists(atPath: matched.path) {
             file = matched
         } else if let resolved {
-            // Yayın başladıysa ilk-eşleşmeyi kalıcılaştır (poll() ile aynı kurulum);
-            // başlamadıysa yan etkisiz oku — erken offset canlı akışla çiftlenme yaratabilir.
             if continuation != nil {
                 matchedFile = resolved
                 offset = fileSize(resolved)
                 pendingPartial = ""
+                everMatched = true
             }
             file = resolved
         } else {
@@ -166,17 +140,11 @@ actor TranscriptWatcher {
         }
         guard let handle = try? FileHandle(forReadingFrom: file) else { return [] }
         defer { try? handle.close() }
-
         let size = fileSize(file)
         let start = size > UInt64(maxTailBytes) ? size - UInt64(maxTailBytes) : 0
         guard (try? handle.seek(toOffset: start)) != nil,
               let data = try? handle.readToEnd() else { return [] }
-
-        // Lossy decode: geçersiz UTF-8 baytlar (çok baytlı karakter sınırında kesim dahil)
-        // U+FFFD olur; start > 0 ise zaten ilk (yarım) satır aşağıda atılır.
         var chunk = String(decoding: data, as: UTF8.self)
-
-        // Kuyruk ortadan kesildiyse ilk satır yarımdır — at.
         if start > 0, let newline = chunk.firstIndex(of: "\n") {
             chunk = String(chunk[chunk.index(after: newline)...])
         }
@@ -195,7 +163,6 @@ actor TranscriptWatcher {
         offset += UInt64(data.count)
         let chunk = pendingPartial + (String(data: data, encoding: .utf8) ?? "")
         var lines = chunk.components(separatedBy: "\n")
-        // Son parça \n ile bitmiyorsa yarım satırdır — bir sonraki poll'a sakla.
         pendingPartial = chunk.hasSuffix("\n") ? "" : (lines.popLast() ?? "")
         for line in lines where !line.isEmpty {
             for item in TranscriptParser.parse(line: line) {
