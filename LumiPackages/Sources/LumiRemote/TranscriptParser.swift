@@ -19,6 +19,13 @@ public enum FeedItem: Equatable, Sendable {
     case question(payload: [Question])
     case turnDone
     case model(String)
+    /// Kontrol sinyali: terminalin aktif transcript dosyası değişti (/clear, resume,
+    /// fork). Transcript öğesi değildir — RemoteService bunu `transcript_reset`
+    /// event'ine çevirir; telefon feed'i temizler.
+    case sessionReset
+    /// Kontrol sinyali: bu terminale ait transcript dosyası bulunamıyor (pointer yok
+    /// + <TID>.jsonl hiçbir proje dizininde yok) → "yansıtılamıyor".
+    case mirrorUnavailable
 
     /// Yalnız item sözlüğü — hem canlı `transcript` event'inde hem `history`
     /// yanıtında aynı şekil kullanılır (protokol: items[] elemanı).
@@ -36,6 +43,8 @@ public enum FeedItem: Equatable, Sendable {
             return ["itemType": "turn_done"]
         case .model(let model):
             return ["itemType": "model", "model": model]
+        case .sessionReset, .mirrorUnavailable:
+            return [:]
         }
     }
 
