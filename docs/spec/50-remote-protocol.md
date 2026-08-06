@@ -62,12 +62,16 @@ body = `summary` (yoksa duruma göre genel metin).
 `title` yalnızca terminalin bir OSC başlığı varsa bulunur.
 `awaitingDecision` yalnızca `true` olduğunda bulunur (yoksa → `false`); oturum bir tool izni/kararı bekliyorsa `true`.
 `model` yalnızca Mac transcript'ten bir model gördüğünde bulunur (yoksa → bilinmiyor); son bilinen çalışan model adı.
+`mirrorable` yalnızca `false` olduğunda bulunur (yoksa → `true`); Lumi bu oturumun transcript dosyasını eşleyemiyor (Lumi-dışı/id'siz başlatılmış — Rider/elle/resume). Telefon "yansıtılamıyor" banner'ı gösterir; giden mesaj (send_text/press_key) açık kalır.
 
 ### `awaiting_decision`
 `{ "kind": "awaiting_decision", "sessionId": "<uuid>", "awaiting": bool }` — Mac bir tool için izin (karar) beklemeye başlayınca `true`, çözülünce `false`. Status'ten ayrı sinyaldir (OSC "needs your permission"); rozet OSC başlığına bağlı olduğundan bu daha güvenilirdir. Relay bu kind'a bakmaz (push kuralı yalnız `status_change`).
 
 ### `model_change`
 `{ "kind": "model_change", "sessionId": "<uuid>", "model": string }` — Mac, son assistant transcript kaydının `message.model` alanından çıkardığı güncel modeli, değiştiğinde bildirir. Relay bakmaz (push yalnız `status_change`).
+
+### `transcript_reset`
+`{ "kind": "transcript_reset", "sessionId": "<uuid>" }` — Mac, bir oturumun aktif transcript dosyası değişince (`/clear`/resume/fork; yeni jsonl) yollar. Telefon o oturumun feed'ini temizler; sonraki canlı `transcript` item'ları ve bir sonraki `get_history` yeni oturumu doldurur. Relay bakmaz (push yalnız `status_change`).
 
 ## event payload — history (Plan 3.5 backfill)
 
