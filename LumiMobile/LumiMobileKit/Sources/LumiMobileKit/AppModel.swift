@@ -182,6 +182,7 @@ public final class AppModel {
             macOnline = true
             feeds[sessionId] = []
             activeQuestions[sessionId] = nil
+            Task { [weak self] in await self?.requestHistory(sessionId: sessionId) }
 
         case .commandResult(let result):
             if historyCommandIds.remove(result.commandId) != nil {
