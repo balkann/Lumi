@@ -24,6 +24,16 @@ final class TerminalSession {
     static let scrollbackLines = 5000
     static let resizeDebounceInterval: TimeInterval = 0.15
 
+    /// PTY çocuk süreç ortamı (saf, test edilebilir). `LUMI_TERMINAL_ID` claude'un
+    /// SessionStart hook'una miras kalır; hook bunu pointer dosya adı olarak kullanır.
+    nonisolated static func childEnvironment(base: [String: String], terminalID: TerminalID) -> [String: String] {
+        var environment = base
+        environment["TERM"] = "xterm-256color"
+        if environment["LANG"] == nil { environment["LANG"] = "en_US.UTF-8" }
+        environment["LUMI_TERMINAL_ID"] = terminalID.raw.uuidString.lowercased()
+        return environment
+    }
+
     let id: TerminalID
     private(set) var meta: TerminalMeta
     let terminalView: TerminalView
@@ -51,11 +61,7 @@ final class TerminalSession {
         self.ioQueue = queue
         self.pipeline = TerminalPipeline(queue: queue)
 
-        var environment = ProcessInfo.processInfo.environment
-        environment["TERM"] = "xterm-256color"
-        if environment["LANG"] == nil {
-            environment["LANG"] = "en_US.UTF-8"
-        }
+        let environment = Self.childEnvironment(base: ProcessInfo.processInfo.environment, terminalID: id)
 
         self.pty = try PTYProcess(
             executable: ShellResolver.defaultShell(),
