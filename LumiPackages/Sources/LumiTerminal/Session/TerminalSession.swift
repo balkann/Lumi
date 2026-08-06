@@ -7,6 +7,7 @@ import SwiftTerm
 protocol TerminalSessionDelegate: AnyObject {
     func session(_ session: TerminalSession, didChangeStatus status: TerminalStatus)
     func session(_ session: TerminalSession, didChangeAwaitingDecision awaiting: Bool)
+    func session(_ session: TerminalSession, didDetectPrompt prompt: DetectedPrompt?)
     func session(_ session: TerminalSession, didChangeTitle title: String)
     func session(_ session: TerminalSession, didExitWithCode code: Int32)
     func sessionDidBell(_ session: TerminalSession)
@@ -35,6 +36,7 @@ final class TerminalSession {
     private let outputBroadcaster = EventBroadcaster<String>()
     private var isTerminated = false
     private var pendingResize: DispatchWorkItem?
+    private var lastPrompt: DetectedPrompt?
 
     init(repoPath: String, name: String, task: String?, font: NSFont) throws {
         let id = TerminalID()
@@ -107,6 +109,9 @@ final class TerminalSession {
         pipeline.onDisplayTitle = { [weak self] title in
             hopToMain { self?.applyTitle(title) }
         }
+        pipeline.onPromptScanDue = { [weak self] in
+            hopToMain { self?.runPromptScan() }
+        }
         // wait_for fan-out (design/01 §3): io queue'dan doğrudan yayın —
         // tüketici yavaşlığı terminali durduramaz
         pipeline.onOutputText = { [outputBroadcaster] text in
@@ -138,6 +143,28 @@ final class TerminalSession {
     private func applyAwaitingDecision(_ awaiting: Bool) {
         guard !isTerminated else { return }
         delegate?.session(self, didChangeAwaitingDecision: awaiting)
+    }
+
+    /// Çıktı sessizliğinde (io queue debounce) main'de tetiklenir: alt satırları
+    /// tarar, son sonuçtan farklıysa delegate'e bildirir. Salt-okuma (spec 4 §K4).
+    private func runPromptScan() {
+        guard !isTerminated else { return }
+        let prompt = TerminalPromptScanner.scan(lines: captureBottomLines())
+        guard prompt != lastPrompt else { return }
+        lastPrompt = prompt
+        delegate?.session(self, didDetectPrompt: prompt)
+    }
+
+    /// Emülatörün görünür alt `n` satırını düz metin olarak okur (MainActor).
+    private func captureBottomLines(_ n: Int = 16) -> [String] {
+        let terminal = terminalView.getTerminal()
+        let rows = terminal.rows
+        let start = max(0, rows - n)
+        var out: [String] = []
+        for row in start..<rows {
+            out.append(terminal.getLine(row: row)?.translateToString(trimRight: true) ?? "")
+        }
+        return out
     }
 
     private func applyTitle(_ title: String) {

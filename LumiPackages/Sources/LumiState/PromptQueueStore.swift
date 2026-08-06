@@ -126,7 +126,7 @@ public final class PromptQueueStore {
             statuses[id] = nil
             awaitingDecisionIDs.remove(id)
             cancelSettle(id)
-        case .spawned, .titleChanged, .bell:
+        case .spawned, .titleChanged, .bell, .promptChanged:
             break
         }
     }
