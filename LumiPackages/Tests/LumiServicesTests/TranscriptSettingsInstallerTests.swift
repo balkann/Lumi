@@ -32,6 +32,29 @@ final class TranscriptSettingsInstallerTests: XCTestCase {
             atPath: root.appendingPathComponent("transcript-map").path))
     }
 
+    func testHookCommandSingleQuotesPathWithSpace() throws {
+        // Build a lumiRoot whose path contains a space to exercise quoting
+        let spaceRoot = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("lumi inst \(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: spaceRoot, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: spaceRoot) }
+
+        try TranscriptSettingsInstaller(lumiRoot: spaceRoot).install()
+
+        let settingsPath = spaceRoot.appendingPathComponent("claude-settings.json")
+        let data = try Data(contentsOf: settingsPath)
+        let json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        let hooks = json["hooks"] as! [String: Any]
+        let sessionStart = hooks["SessionStart"] as! [[String: Any]]
+        let innerHooks = sessionStart[0]["hooks"] as! [[String: Any]]
+        let command = innerHooks[0]["command"] as! String
+
+        let expectedScriptPath = spaceRoot
+            .appendingPathComponent("hooks/session-start.sh").path
+        XCTAssertTrue(command.contains("'\(expectedScriptPath)'"),
+            "command '\(command)' should single-quote script path '\(expectedScriptPath)'")
+    }
+
     func testInstallIsIdempotent() throws {
         let p1 = try TranscriptSettingsInstaller(lumiRoot: root).install()
         let p2 = try TranscriptSettingsInstaller(lumiRoot: root).install()

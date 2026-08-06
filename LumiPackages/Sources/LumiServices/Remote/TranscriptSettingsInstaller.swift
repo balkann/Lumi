@@ -27,7 +27,7 @@ public struct TranscriptSettingsInstaller {
         let settingsPath = lumiRoot.appendingPathComponent("claude-settings.json")
         let settings: [String: Any] = [
             "hooks": ["SessionStart": [
-                ["hooks": [["type": "command", "command": "sh \(script.path)"]]],
+                ["hooks": [["type": "command", "command": "sh '\(script.path)'"]]],
             ]],
         ]
         let data = try JSONSerialization.data(withJSONObject: settings, options: [.prettyPrinted])
