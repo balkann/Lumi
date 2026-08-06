@@ -62,6 +62,7 @@ body = `summary` (yoksa duruma göre genel metin).
 `title` yalnızca terminalin bir OSC başlığı varsa bulunur.
 `awaitingDecision` yalnızca `true` olduğunda bulunur (yoksa → `false`); oturum bir tool izni/kararı bekliyorsa `true`.
 `model` yalnızca Mac transcript'ten bir model gördüğünde bulunur (yoksa → bilinmiyor); son bilinen çalışan model adı.
+`activePrompt` (opsiyonel): `[{ "header", "question", "options": ["…"] }]` — o an ekranda duran interaktif prompt (izin/soru; ekran-scrape, spec 4). Yoksa alan gelmez. Reconnect'te telefon kartı bu alandan yeniden kurar.
 
 ### `awaiting_decision`
 `{ "kind": "awaiting_decision", "sessionId": "<uuid>", "awaiting": bool }` — Mac bir tool için izin (karar) beklemeye başlayınca `true`, çözülünce `false`. Status'ten ayrı sinyaldir (OSC "needs your permission"); rozet OSC başlığına bağlı olduğundan bu daha güvenilirdir. Relay bu kind'a bakmaz (push kuralı yalnız `status_change`).
@@ -86,6 +87,8 @@ listeyle DEĞİŞTİRİR. Relay bu kind'a bakmaz (push kuralı yalnız `status_c
 | `tool_use` | `tool` (string), `summary` (string) |
 | `question` | `questions`: `[{ "header", "question", "options": ["…"] }]` |
 | `turn_done` | (yok) |
+
+`question` item'ının `questions` alanı **boş dizi (`[]`)** ise: o oturumun açık prompt kartı **temizlenir** (ekran-scrape prompt kalktığında gönderilir; spec 4). Boş olmayan dizi → kart gösterilir. Transcript-türevli AskUserQuestion asla boş göndermez; boş yalnız ekran-scrape temizliğinden gelir (→ çakışma yok).
 
 ## Komut aksiyonları (Plan 2/3 sözleşmesi)
 

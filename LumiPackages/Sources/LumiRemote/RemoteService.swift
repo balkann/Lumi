@@ -49,6 +49,9 @@ public final class RemoteService: RemoteServicing {
     private let claimRegistry = TranscriptClaimRegistry()
     private var lastSummary: [TerminalID: String] = [:]
     private var awaitingDecision: [TerminalID: Bool] = [:]
+    /// Ekranda o an duran interaktif prompt (ekran-scrape, spec 4). Birincil kaynak:
+    /// varken transcript AskUserQuestion düşürülür (dedup).
+    private var screenPrompt: [TerminalID: DetectedPrompt] = [:]
     private var currentModel: [TerminalID: String] = [:]
     private var running = false
     private var epoch = 0
@@ -182,6 +185,11 @@ public final class RemoteService: RemoteServicing {
             guard let meta = terminal.terminals.first(where: { $0.id == id }) else { return }
             await connection.send(type: "event", payload:
                 SnapshotBuilder.awaitingDecisionEvent(sessionId: meta.id.description, awaiting: awaiting))
+        case .promptChanged(let id, let prompt):
+            screenPrompt[id] = prompt   // nil → anahtar silinir
+            guard let meta = terminal.terminals.first(where: { $0.id == id }) else { return }
+            await connection.send(type: "event",
+                payload: SnapshotBuilder.promptEvent(sessionId: meta.id.description, prompt: prompt))
         default:
             break
         }
@@ -225,6 +233,7 @@ public final class RemoteService: RemoteServicing {
         await claimRegistry.unregister(owner: id)
         lastSummary[id] = nil
         awaitingDecision[id] = nil
+        screenPrompt[id] = nil
         currentModel[id] = nil
     }
 
@@ -263,6 +272,8 @@ public final class RemoteService: RemoteServicing {
     func handleFeedItem(_ item: FeedItem, sessionId: TerminalID) async {
         switch item {
         case .question(let questions):
+            // Ekran-scrape birincil (spec 4 §K1): ekranda aktif prompt varken transcript sorusu düşürülür.
+            if screenPrompt[sessionId] != nil { return }
             lastSummary[sessionId] = questions.first?.question
         case .toolUse(let name, let summary):
             lastSummary[sessionId] = summary.isEmpty ? name : "\(name): \(summary)"
@@ -290,7 +301,8 @@ public final class RemoteService: RemoteServicing {
         let personaList = await personas.personas(projectPath: nil)
         let payload = SnapshotBuilder.snapshot(
             terminals: terminal.terminals, repos: repoList, personas: personaList,
-            awaitingDecision: awaitingDecision, currentModel: currentModel)
+            awaitingDecision: awaitingDecision, currentModel: currentModel,
+            activePrompts: screenPrompt)
         rlog("snapshot -> \(terminal.terminals.count) session, watchers=\(watchers.count)")
         await connection.send(type: "snapshot", payload: payload)
     }
@@ -305,5 +317,10 @@ public final class RemoteService: RemoteServicing {
         guard state != newState else { return }
         state = newState
         broadcaster.send(.stateChanged(newState))
+    }
+
+    /// Test seam: watcher olmadan feed öğesi enjekte eder (dedup davranışını doğrular).
+    func ingestFeedItemForTest(_ item: FeedItem, sessionId: TerminalID) async {
+        await handleFeedItem(item, sessionId: sessionId)
     }
 }
