@@ -10,6 +10,19 @@ struct SessionDetailView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            if model.session(sessionId)?.mirrorable == false {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                    Text("Bu oturum Lumi dışından başlatıldı — transcript yansıtılamıyor. Mesaj göndermek çalışır.")
+                        .font(.footnote)
+                }
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.orange.opacity(0.15))
+                .foregroundStyle(.orange)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .padding(.horizontal)
+            }
             feedScroll
             if let error = model.lastCommandError[sessionId] {
                 Text(error)
