@@ -64,4 +64,24 @@ final class SnapshotBuilderTests: XCTestCase {
         let sessions = try XCTUnwrap(snap["sessions"] as? [[String: Any]])
         XCTAssertEqual(sessions[0]["repoName"] as? String, "demo", "ilk kayıt kazanmalı")
     }
+
+    func testPromptEventCarriesQuestionPayload() {
+        let prompt = DetectedPrompt(kind: .permission,
+                                    questionText: "Do you want to proceed?",
+                                    options: ["Yes", "No"])
+        let ev = SnapshotBuilder.promptEvent(sessionId: "s1", prompt: prompt)
+        XCTAssertEqual(ev["kind"] as? String, "transcript")
+        let item = ev["item"] as? [String: Any]
+        XCTAssertEqual(item?["itemType"] as? String, "question")
+        let qs = item?["questions"] as? [[String: Any]]
+        XCTAssertEqual(qs?.count, 1)
+        XCTAssertEqual(qs?.first?["question"] as? String, "Do you want to proceed?")
+        XCTAssertEqual(qs?.first?["options"] as? [String], ["Yes", "No"])
+    }
+
+    func testPromptEventNilClearsWithEmptyQuestions() {
+        let ev = SnapshotBuilder.promptEvent(sessionId: "s1", prompt: nil)
+        let item = ev["item"] as? [String: Any]
+        XCTAssertEqual((item?["questions"] as? [[String: Any]])?.count, 0)
+    }
 }

@@ -17,6 +17,7 @@ final class TerminalPipeline: @unchecked Sendable {
     private var inputFilter = PTYInputFilter()
     private let coalescer: OutputCoalescer
     private let silenceTimer: CodexSilenceTimer
+    private let promptScanTimer: PromptScanTimer
 
     // @Sendable: bu callback'ler io queue'da çağrılır; MainActor bağlamında atanan
     // closure'ların izolasyon miras almasını engeller (tüketici main'e kendisi sıçrar)
@@ -26,11 +27,14 @@ final class TerminalPipeline: @unchecked Sendable {
     var onDisplayTitle: (@Sendable (String) -> Void)?
     var onFlushBatch: (@Sendable (Data) -> Void)?
     var onOutputText: (@Sendable (String) -> Void)?
+    /// Çıktı sessizliğinde ekran-scrape tetikler (io queue'da çağrılır; tüketici main'e sıçrar).
+    var onPromptScanDue: (@Sendable () -> Void)?
 
     init(queue: DispatchQueue, flow: FlowController = FlowController()) {
         self.flow = flow
         self.coalescer = OutputCoalescer(scheduler: DispatchOneShotScheduler(queue: queue))
         self.silenceTimer = CodexSilenceTimer(scheduler: DispatchOneShotScheduler(queue: queue))
+        self.promptScanTimer = PromptScanTimer(scheduler: DispatchOneShotScheduler(queue: queue))
 
         coalescer.onFlush = { [weak self] data in
             self?.onFlushBatch?(data)
@@ -43,6 +47,9 @@ final class TerminalPipeline: @unchecked Sendable {
         }
         decisionTracker.onChange = { [weak self] awaiting in
             self?.onAwaitingDecisionChange?(awaiting)
+        }
+        promptScanTimer.onDue = { [weak self] in
+            self?.onPromptScanDue?()
         }
     }
 
@@ -64,6 +71,7 @@ final class TerminalPipeline: @unchecked Sendable {
                 silenceTimer.touch()
             }
             onOutputText?(text)
+            promptScanTimer.touch()
         }
         coalescer.ingest(data)
         return directive == .suspend ? .suspend : .proceed
@@ -144,6 +152,7 @@ final class TerminalPipeline: @unchecked Sendable {
     /// kayıttan düşmüş terminale stale status push edilmez.
     func prepareForExit() {
         silenceTimer.cancel()
+        promptScanTimer.cancel()
         decisionTracker.reset()
         coalescer.flushNow()
     }

@@ -196,6 +196,8 @@ public final class TerminalListStore {
             if let meta = meta(for: id) {
                 toasts.show(.bell, title: meta.name, message: "Bell", terminalID: id)
             }
+        case .promptChanged:
+            break // ekran-scrape yalnız remote'a gider (spec 4); liste store'u ilgilenmez
         }
     }
 

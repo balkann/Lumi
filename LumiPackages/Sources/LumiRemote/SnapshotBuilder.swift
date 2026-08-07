@@ -8,7 +8,8 @@ enum SnapshotBuilder {
         repos: [Repo],
         personas: [Persona],
         awaitingDecision: [TerminalID: Bool] = [:],
-        currentModel: [TerminalID: String] = [:]
+        currentModel: [TerminalID: String] = [:],
+        activePrompts: [TerminalID: DetectedPrompt] = [:]
     ) -> [String: Any] {
         let repoNames = Dictionary(repos.map { ($0.path, $0.name) },
                                    uniquingKeysWith: { first, _ in first })
@@ -23,6 +24,9 @@ enum SnapshotBuilder {
             if let title = meta.oscTitle { entry["title"] = title }
             if awaitingDecision[meta.id] == true { entry["awaitingDecision"] = true }
             if let model = currentModel[meta.id] { entry["model"] = model }
+            if let prompt = activePrompts[meta.id] {
+                entry["activePrompt"] = [questionDict(prompt)]
+            }
             return entry
         }
         return [
@@ -34,6 +38,28 @@ enum SnapshotBuilder {
 
     static func awaitingDecisionEvent(sessionId: String, awaiting: Bool) -> [String: Any] {
         ["kind": "awaiting_decision", "sessionId": sessionId, "awaiting": awaiting]
+    }
+
+    /// Ekran-scrape prompt'unu mevcut mobil `question` transcript olayına çevirir.
+    /// prompt == nil → boş `questions: []` = telefonda kartı temizle (spec 4).
+    static func promptEvent(sessionId: String, prompt: DetectedPrompt?) -> [String: Any] {
+        let questions: [[String: Any]] = prompt.map { [questionDict($0)] } ?? []
+        return ["kind": "transcript", "sessionId": sessionId,
+                "item": ["itemType": "question", "questions": questions]]
+    }
+
+    private static func questionDict(_ prompt: DetectedPrompt) -> [String: Any] {
+        ["header": kindLabel(prompt.kind),
+         "question": prompt.questionText ?? "",
+         "options": prompt.options]
+    }
+
+    private static func kindLabel(_ kind: DetectedPrompt.Kind) -> String {
+        switch kind {
+        case .permission: return "İzin isteği"
+        case .question: return "Soru"
+        case .generic: return ""
+        }
     }
 
     static func modelChangeEvent(sessionId: String, model: String) -> [String: Any] {

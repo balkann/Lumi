@@ -94,4 +94,6 @@ public enum TerminalEvent: Sendable, Equatable {
     /// Prompt kuyruğu bunu görünce duraklar; renk/durum değişmez.
     case awaitingDecisionChanged(TerminalID, Bool)
     case bell(TerminalID)
+    /// Ekranda interaktif prompt belirdi/değişti (nil = kalktı). Ekran-scrape (spec 4).
+    case promptChanged(TerminalID, DetectedPrompt?)
 }

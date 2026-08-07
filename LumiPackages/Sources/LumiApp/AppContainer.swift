@@ -251,7 +251,7 @@ final class AppContainer {
                 case .exited(let id, _):
                     // Cleanup sözleşmesi: interval timer'lar iptal edilir (sızıntı yok)
                     self.notifications.terminalRemoved(id)
-                case .spawned, .titleChanged, .awaitingDecisionChanged, .bell:
+                case .spawned, .titleChanged, .awaitingDecisionChanged, .bell, .promptChanged:
                     break
                 }
             }

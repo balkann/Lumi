@@ -197,6 +197,11 @@ extension TerminalSessionManager: TerminalSessionDelegate {
         broadcaster.send(.awaitingDecisionChanged(session.id, awaiting))
     }
 
+    func session(_ session: TerminalSession, didDetectPrompt prompt: DetectedPrompt?) {
+        guard isRegistered(session) else { return }
+        broadcaster.send(.promptChanged(session.id, prompt))
+    }
+
     func session(_ session: TerminalSession, didChangeTitle title: String) {
         guard isRegistered(session) else { return }
         broadcaster.send(.titleChanged(session.id, title))

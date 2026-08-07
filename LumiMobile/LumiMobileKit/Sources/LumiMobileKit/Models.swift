@@ -36,10 +36,13 @@ public struct SessionSummary: Decodable, Sendable, Equatable, Identifiable {
     public let title: String?
     public let awaitingDecision: Bool
     public let model: String?
+    /// O an ekranda duran interaktif prompt (ekran-scrape; spec 4). Reconnect'te kartı kurar.
+    public let activePrompt: [Question]?
 
     public init(id: String, repoPath: String, repoName: String,
                 status: SessionStatus, title: String? = nil,
-                awaitingDecision: Bool = false, model: String? = nil) {
+                awaitingDecision: Bool = false, model: String? = nil,
+                activePrompt: [Question]? = nil) {
         self.id = id
         self.repoPath = repoPath
         self.repoName = repoName
@@ -47,10 +50,11 @@ public struct SessionSummary: Decodable, Sendable, Equatable, Identifiable {
         self.title = title
         self.awaitingDecision = awaitingDecision
         self.model = model
+        self.activePrompt = activePrompt
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, repoPath, repoName, status, title, awaitingDecision, model
+        case id, repoPath, repoName, status, title, awaitingDecision, model, activePrompt
     }
 
     public init(from decoder: Decoder) throws {
@@ -62,7 +66,8 @@ public struct SessionSummary: Decodable, Sendable, Equatable, Identifiable {
             status: try c.decode(SessionStatus.self, forKey: .status),
             title: try c.decodeIfPresent(String.self, forKey: .title),
             awaitingDecision: try c.decodeIfPresent(Bool.self, forKey: .awaitingDecision) ?? false,
-            model: try c.decodeIfPresent(String.self, forKey: .model)
+            model: try c.decodeIfPresent(String.self, forKey: .model),
+            activePrompt: try c.decodeIfPresent([Question].self, forKey: .activePrompt)
         )
     }
 }

@@ -630,4 +630,30 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.modelLabel("claude-haiku-4-5"), "Haiku")
         XCTAssertEqual(model.modelLabel("weird-id"), "weird-id")
     }
+
+    func testEmptyQuestionClearsCard() {
+        let (model, _, _) = makeModel()
+        model.handle(.snapshot(Snapshot(
+            sessions: [SessionSummary(id: "s1", repoPath: "/r", repoName: "r",
+                                      status: .waitingUnseen)],
+            repos: [], personas: [])))
+        // önce dolu soru → kart var
+        model.handle(.event(.transcript(sessionId: "s1",
+            item: .question([Question(header: "", question: "Q?", options: ["A", "B"])]))))
+        XCTAssertNotNil(model.questionCard(for: "s1")?.questions)
+        // boş soru → kart kalkar
+        model.handle(.event(.transcript(sessionId: "s1", item: .question([]))))
+        XCTAssertNil(model.questionCard(for: "s1")?.questions)
+    }
+
+    func testSnapshotActivePromptPopulatesCard() {
+        let (model, _, _) = makeModel()
+        let summary = SessionSummary(id: "s1", repoPath: "/r", repoName: "r",
+                                     status: .waitingUnseen,
+                                     activePrompt: [Question(header: "İzin isteği",
+                                                             question: "Do you want to proceed?",
+                                                             options: ["Yes", "No"])])
+        model.handle(.snapshot(Snapshot(sessions: [summary], repos: [], personas: [])))
+        XCTAssertEqual(model.questionCard(for: "s1")?.questions?.first?.options, ["Yes", "No"])
+    }
 }

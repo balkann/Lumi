@@ -103,6 +103,28 @@ private actor FakeConnection: RelayConnecting {
               let first = sessions.first else { return nil }
         return first["model"] as? String
     }
+    func promptEvent() -> (sessionId: String, optionCount: Int)? {
+        guard let e = sent.first(where: {
+            $0.type == "event" && ($0.payload["kind"] as? String) == "transcript"
+                && (($0.payload["item"] as? [String: Any])?["itemType"] as? String) == "question"
+        }) else { return nil }
+        let item = e.payload["item"] as? [String: Any]
+        let qs = item?["questions"] as? [[String: Any]]
+        return ((e.payload["sessionId"] as? String) ?? "",
+                (qs?.first?["options"] as? [String])?.count ?? -1)
+    }
+    func questionEventCount() -> Int {
+        sent.filter {
+            $0.type == "event" && ($0.payload["kind"] as? String) == "transcript"
+                && (($0.payload["item"] as? [String: Any])?["itemType"] as? String) == "question"
+        }.count
+    }
+    func snapshotFirstSessionHasActivePrompt() -> Bool {
+        guard let snap = sent.last(where: { $0.type == "snapshot" }),
+              let sessions = snap.payload["sessions"] as? [[String: Any]],
+              let first = sessions.first else { return false }
+        return first["activePrompt"] != nil
+    }
 }
 
 // FakeTerminal: RemoteCommandHandlerTests'tekiyle aynı yüzey + events push'u
@@ -473,6 +495,64 @@ final class RemoteServiceTests: XCTestCase {
         XCTAssertEqual(history?.itemCount, 1, "model öğesi history'den elenmeli, yalnız metin kalmalı")
         let firstText = await connection.historyFirstItemText()
         XCTAssertEqual(firstText, "gecmis")
+        service.stop(); await drain()
+    }
+
+    func testPromptChangedSendsQuestionEvent() async throws {
+        let connection = FakeConnection()
+        let terminal = FakeTerminal()
+        let meta = try terminal.spawn(repoPath: "/tmp/demo", task: nil, command: nil)
+        let service = makeService(connection: connection, terminal: terminal)
+        await service.start(); await drain()
+
+        let prompt = DetectedPrompt(kind: .permission,
+                                    questionText: "Do you want to proceed?",
+                                    options: ["Yes", "No"])
+        terminal.pushEvent(.promptChanged(meta.id, prompt))
+        await drain()
+
+        let ev = await connection.promptEvent()
+        XCTAssertEqual(ev?.sessionId, meta.id.description)
+        XCTAssertEqual(ev?.optionCount, 2)
+        service.stop(); await drain()
+    }
+
+    func testScreenPromptSuppressesTranscriptQuestion() async throws {
+        let connection = FakeConnection()
+        let terminal = FakeTerminal()
+        let meta = try terminal.spawn(repoPath: "/tmp/demo", task: nil, command: nil)
+        let service = makeService(connection: connection, terminal: terminal)
+        await service.start(); await drain()
+
+        let prompt = DetectedPrompt(kind: .question, questionText: "Q?", options: ["A", "B"])
+        terminal.pushEvent(.promptChanged(meta.id, prompt))
+        await drain()
+        // transcript AskUserQuestion aynı oturuma gelirse düşürülür
+        await service.ingestFeedItemForTest(.question(payload: [
+            Question(header: "", question: "Q?", options: ["A", "B"])
+        ]), sessionId: meta.id)
+        await drain()
+
+        let count = await connection.questionEventCount()
+        XCTAssertEqual(count, 1) // yalnız ekran-scrape olayı
+        service.stop(); await drain()
+    }
+
+    func testSnapshotCarriesActivePrompt() async throws {
+        let connection = FakeConnection()
+        let terminal = FakeTerminal()
+        let meta = try terminal.spawn(repoPath: "/tmp/demo", task: nil, command: nil)
+        let service = makeService(connection: connection, terminal: terminal)
+        await service.start(); await drain()
+
+        let prompt = DetectedPrompt(kind: .question, questionText: "Q?", options: ["A"])
+        terminal.pushEvent(.promptChanged(meta.id, prompt))
+        await drain()
+        await connection.push(.message(type: "welcome", payload: ["phoneCount": 0]))
+        await drain()
+
+        let has = await connection.snapshotFirstSessionHasActivePrompt()
+        XCTAssertTrue(has)
         service.stop(); await drain()
     }
 }

@@ -156,7 +156,8 @@ public final class AppModel {
             macOnline = true
             switch item {
             case .question(let questions):
-                activeQuestions[sessionId] = questions
+                // Boş dizi = ekran-scrape prompt kalktı → kartı temizle (spec 4).
+                activeQuestions[sessionId] = questions.isEmpty ? nil : questions
             case .turnDone:
                 activeQuestions[sessionId] = nil
                 appendFeed(sessionId, item)
@@ -428,6 +429,12 @@ public final class AppModel {
         // snapshot'ta awaiting=false olan oturumların pending'ini temizle
         for s in snapshot.sessions where !s.awaitingDecision {
             decisionPending[s.id] = nil
+        }
+        // Ekran-scrape aktif promptu snapshot'tan geri kur (reconnect; spec 4).
+        for s in snapshot.sessions {
+            if let prompt = s.activePrompt, !prompt.isEmpty {
+                activeQuestions[s.id] = prompt
+            }
         }
     }
 
