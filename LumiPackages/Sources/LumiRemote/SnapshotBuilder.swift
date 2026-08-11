@@ -66,6 +66,12 @@ enum SnapshotBuilder {
         ["kind": "model_change", "sessionId": sessionId, "model": model]
     }
 
+    /// İzlenen transcript dosyası değişti (ör. /clear): telefon o oturumun feed'ini +
+    /// soru kartını sıfırlar; sonraki canlı transcript öğeleri yeni oturumu doldurur (spec 4/clear).
+    static func sessionResetEvent(sessionId: String) -> [String: Any] {
+        ["kind": "session_reset", "sessionId": sessionId]
+    }
+
     static func statusChangeEvent(
         meta: TerminalMeta,
         status: TerminalStatus,

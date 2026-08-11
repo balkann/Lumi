@@ -287,6 +287,17 @@ public final class RemoteService: RemoteServicing {
             await connection.send(type: "event",
                 payload: SnapshotBuilder.modelChangeEvent(sessionId: sessionId.description, model: model))
             return
+        case .sessionReset:
+            // İzlenen transcript dosyası değişti (ör. /clear yeni oturum dosyası açtı):
+            // oturum-durumunu sıfırla + telefona reset yolla (feed/soru kartı temizlenir).
+            // Yeni dosyanın içeriği bunu takip eden canlı transcript öğeleriyle repopüle olur.
+            lastSummary[sessionId] = nil
+            screenPrompt[sessionId] = nil
+            awaitingDecision[sessionId] = nil
+            currentModel[sessionId] = nil
+            await connection.send(type: "event",
+                payload: SnapshotBuilder.sessionResetEvent(sessionId: sessionId.description))
+            return
         default:
             break
         }

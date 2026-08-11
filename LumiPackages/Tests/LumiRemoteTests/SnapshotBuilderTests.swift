@@ -84,4 +84,10 @@ final class SnapshotBuilderTests: XCTestCase {
         let item = ev["item"] as? [String: Any]
         XCTAssertEqual((item?["questions"] as? [[String: Any]])?.count, 0)
     }
+
+    func testSessionResetEvent() {
+        let ev = SnapshotBuilder.sessionResetEvent(sessionId: "s1")
+        XCTAssertEqual(ev["kind"] as? String, "session_reset")
+        XCTAssertEqual(ev["sessionId"] as? String, "s1")
+    }
 }

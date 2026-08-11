@@ -125,6 +125,12 @@ private actor FakeConnection: RelayConnecting {
               let first = sessions.first else { return false }
         return first["activePrompt"] != nil
     }
+    func sessionResetSent() -> String? {
+        guard let e = sent.first(where: {
+            $0.type == "event" && ($0.payload["kind"] as? String) == "session_reset"
+        }) else { return nil }
+        return e.payload["sessionId"] as? String
+    }
 }
 
 // FakeTerminal: RemoteCommandHandlerTests'tekiyle aynı yüzey + events push'u
@@ -553,6 +559,27 @@ final class RemoteServiceTests: XCTestCase {
 
         let has = await connection.snapshotFirstSessionHasActivePrompt()
         XCTAssertTrue(has)
+        service.stop(); await drain()
+    }
+
+    func testSessionResetSendsResetEventAndClearsPrompt() async throws {
+        let connection = FakeConnection()
+        let terminal = FakeTerminal()
+        let meta = try terminal.spawn(repoPath: "/tmp/demo", task: nil, command: nil)
+        let service = makeService(connection: connection, terminal: terminal)
+        await service.start(); await drain()
+
+        // Önce ekran promptu aktifleşsin (durum sıfırlanacak).
+        terminal.pushEvent(.promptChanged(meta.id,
+            DetectedPrompt(kind: .question, questionText: "Q?", options: ["A"])))
+        await drain()
+
+        // /clear → watcher .sessionReset yayar (test seam ile enjekte).
+        await service.ingestFeedItemForTest(.sessionReset, sessionId: meta.id)
+        await drain()
+
+        let sid = await connection.sessionResetSent()
+        XCTAssertEqual(sid, meta.id.description, "session_reset event'i doğru oturuma gönderilmeli")
         service.stop(); await drain()
     }
 }

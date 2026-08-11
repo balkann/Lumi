@@ -19,6 +19,10 @@ public enum FeedItem: Equatable, Sendable {
     case question(payload: [Question])
     case turnDone
     case model(String)
+    /// İzlenen transcript dosyası değişti (ör. `/clear` yeni oturum dosyası açtı):
+    /// telefon o oturumun feed'ini sıfırlamalı. Canlı akışta sentinel — transcript
+    /// item'ı olarak GÖNDERİLMEZ (RemoteService ayrı `session_reset` event'ine çevirir).
+    case sessionReset
 
     /// Yalnız item sözlüğü — hem canlı `transcript` event'inde hem `history`
     /// yanıtında aynı şekil kullanılır (protokol: items[] elemanı).
@@ -36,6 +40,9 @@ public enum FeedItem: Equatable, Sendable {
             return ["itemType": "turn_done"]
         case .model(let model):
             return ["itemType": "model", "model": model]
+        case .sessionReset:
+            // Normalde RemoteService bunu yakalar; savunmacı yer-tutucu.
+            return ["itemType": "session_reset"]
         }
     }
 

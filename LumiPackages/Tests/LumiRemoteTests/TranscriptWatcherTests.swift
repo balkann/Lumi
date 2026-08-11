@@ -75,10 +75,12 @@ final class TranscriptWatcherTests: XCTestCase {
         var received: [FeedItem] = []
         for await item in stream {
             received.append(item)
-            break
+            if received.count >= 2 { break }
         }
         await watcher.stop()
-        XCTAssertEqual(received, [.assistantText("taze")])
+        // old → fresh geçişi bir oturum değişimidir → önce sessionReset, sonra taze içerik.
+        XCTAssertEqual(received.first, .sessionReset)
+        XCTAssertEqual(received.last, .assistantText("taze"))
     }
 
     func testPartialLineWaitsForCompletion() async throws {
@@ -146,10 +148,39 @@ final class TranscriptWatcherTests: XCTestCase {
         var received: [FeedItem] = []
         for await item in stream {
             received.append(item)
-            break
+            if received.count >= 2 { break }
         }
         await watcher.stop()
-        XCTAssertEqual(received, [.assistantText("yeni-B")], "daha yeni dosyaya geçiş yapmalı ve yeni satırları akıtmalı")
+        XCTAssertEqual(received.first, .sessionReset, "oturum dosyası değişince önce reset yayılmalı")
+        XCTAssertEqual(received.last, .assistantText("yeni-B"), "sonra yeni dosyanın satırları akmalı")
+    }
+
+    /// `/clear` yeni bir `<uuid>.jsonl` açar; Lumi'nin `--session-id`'ye verdiği
+    /// exactFile bayat kalır ama diskte durur. Watcher, exactFile'dan sonra doğmuş,
+    /// başı `<command-name>/clear</command-name>` olan yeni dosyaya ilerlemeli
+    /// (normal daha-yeni dosya değil — o crosstalk olurdu, bkz. exact-wins testi).
+    func testHistoryItemsFollowsClearSuccessor() async throws {
+        let sid = "abcdef01-2222-4222-8333-abcdef012345"
+        let exact = projectDir.appendingPathComponent("\(sid).jsonl")
+        try assistantLine("eski-oturum").write(to: exact, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes(
+            [.modificationDate: Date().addingTimeInterval(-10)], ofItemAtPath: exact.path)
+
+        // /clear ardılı: başında /clear komut kaydı + yeni içerik, daha yeni mtime.
+        let successor = projectDir.appendingPathComponent("\(UUID().uuidString).jsonl")
+        let clearLine = #"{"type":"user","message":{"content":"<command-name>/clear</command-name>"}}"# + "\n"
+        try (clearLine + assistantLine("yeni-oturum"))
+            .write(to: successor, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes(
+            [.modificationDate: Date()], ofItemAtPath: successor.path)
+
+        let watcher = TranscriptWatcher(
+            projectsRoot: root, repoPath: repoPath,
+            sessionCreatedAt: Date().addingTimeInterval(-60),
+            sessionId: sid)
+        let items = await watcher.historyItems()
+        XCTAssertEqual(items, [.assistantText("yeni-oturum")],
+                       "/clear sonrası exactFile bayatlar; başı /clear olan ardıl dosyaya geçilmeli")
     }
 
     /// Aynı repoda eş zamanlı iki terminal (2 tab): her watcher ortak bir
