@@ -48,6 +48,14 @@ final class AppContainer {
         let mode = LumiPaths.Mode.production
         #endif
         paths = LumiPaths(mode: mode)
+        // Kalıcı teşhis günlüğü — GUI app'te stderr kaybolduğundan kritik olaylar
+        // (spawn, launch-gate, remote, transcript) buradan okunur.
+        DiagLog.shared.configure(
+            directory: paths.configDir.appendingPathComponent("logs"),
+            filename: "mac.log"
+        )
+        DiagLog.shared.log(
+            "app", "başlatıldı mode=\(mode) pid=\(ProcessInfo.processInfo.processIdentifier)")
         config = ConfigService(paths: paths)
         system = SystemService(smokeTester: PTYSmokeTester())
         repoService = RepoService()

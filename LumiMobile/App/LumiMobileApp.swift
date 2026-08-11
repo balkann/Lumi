@@ -8,6 +8,12 @@ struct LumiMobileApp: App {
     private let coordinator: PushCoordinator
 
     init() {
+        // Kalıcı teşhis günlüğü — Documents/lumi-mobile.log; Mac'ten
+        // `xcrun devicectl device copy from` ile çekilip incelenir.
+        if let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+            DiagLog.shared.configure(directory: docs, filename: "lumi-mobile.log")
+        }
+        DiagLog.shared.log("app", "başlatıldı")
         let model = AppModel(client: RelayClient(), store: KeychainStore())
         let coordinator = PushCoordinator(
             model: model,
