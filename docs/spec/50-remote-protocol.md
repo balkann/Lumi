@@ -70,6 +70,9 @@ body = `summary` (yoksa duruma göre genel metin).
 ### `model_change`
 `{ "kind": "model_change", "sessionId": "<uuid>", "model": string }` — Mac, son assistant transcript kaydının `message.model` alanından çıkardığı güncel modeli, değiştiğinde bildirir. Relay bakmaz (push yalnız `status_change`).
 
+### `session_reset`
+`{ "kind": "session_reset", "sessionId": "<uuid>" }` — İzlenen transcript dosyası **değişti** (ör. Claude Code'da `/clear` yeni bir `<yeni-uuid>.jsonl` oturum dosyası açar; watcher exactFile bayatlayınca başı `/clear` olan ardıl dosyaya ilerler). Telefon o oturumun **feed'ini + soru kartını sıfırlar**; yeni oturumun içeriği bunu takip eden `transcript` event'leriyle (watcher yeni dosyanın son ~256KB'ını baştan oynatır) yeniden dolar. Relay bakmaz (push yalnız `status_change`).
+
 ## event payload — history (Plan 3.5 backfill)
 
 `{ "kind": "history", "sessionId": "<uuid>", "items": [ {...}, ... ] }` —
