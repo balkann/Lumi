@@ -259,6 +259,14 @@ final class ProtocolTests: XCTestCase {
         XCTAssertEqual(payload["commandId"] as? String, "m9")
     }
 
+    func testSessionResetEventDecodes() {
+        let json = #"{"v":1,"type":"event","payload":{"kind":"session_reset","sessionId":"s1"}}"#
+        guard case .event(.sessionReset(let sid))? = PhoneProtocol.decodeServerMessage(json) else {
+            return XCTFail("session_reset decode edilemedi")
+        }
+        XCTAssertEqual(sid, "s1")
+    }
+
     func testSnapshotDecodesActivePrompt() {
         let json = """
         {"v":1,"type":"snapshot","payload":{"sessions":[

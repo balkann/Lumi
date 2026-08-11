@@ -148,6 +148,8 @@ public enum RemoteEvent: Sendable, Equatable {
     case history(sessionId: String, items: [FeedItem])
     case awaitingDecision(sessionId: String, awaiting: Bool)
     case modelChange(sessionId: String, model: String)
+    /// İzlenen transcript dosyası değişti (ör. /clear): oturumun feed'i + soru kartı sıfırlanır.
+    case sessionReset(sessionId: String)
 }
 
 public struct CommandResult: Decodable, Sendable, Equatable {

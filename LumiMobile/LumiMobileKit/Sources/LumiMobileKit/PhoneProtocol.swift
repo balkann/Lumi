@@ -85,6 +85,8 @@ public enum PhoneProtocol {
         case "model_change":
             guard let model = payload["model"] as? String else { return nil }
             return .modelChange(sessionId: sessionId, model: model)
+        case "session_reset":
+            return .sessionReset(sessionId: sessionId)
         default:
             return nil
         }

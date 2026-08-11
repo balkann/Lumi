@@ -179,6 +179,15 @@ public final class AppModel {
             macOnline = true
             models[sessionId] = model
 
+        case .event(.sessionReset(let sessionId)):
+            // İzlenen transcript dosyası değişti (/clear): eski sohbeti temizle.
+            // Yeni oturumun içeriği bunu takip eden transcript event'leriyle repopüle olur.
+            macOnline = true
+            feeds[sessionId] = []
+            activeQuestions[sessionId] = nil
+            decisionPending[sessionId] = nil
+            lastCommandError[sessionId] = nil
+
         case .commandResult(let result):
             if historyCommandIds.remove(result.commandId) != nil {
                 return // geçmiş isteğinin sonucu kullanıcıya yansıtılmaz (ok da olsa hata da)

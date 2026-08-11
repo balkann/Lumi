@@ -646,6 +646,29 @@ final class AppModelTests: XCTestCase {
         XCTAssertNil(model.questionCard(for: "s1")?.questions)
     }
 
+    func testSessionResetClearsFeedAndQuestionThenRepopulates() {
+        let (model, _, _) = makeModel()
+        model.handle(.snapshot(Snapshot(
+            sessions: [SessionSummary(id: "s1", repoPath: "/r", repoName: "r",
+                                      status: .waitingUnseen)],
+            repos: [], personas: [])))
+        // Eski sohbet: bir asistan mesajı + açık soru kartı.
+        model.handle(.event(.transcript(sessionId: "s1", item: .assistantText("eski mesaj"))))
+        model.handle(.event(.transcript(sessionId: "s1",
+            item: .question([Question(header: "", question: "Q?", options: ["A"])]))))
+        XCTAssertFalse((model.feeds["s1"] ?? []).isEmpty)
+        XCTAssertNotNil(model.questionCard(for: "s1")?.questions)
+
+        // /clear → session_reset: eski sohbet ve kart temizlenmeli.
+        model.handle(.event(.sessionReset(sessionId: "s1")))
+        XCTAssertTrue((model.feeds["s1"] ?? []).isEmpty, "reset feed'i temizlemeli")
+        XCTAssertNil(model.questionCard(for: "s1")?.questions, "reset soru kartını temizlemeli")
+
+        // Yeni oturum içeriği repopüle olmalı (eskiyle karışmadan).
+        model.handle(.event(.transcript(sessionId: "s1", item: .assistantText("yeni mesaj"))))
+        XCTAssertEqual((model.feeds["s1"] ?? []).map(\.item), [.assistantText("yeni mesaj")])
+    }
+
     func testSnapshotActivePromptPopulatesCard() {
         let (model, _, _) = makeModel()
         let summary = SessionSummary(id: "s1", repoPath: "/r", repoName: "r",
