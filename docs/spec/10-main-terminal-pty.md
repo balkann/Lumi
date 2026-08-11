@@ -46,6 +46,8 @@ Main process içinde çalışan, uygulamanın **tek doğruluk kaynağı (single 
 
 **Edge-case'ler:** Komut `claude`/`codex` ile başlamıyorsa builder no-op'tur. Prompt güvenliği için Codex create-action akışında randomized heredoc delimiter kullanılır (ipc handler tarafında).
 
+**Native davranış değişikliği — quiescence-gate'li başlangıç komutu (2026-08-11, karar 21):** Electron sürümü spawn'daki başlangıç komutunu PTY'ye anında yazıyordu; shell startup'ında stdin okuyan interaktif sorular (oh-my-zsh "update? [Y/n]" tek-tuş okuması vb.) komutun ilk karakterlerini yutuyordu (`claude` → `laude`). Native'de spawn komutu `LaunchCommandGate`'te bekletilir ve PromptScanTimer'ın çıktı-sessizliği tetiğinde (spec 4 quiescence, `runPromptScan`) ekranın alt satırlarına bakılarak enjekte edilir: ekran boşsa ya da son dolu satır tek-tuş onay sorusuyla (`[Y/n]`, `(y/N)`, `[yes/no]:` varyantları) bitiyorsa beklenmeye devam edilir; kullanıcı soruyu cevaplayıp shell prompt'u gelince komut bir kez yazılır. Yalnız `TerminalSessionManager.spawn(command:)` yolunu kapsar; persona/ActionEngine'in spawn-sonrası `write()` çağrıları bilinçli olarak kapsam dışıdır (aynı yarış orada da vardır, ayrı iş).
+
 **Kullanıcıya görünen etki:** Action butonuna basınca terminalde komutun "yazıldığı" görülür ve agent başlar.
 
 ### 3. Veri stream'i: PTY → renderer

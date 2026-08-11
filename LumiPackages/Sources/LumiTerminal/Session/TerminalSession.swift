@@ -37,6 +37,8 @@ final class TerminalSession {
     private var isTerminated = false
     private var pendingResize: DispatchWorkItem?
     private var lastPrompt: DetectedPrompt?
+    private var launchGate = LaunchCommandGate()
+    private var didLogLaunchHold = false
 
     init(repoPath: String, name: String, task: String?, font: NSFont) throws {
         let id = TerminalID()
@@ -145,11 +147,31 @@ final class TerminalSession {
         delegate?.session(self, didChangeAwaitingDecision: awaiting)
     }
 
+    /// Spawn'daki başlangıç komutunu shell hazır olana dek bekletir; enjeksiyon
+    /// quiescence'ta `runPromptScan` içinde yapılır (LaunchCommandGate).
+    func enqueueLaunchCommand(_ command: String) {
+        launchGate.arm(command)
+        DiagLog.shared.log("terminal", "launch armed \(id.raw.uuidString.prefix(8))")
+    }
+
     /// Çıktı sessizliğinde (io queue debounce) main'de tetiklenir: alt satırları
-    /// tarar, son sonuçtan farklıysa delegate'e bildirir. Salt-okuma (spec 4 §K4).
+    /// tarar, son sonuçtan farklıysa delegate'e bildirir. Salt-okuma (spec 4 §K4);
+    /// tek istisna bekleyen başlangıç komutunun shell hazırken enjeksiyonu.
     private func runPromptScan() {
         guard !isTerminated else { return }
-        let prompt = TerminalPromptScanner.scan(lines: captureBottomLines())
+        let lines = captureBottomLines()
+        if let command = launchGate.commandToInject(bottomLines: lines) {
+            DiagLog.shared.log("terminal", "launch inject \(id.raw.uuidString.prefix(8))")
+            write(command + "\r")
+        } else if launchGate.isPending, !didLogLaunchHold {
+            // İlk bekletmeyi bir kez kaydet — soru ekranda kaldıkça her
+            // quiescence tick'inde tekrar yazmamak için.
+            didLogLaunchHold = true
+            DiagLog.shared.log(
+                "terminal",
+                "launch hold (shell hazır değil) \(id.raw.uuidString.prefix(8)) son=\(lines.last { !$0.isEmpty } ?? "")")
+        }
+        let prompt = TerminalPromptScanner.scan(lines: lines)
         guard prompt != lastPrompt else { return }
         lastPrompt = prompt
         delegate?.session(self, didDetectPrompt: prompt)
