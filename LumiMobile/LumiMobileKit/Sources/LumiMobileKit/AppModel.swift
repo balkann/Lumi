@@ -96,7 +96,11 @@ public final class AppModel {
 
     @discardableResult
     public func pair(from string: String) async -> Bool {
-        guard let info = Pairing.parse(string) else { return false }
+        guard let info = Pairing.parse(string) else {
+            DiagLog.shared.log("model", "pair parse edilemedi")
+            return false
+        }
+        DiagLog.shared.log("model", "pair ok relay=\(info.relayUrl)")
         store.write(info)
         isPaired = true
         await client.stop()
@@ -130,6 +134,9 @@ public final class AppModel {
     // MARK: Gelen mesajlar
 
     public func handle(_ message: ServerMessage) {
+        if case .pong = message {} else {
+            DiagLog.shared.log("model", "in \(Self.describe(message))")
+        }
         switch message {
         case .welcome(let welcome):
             macOnline = welcome.macOnline
@@ -206,6 +213,40 @@ public final class AppModel {
 
         case .pong:
             break
+        }
+    }
+
+    /// Gelen mesajın tek satırlık teşhis özeti (içerik metni loglanmaz).
+    private static func describe(_ message: ServerMessage) -> String {
+        switch message {
+        case .welcome(let welcome):
+            "welcome macOnline=\(welcome.macOnline) snapshot=\(welcome.snapshot != nil)"
+        case .snapshot(let snapshot):
+            "snapshot sessions=\(snapshot.sessions.count)"
+        case .event(.statusChange(let id, let status, _, _)):
+            "statusChange \(id.prefix(8)) \(status.badge)"
+        case .event(.transcript(let id, let item)):
+            "transcript \(id.prefix(8)) \(feedLabel(item))"
+        case .event(.history(let id, let items)):
+            "history \(id.prefix(8)) items=\(items.count)"
+        case .event(.awaitingDecision(let id, let awaiting)):
+            "awaitingDecision \(id.prefix(8)) \(awaiting)"
+        case .event(.modelChange(let id, let model)):
+            "modelChange \(id.prefix(8)) \(model)"
+        case .commandResult(let result):
+            "commandResult \(result.commandId) ok=\(result.ok) err=\(result.error ?? "-")"
+        case .pong:
+            "pong"
+        }
+    }
+
+    private static func feedLabel(_ item: FeedItem) -> String {
+        switch item {
+        case .assistantText: "assistantText"
+        case .toolUse(let tool, _): "toolUse(\(tool))"
+        case .question(let questions): "question(n=\(questions.count))"
+        case .turnDone: "turnDone"
+        case .userMessage: "userMessage"
         }
     }
 
@@ -303,6 +344,8 @@ public final class AppModel {
     }
 
     public func applyPushToken(_ hex: String) async {
+        DiagLog.shared.log(
+            "push", "token alındı \(hex.prefix(8))… enabled=\(notificationsEnabled)")
         latestPushToken = hex
         if notificationsEnabled { await client.registerPush(deviceToken: hex) }
     }
@@ -405,6 +448,11 @@ public final class AppModel {
             decisionPending[target] = nil
         }
         let ok = await client.send(command: OutgoingCommand(commandId: commandId, action: action))
+        // Mirror ile yalnız case adı loglanır — mesaj içeriği günlüğe düşmez.
+        let label = Mirror(reflecting: action).children.first?.label
+            ?? String(describing: action)
+        DiagLog.shared.log(
+            "model", "out \(commandId) \(label) target=\(target.prefix(8)) ok=\(ok)")
         if !ok {
             commandTargets[commandId] = nil
             commandUserMessages[commandId] = nil

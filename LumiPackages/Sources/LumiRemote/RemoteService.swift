@@ -1,25 +1,15 @@
 import Foundation
 import LumiKit
 
-/// Tanı günlüğü — yalnız `LUMI_REMOTE_DEBUG` ortam değişkeni set edildiğinde
-/// stderr'e yazar (üretimde sessiz). Telefon↔Mac boru hattının hangi sınırda
-/// koptuğunu tek bir tekrar-üretim koşusunda göstermek için (transcript takibi
-/// tanısı). Kaldırılabilir; davranışa etkisi yok.
+/// Tanı günlüğü — telefon↔Mac boru hattının hangi sınırda koptuğunu göstermek
+/// için. Kalıcı DiagLog'a her zaman yazar (boyut-tavanlı, ~/.lumi/logs/mac.log);
+/// `LUMI_REMOTE_DEBUG` set ise ek olarak stderr'e de düşer. Davranışa etkisi yok.
 let remoteDebugEnabled = ProcessInfo.processInfo.environment["LUMI_REMOTE_DEBUG"] != nil
-let remoteDebugLogURL = FileManager.default.homeDirectoryForCurrentUser
-    .appendingPathComponent("lumi-remote-debug.log")
 func rlog(_ message: @autoclosure () -> String) {
-    guard remoteDebugEnabled else { return }
-    let line = "[LUMI-REMOTE] \(message())\n"
-    FileHandle.standardError.write(Data(line.utf8))
-    // Ayrıca sabit bir dosyaya ekle — GUI app terminalden başlatılmasa da
-    // (~/lumi-remote-debug.log) okunabilsin.
-    if let handle = try? FileHandle(forWritingTo: remoteDebugLogURL) {
-        defer { try? handle.close() }
-        _ = try? handle.seekToEnd()
-        handle.write(Data(line.utf8))
-    } else {
-        try? Data(line.utf8).write(to: remoteDebugLogURL)
+    let text = message()
+    DiagLog.shared.log("remote", text)
+    if remoteDebugEnabled {
+        FileHandle.standardError.write(Data("[LUMI-REMOTE] \(text)\n".utf8))
     }
 }
 

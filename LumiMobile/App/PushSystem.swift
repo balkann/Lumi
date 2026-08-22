@@ -39,6 +39,6 @@ struct SystemRemoteRegistrar: RemoteRegistering {
 
     func application(_ application: UIApplication,
                      didFailToRegisterForRemoteNotificationsWithError error: Error) {
-        print("APNs kayıt başarısız: \(error.localizedDescription)")
+        DiagLog.shared.log("push", "APNs kayıt başarısız: \(error.localizedDescription)")
     }
 }

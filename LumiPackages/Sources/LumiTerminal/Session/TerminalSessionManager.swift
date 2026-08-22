@@ -125,12 +125,17 @@ public final class TerminalSessionManager: TerminalServicing {
             }
         )
         broadcaster.send(.spawned(session.meta))
+        DiagLog.shared.log(
+            "terminal",
+            "spawn \(session.id.raw.uuidString.prefix(8)) repo=\((repoPath as NSString).lastPathComponent) launch=\(command != nil)")
         if let command {
             // claude başlatan komuta terminalin id'sini --session-id olarak enjekte et →
             // transcript dosyası <terminalID>.jsonl olur, TranscriptWatcher kesin eşler.
             let launch = ClaudeSessionID.inject(
                 into: command, sessionId: session.id.raw.uuidString.lowercased())
-            session.write(launch + "\r")
+            // Anında yazma yok: shell startup'ında stdin okuyan sorular (omz
+            // update [Y/n]) komutun başını yutuyordu — quiescence-gate bekletir.
+            session.enqueueLaunchCommand(launch)
         }
         return session.meta
     }

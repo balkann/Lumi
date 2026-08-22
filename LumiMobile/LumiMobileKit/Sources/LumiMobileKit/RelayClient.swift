@@ -102,20 +102,26 @@ public actor RelayClient: RelayClienting {
     private func run(url: URL, token: String) async {
         while !Task.isCancelled {
             setState(.connecting)
+            DiagLog.shared.log("relay", "bağlanıyor \(url.host ?? url.absoluteString)")
             let conn = connect(url)
             connection = conn
             do {
                 try await conn.send(PhoneProtocol.helloFrame(token: token))
                 for try await frame in conn.incoming {
-                    guard let message = PhoneProtocol.decodeServerMessage(frame) else { continue }
+                    guard let message = PhoneProtocol.decodeServerMessage(frame) else {
+                        DiagLog.shared.log("relay", "decode edilemeyen frame \(frame.prefix(80))")
+                        continue
+                    }
                     if case .welcome = message {
                         backoff.reset()
                         setState(.connected)
                     }
                     yield(.message(message))
                 }
+                DiagLog.shared.log("relay", "akış kapandı (sunucu tarafı)")
             } catch {
                 // kopma → aşağıda backoff ile yeniden dene
+                DiagLog.shared.log("relay", "koptu: \(error.localizedDescription)")
             }
             connection = nil
             if Task.isCancelled { return }
@@ -125,11 +131,15 @@ public actor RelayClient: RelayClienting {
     }
 
     private func sendFrame(_ frame: String) async -> Bool {
-        guard let connection else { return false }
+        guard let connection else {
+            DiagLog.shared.log("relay", "send atlandı (bağlantı yok)")
+            return false
+        }
         do {
             try await connection.send(frame)
             return true
         } catch {
+            DiagLog.shared.log("relay", "send başarısız: \(error.localizedDescription)")
             return false
         }
     }
@@ -137,6 +147,7 @@ public actor RelayClient: RelayClienting {
     private func setState(_ newState: ConnectionState) {
         guard state != newState else { return }
         state = newState
+        DiagLog.shared.log("relay", "state \(newState)")
         yield(.stateChanged(newState))
     }
 
