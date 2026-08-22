@@ -233,6 +233,8 @@ public final class AppModel {
             "awaitingDecision \(id.prefix(8)) \(awaiting)"
         case .event(.modelChange(let id, let model)):
             "modelChange \(id.prefix(8)) \(model)"
+        case .event(.sessionReset(let id)):
+            "sessionReset \(id.prefix(8))"
         case .commandResult(let result):
             "commandResult \(result.commandId) ok=\(result.ok) err=\(result.error ?? "-")"
         case .pong:
