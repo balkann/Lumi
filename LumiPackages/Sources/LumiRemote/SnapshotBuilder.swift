@@ -9,7 +9,8 @@ enum SnapshotBuilder {
         personas: [Persona],
         awaitingDecision: [TerminalID: Bool] = [:],
         currentModel: [TerminalID: String] = [:],
-        activePrompts: [TerminalID: DetectedPrompt] = [:]
+        activePrompts: [TerminalID: DetectedPrompt] = [:],
+        screenTails: [TerminalID: [String]] = [:]
     ) -> [String: Any] {
         let repoNames = Dictionary(repos.map { ($0.path, $0.name) },
                                    uniquingKeysWith: { first, _ in first })
@@ -26,6 +27,9 @@ enum SnapshotBuilder {
             if let model = currentModel[meta.id] { entry["model"] = model }
             if let prompt = activePrompts[meta.id] {
                 entry["activePrompt"] = [questionDict(prompt)]
+            }
+            if let tail = screenTails[meta.id], !tail.isEmpty {
+                entry["screenText"] = tail
             }
             return entry
         }
@@ -60,6 +64,12 @@ enum SnapshotBuilder {
         case .question: return "Soru"
         case .generic: return ""
         }
+    }
+
+    /// Yapısal prompt yokken ham ekran özeti (bare kart bağlamı, spec 4 §K3).
+    /// lines == [] → telefonda özet temizlenir.
+    static func screenTextEvent(sessionId: String, lines: [String]) -> [String: Any] {
+        ["kind": "screen_text", "sessionId": sessionId, "lines": lines]
     }
 
     static func modelChangeEvent(sessionId: String, model: String) -> [String: Any] {

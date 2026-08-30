@@ -205,7 +205,10 @@ struct QuestionCardView: View {
                 Text("Oturum girdi bekliyor")
                     .font(.subheadline.weight(.semibold))
                 if let context = card.context {
-                    Text(context).font(.caption).foregroundStyle(.secondary)
+                    Text(context)
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 HStack {
                     ForEach(["1", "2", "3"], id: \.self) { key in

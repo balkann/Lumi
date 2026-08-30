@@ -38,11 +38,13 @@ public struct SessionSummary: Decodable, Sendable, Equatable, Identifiable {
     public let model: String?
     /// O an ekranda duran interaktif prompt (ekran-scrape; spec 4). Reconnect'te kartı kurar.
     public let activePrompt: [Question]?
+    /// Yapısal prompt yokken ham ekran özeti (bare kart bağlamı; spec 4 §K3).
+    public let screenText: [String]?
 
     public init(id: String, repoPath: String, repoName: String,
                 status: SessionStatus, title: String? = nil,
                 awaitingDecision: Bool = false, model: String? = nil,
-                activePrompt: [Question]? = nil) {
+                activePrompt: [Question]? = nil, screenText: [String]? = nil) {
         self.id = id
         self.repoPath = repoPath
         self.repoName = repoName
@@ -51,10 +53,11 @@ public struct SessionSummary: Decodable, Sendable, Equatable, Identifiable {
         self.awaitingDecision = awaitingDecision
         self.model = model
         self.activePrompt = activePrompt
+        self.screenText = screenText
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, repoPath, repoName, status, title, awaitingDecision, model, activePrompt
+        case id, repoPath, repoName, status, title, awaitingDecision, model, activePrompt, screenText
     }
 
     public init(from decoder: Decoder) throws {
@@ -67,7 +70,8 @@ public struct SessionSummary: Decodable, Sendable, Equatable, Identifiable {
             title: try c.decodeIfPresent(String.self, forKey: .title),
             awaitingDecision: try c.decodeIfPresent(Bool.self, forKey: .awaitingDecision) ?? false,
             model: try c.decodeIfPresent(String.self, forKey: .model),
-            activePrompt: try c.decodeIfPresent([Question].self, forKey: .activePrompt)
+            activePrompt: try c.decodeIfPresent([Question].self, forKey: .activePrompt),
+            screenText: try c.decodeIfPresent([String].self, forKey: .screenText)
         )
     }
 }
@@ -150,6 +154,8 @@ public enum RemoteEvent: Sendable, Equatable {
     case modelChange(sessionId: String, model: String)
     /// İzlenen transcript dosyası değişti (ör. /clear): oturumun feed'i + soru kartı sıfırlanır.
     case sessionReset(sessionId: String)
+    /// Yapısal prompt yokken ham ekran özeti (bare kart bağlamı; [] = temizle). Spec 4 §K3.
+    case screenText(sessionId: String, lines: [String])
 }
 
 public struct CommandResult: Decodable, Sendable, Equatable {

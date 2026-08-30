@@ -158,7 +158,12 @@ final class AppContainer {
 
         // First-run → onboarding sihirbazı (spec/13 §1.2, spec/22)
         workspace.isOnboardingActive = await config.isFirstRun()
-        await notifications.requestPermissionIfNeeded()
+        // Bildirim izni fire-and-forget: `requestAuthorization` izin notDetermined'ken
+        // (yeni/ad-hoc-imzalı build'de TCC sıfırlanır) sistem dialog'unda SENKRON bekler.
+        // `await` ile bootstrap'i bloklarsa remoteService.start() (aşağıda) dialog
+        // cevaplanana dek çalışmaz → telefona hiçbir şey gitmez. İzin sonucuna
+        // buradan sonra hiçbir adım bağlı değil; ayrı Task'te çözülsün.
+        Task { await notifications.requestPermissionIfNeeded() }
 
         // Font ailesi + boyut tek NSFont'a birlikte çözülür; ikisinden hangisi
         // değişirse değişsin taze config'den fontu yeniden kurar.
@@ -259,7 +264,8 @@ final class AppContainer {
                 case .exited(let id, _):
                     // Cleanup sözleşmesi: interval timer'lar iptal edilir (sızıntı yok)
                     self.notifications.terminalRemoved(id)
-                case .spawned, .titleChanged, .awaitingDecisionChanged, .bell, .promptChanged:
+                case .spawned, .titleChanged, .awaitingDecisionChanged, .bell, .promptChanged,
+                     .screenTailChanged:
                     break
                 }
             }

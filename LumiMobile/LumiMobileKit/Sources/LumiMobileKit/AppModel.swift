@@ -54,6 +54,8 @@ public final class AppModel {
     private var commandCounter = 0
     private var feedCounter = 0
     private var activeQuestions: [String: [Question]] = [:]
+    /// sessionId → yapısal prompt yokken ham ekran özeti (bare kart bağlamı; spec 4 §K3).
+    private var screenTails: [String: [String]] = [:]
     /// sessionId → araç izni bekleniyor; nil = beklemiyor.
     private var decisionPending: [String: Bool] = [:]
     /// sessionId → mevcut model id'si; kalıcı bilgi (statusChange temizlemez).
@@ -122,6 +124,7 @@ public final class AppModel {
         sessions = []
         feeds = [:]
         activeQuestions = [:]
+        screenTails = [:]
         decisionPending = [:]
         models = [:]
         lastCommandError = [:]
@@ -156,6 +159,7 @@ public final class AppModel {
             // Soru cevaplanmış / tur ilerlemiş demektir.
             if status.badge == .working || status.badge == .idle {
                 activeQuestions[sessionId] = nil
+                screenTails[sessionId] = nil
                 decisionPending[sessionId] = nil
             }
 
@@ -192,8 +196,14 @@ public final class AppModel {
             macOnline = true
             feeds[sessionId] = []
             activeQuestions[sessionId] = nil
+            screenTails[sessionId] = nil
             decisionPending[sessionId] = nil
             lastCommandError[sessionId] = nil
+
+        case .event(.screenText(let sessionId, let lines)):
+            // Yapısal prompt yokken ham ekran özeti (bare kart bağlamı); [] = temizle.
+            macOnline = true
+            screenTails[sessionId] = lines.isEmpty ? nil : lines
 
         case .commandResult(let result):
             if historyCommandIds.remove(result.commandId) != nil {
@@ -235,6 +245,8 @@ public final class AppModel {
             "modelChange \(id.prefix(8)) \(model)"
         case .event(.sessionReset(let id)):
             "sessionReset \(id.prefix(8))"
+        case .event(.screenText(let id, let lines)):
+            "screenText \(id.prefix(8)) lines=\(lines.count)"
         case .commandResult(let result):
             "commandResult \(result.commandId) ok=\(result.ok) err=\(result.error ?? "-")"
         case .pong:
@@ -284,9 +296,12 @@ public final class AppModel {
         if decisionPending[sessionId] == true {
             return QuestionCard(questions: nil, context: lastToolContext(sessionId), isPermission: true)
         }
-        // (3) Waiting rozeti → jenerik kart
+        // (3) Waiting rozeti → jenerik kart. Bağlam olarak ham ekran özetini yeğle
+        //     (parse edilemeyen üçüncü-parti CLI menüsü okunabilsin; spec 4 §K3),
+        //     yoksa son tool_use özetine düş.
         guard session(sessionId)?.status.badge == .waiting else { return nil }
-        return QuestionCard(questions: nil, context: lastToolContext(sessionId))
+        let context = screenTails[sessionId]?.joined(separator: "\n") ?? lastToolContext(sessionId)
+        return QuestionCard(questions: nil, context: context)
     }
 
     /// Feed'deki son tool_use öğesinin bağlam dizgesi, yoksa nil.
@@ -475,6 +490,7 @@ public final class AppModel {
         let liveIds = Set(snapshot.sessions.map(\.id))
         feeds = feeds.filter { liveIds.contains($0.key) }
         activeQuestions = activeQuestions.filter { liveIds.contains($0.key) }
+        screenTails = screenTails.filter { liveIds.contains($0.key) }
         lastCommandError = lastCommandError.filter { liveIds.contains($0.key) }
         models = models.filter { liveIds.contains($0.key) }
         for s in snapshot.sessions {
@@ -493,6 +509,12 @@ public final class AppModel {
         for s in snapshot.sessions {
             if let prompt = s.activePrompt, !prompt.isEmpty {
                 activeQuestions[s.id] = prompt
+            }
+        }
+        // Ham ekran özetini snapshot'tan geri kur (reconnect; bare kart bağlamı, spec 4 §K3).
+        for s in snapshot.sessions {
+            if let tail = s.screenText, !tail.isEmpty {
+                screenTails[s.id] = tail
             }
         }
     }

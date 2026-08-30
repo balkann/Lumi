@@ -133,13 +133,24 @@ actor TranscriptWatcher {
 
     /// Bu terminalin bağlanacağı jsonl (öncelik sırası tip yorumunda):
     /// 1. `exactFile` (session-id) diskte varsa — kesin, deterministik.
+    /// 1b. `exactFile` biliniyor ama YOK → boş (heuristiğe DÜŞME). Lumi-başlatılan
+    ///     oturumun transcript'i deterministik olarak `<sessionId>.jsonl`'dir; claude
+    ///     henüz onu yazmadıysa (spawn ile ilk yazım arası pencere, ya da launch-gate
+    ///     komutu enjekte edemediyse) oturumun geçmişi YOKTUR. Aynı repodaki alakasız
+    ///     bir kardeşe (ör. az önce silinmiş oturumun leftover jsonl'i) düşmek "eski
+    ///     chat yanlış oturumda görünüyor" bugıdır — "yanlış eşleşmektense boş" (registry
+    ///     `.unassigned` felsefesiyle aynı; gerçek cihaz logu mac.log 09:41–09:42).
     /// 2. Çoklu-oturum tekil-sahiplik (owner+registry) — kardeş tab ayrımı.
-    /// 3. Tek-oturum mtime sezgiseli (+ restart fallback).
+    /// 3. Tek-oturum mtime sezgiseli (+ restart fallback) — yalnız exactFile'sız
+    ///    (session-id'siz: external/manuel) oturumlar için.
     private func resolveMatch() async -> URL? {
-        if let exactFile, FileManager.default.fileExists(atPath: exactFile.path) {
-            // /clear exactFile'ı bayatlatıp yeni <uuid>.jsonl açar → ardıla ilerle.
-            if let successor = clearSuccessor(newerThan: exactFile) { return successor }
-            return exactFile
+        if let exactFile {
+            if FileManager.default.fileExists(atPath: exactFile.path) {
+                // /clear exactFile'ı bayatlatıp yeni <uuid>.jsonl açar → ardıla ilerle.
+                if let successor = clearSuccessor(newerThan: exactFile) { return successor }
+                return exactFile
+            }
+            return nil  // 1b: bilinen exactFile yoksa geçmiş yok — heuristiğe düşme.
         }
         if let owner, let registry {
             switch await registry.assignment(for: owner) {

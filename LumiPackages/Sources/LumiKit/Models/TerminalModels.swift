@@ -96,4 +96,6 @@ public enum TerminalEvent: Sendable, Equatable {
     case bell(TerminalID)
     /// Ekranda interaktif prompt belirdi/değişti (nil = kalktı). Ekran-scrape (spec 4).
     case promptChanged(TerminalID, DetectedPrompt?)
+    /// Parse edilemeyen bekleyen prompt için ham ekran özeti ([] = yok). Ekran-scrape (spec 4).
+    case screenTailChanged(TerminalID, [String])
 }

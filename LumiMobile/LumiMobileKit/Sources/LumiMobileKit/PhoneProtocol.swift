@@ -87,6 +87,9 @@ public enum PhoneProtocol {
             return .modelChange(sessionId: sessionId, model: model)
         case "session_reset":
             return .sessionReset(sessionId: sessionId)
+        case "screen_text":
+            let lines = (payload["lines"] as? [String]) ?? []
+            return .screenText(sessionId: sessionId, lines: lines)
         default:
             return nil
         }

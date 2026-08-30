@@ -267,6 +267,36 @@ final class ProtocolTests: XCTestCase {
         XCTAssertEqual(sid, "s1")
     }
 
+    func testScreenTextEventDecodes() {
+        let json = #"{"v":1,"type":"event","payload":{"kind":"screen_text","sessionId":"s1","lines":["cm login","1. SSO","2. Token"]}}"#
+        guard case .event(.screenText(let sid, let lines))? = PhoneProtocol.decodeServerMessage(json) else {
+            return XCTFail("screen_text decode edilemedi")
+        }
+        XCTAssertEqual(sid, "s1")
+        XCTAssertEqual(lines, ["cm login", "1. SSO", "2. Token"])
+    }
+
+    func testScreenTextEventMissingLinesDecodesEmpty() {
+        let json = #"{"v":1,"type":"event","payload":{"kind":"screen_text","sessionId":"s1"}}"#
+        guard case .event(.screenText(_, let lines))? = PhoneProtocol.decodeServerMessage(json) else {
+            return XCTFail("screen_text decode edilemedi")
+        }
+        XCTAssertEqual(lines, [])
+    }
+
+    func testSnapshotDecodesScreenText() {
+        let json = """
+        {"v":1,"type":"snapshot","payload":{"sessions":[
+          {"id":"s1","repoPath":"/r","repoName":"r","status":"waiting-unseen",
+           "screenText":["Select auth","1. SSO","2. Token"]}
+        ],"repos":[],"personas":[]}}
+        """
+        guard case .snapshot(let snap)? = PhoneProtocol.decodeServerMessage(json) else {
+            return XCTFail("snapshot decode edilemedi")
+        }
+        XCTAssertEqual(snap.sessions.first?.screenText, ["Select auth", "1. SSO", "2. Token"])
+    }
+
     func testSnapshotDecodesActivePrompt() {
         let json = """
         {"v":1,"type":"snapshot","payload":{"sessions":[

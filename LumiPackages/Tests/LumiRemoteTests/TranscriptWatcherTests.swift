@@ -326,19 +326,45 @@ final class TranscriptWatcherTests: XCTestCase {
                        "sessionId verildiğinde tam <sid>.jsonl eşlenmeli, daha yeni başka dosya değil")
     }
 
-    func testFallsBackToHeuristicWhenExactFileAbsent() async throws {
+    /// Gerçek cihaz bugı (mac.log 09:41–09:42): telefonda chat silinip yeni oturum
+    /// başlatılınca, yeni oturumun claude'u henüz `<sessionId>.jsonl` YAZMADAN
+    /// get_history gelirse, watcher heuristiğe düşüp SİLİNEN oturumun jsonl'ine
+    /// (hâlâ taze mtime'lı) eşleşiyor ve eski sohbeti geri döndürüyordu.
+    /// Bilinen exactFile'lı (Lumi-başlatılan) bir oturumda o dosya YOKKEN geçmiş
+    /// BOŞ olmalı — alakasız bir kardeş transcript sızmamalı.
+    func testExactFileAbsentDoesNotLeakDeletedSiblingHistory() async throws {
+        let sid = "0e9c7ecb-1e18-4046-9705-45e938177470"       // yeni oturum; <sid>.jsonl YOK
+        // Silinen oturumun leftover jsonl'i — az önce yazıldığından mtime TAZE
+        // (heuristik cutoff'unun içinde → yanlışlıkla bunu seçerdi).
+        let leftover = projectDir.appendingPathComponent("6046511c-1bbe-4f00-8488-4f0475221395.jsonl")
+        try assistantLine("silinen-oturum-gecmisi").write(to: leftover, atomically: true, encoding: .utf8)
+
+        let watcher = TranscriptWatcher(
+            projectsRoot: root, repoPath: repoPath,
+            sessionCreatedAt: Date(),          // yeni oturum "şimdi" doğdu
+            sessionId: sid)
+        let items = await watcher.historyItems()
+        XCTAssertEqual(items, [],
+                       "exactFile bilinip diskte yokken silinen kardeş transcript sızmamalı (boş dönmeli)")
+    }
+
+    /// exactFile (session-id) biliniyor ama diskte YOKKEN, aynı repodaki alakasız bir
+    /// jsonl'e heuristikle DÜŞMEZ — boş döner. (Eskiden heuristiğe düşerdi; o davranış
+    /// "silinen oturumun geçmişi yeni oturumda görünüyor" bugına yol açıyordu —
+    /// bkz. testExactFileAbsentDoesNotLeakDeletedSiblingHistory. "Yanlış eşleşmektense boş".)
+    func testExactFileAbsentReturnsEmptyNotHeuristicSibling() async throws {
         let sid = "11111111-1111-4111-8111-111111111111"
-        // <sid>.jsonl YOK; yalnız bir heuristik dosya var
+        // <sid>.jsonl YOK; yalnız alakasız bir jsonl var
         let other = projectDir.appendingPathComponent("only.jsonl")
-        try assistantLine("heuristik").write(to: other, atomically: true, encoding: .utf8)
+        try assistantLine("alakasiz").write(to: other, atomically: true, encoding: .utf8)
 
         let watcher = TranscriptWatcher(
             projectsRoot: root, repoPath: repoPath,
             sessionCreatedAt: Date().addingTimeInterval(-60),
             sessionId: sid)
         let items = await watcher.historyItems()
-        XCTAssertEqual(items, [.assistantText("heuristik")],
-                       "exact dosya yoksa heuristik eşleşmeye düşmeli")
+        XCTAssertEqual(items, [],
+                       "exact dosya bilinip yoksa heuristiğe düşülmemeli — boş dönmeli")
     }
 
     // MARK: - historyItems (Plan 3.5 backfill)

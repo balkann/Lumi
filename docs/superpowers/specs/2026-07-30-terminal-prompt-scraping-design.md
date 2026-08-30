@@ -44,11 +44,18 @@ enum TerminalPromptScanner {
 
 Algılama kuralları (girdi: `translateToString(trimRight:true)` ile alınmış düz satırlar):
 
-- **Footer imzası (zorunlu):** son ~5 satırdan biri şunlardan birini içermeli (case-insensitive):
-  `to select`, `to navigate`, `to proceed`, `esc to cancel`, `tab to amend`, `↑/↓`.
-  Footer yoksa → `nil` (yarı-render/normal çıktı elenir).
+- **Footer imzası (birincil sinyal):** son ~5 satırdan biri şunlardan birini içerirse
+  `to select`, `to navigate`, `to proceed`, `esc to cancel`, `tab to amend`, `↑/↓` → prompt kabul.
+  Bu Claude Code'un kendi menülerini (AskUserQuestion/izin) yakalar.
+- **Footer'sız kural (2026-08, üçüncü-parti CLI menüleri — kullanıcı onaylı):** footer yoksa
+  prompt yalnızca şu koşulların **hepsi** sağlanırsa kabul edilir (yoksa `nil`): (a) ≥2 seçenek,
+  (b) numaralar 1'den **ardışık** (`[1,2,…,n]`), (c) **sarılan-satır yok** (temiz numaralı blok),
+  (d) blok ekranın **en altına yaslı** (son seçenekten sonra yalnız boş satır). Bu, `cm` SSO login
+  gibi footer'ı olmayan gerçek PTY menülerini yakalar; normal çıktının (log/liste) false-positive'ini
+  eler. Kind = `generic`. *Sınır:* menü Claude'un kendi Bash tool'u içinde çalışıyorsa ekran-buffer'da
+  olmadığından yakalanamaz — o durumda §K3 (ham ekran özeti) devreye girer.
 - **Numaralı seçenekler:** `^\s*[❯›>\*]?\s*(\d+)\.\s+(.+)$` eşleşen ardışık satırlar. `❯/›/>` prefiksi seçili satırı işaretler (bilgi amaçlı; UI'ı etkilemez). Numaralı satır yoksa → `nil`.
-- **Sarılan seçenek:** iki numaralı satır arasındaki, numarayla başlamayan boş-olmayan satırlar bir önceki seçeneğe (boşlukla) eklenir.
+- **Sarılan seçenek:** iki numaralı satır arasındaki, numarayla başlamayan boş-olmayan satırlar bir önceki seçeneğe (boşlukla) eklenir. **Yalnız kutu-çizgi karakterlerinden oluşan ayraç satırları** (`──────`, Claude AskUserQuestion şıklar-arası kural) sarılan-devam sayılmaz; atlanır (yoksa "Type something ──────" gibi kirlenir).
 - **Soru metni:** ilk numaralı seçeneğin üstündeki, kutu-çizgi/boşluk temizlenmiş boş-olmayan satırlar (ilk boş satıra / buffer başına kadar), tek metne birleştirilir. Yoksa `nil`.
 - **Kind sınıflandırması (best-effort, sadece etiket/başlık için):**
   `question` (footer `to select`/`to navigate` içerir → AskUserQuestion menüsü),
@@ -145,8 +152,15 @@ Görüntüleme yolu **zaten var** (`activeQuestions` → `QuestionCardView` ger�
 - **Prompt→prompt değişimi:** yeni payload eskisinin üstüne yazılır (diff farklı → emit).
 - **Prompt kalkması:** cevap → status `working`/`idle` → mobil `activeQuestions` zaten temizler; ek olarak ekran-scrape `nil` → boş `question` event → açık temizleme (Esc ile kapatıp waiting'de kalma gibi kenar durumu da kapsar).
 - **Reconnect:** snapshot `activePrompt` taşır → ortada prompt varken bağlanan telefon kartı görür.
-- **False positive:** footer imzası + numaralı seçenek **ikisi birden** şart; normal çıktı/yarım render elenir.
+- **False positive:** footer imzası + numaralı seçenek; footer yoksa yukarıdaki 4 koşul (ardışık+temiz+alta-yaslı); normal çıktı/yarım render elenir.
 - **Codex/diğer CLI:** imza jeneriktir; aynı footer+numara şeklini gösteren her CLI çalışır.
+- **§K3 — ham ekran özeti (2026-08, kullanıcı onaylı):** oturum bekliyor (`awaitingDecision`/waiting) ama
+  `scan()` yapısal prompt üretemiyorsa (parse edilemeyen menü), Mac son dolu ekran satırlarını
+  (`TerminalPromptScanner.screenTail`, kutu-çizgi ayıklanmış, ≤6 satır) `screen_text` event'i /
+  snapshot `screenText` alanıyla telefona yollar; telefon bunu bare "Oturum girdi bekliyor" kartının
+  bağlamında gösterir (tool_use özetine yeğler). Yapısal prompt belirince Mac `[]` yollayıp temizler.
+  *Sınır:* menü Claude'un kendi Bash tool'u içinde çalışıyorsa Lumi ekran-buffer'ında hiç bulunmaz →
+  gösterilecek anlamlı metin yoktur (Claude Code sınırı, Lumi değil).
 
 ## Test
 

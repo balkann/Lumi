@@ -325,12 +325,14 @@ final class RemoteServiceTests: XCTestCase {
         let connection = FakeConnection()
         let terminal = FakeTerminal()
         let meta = try terminal.spawn(repoPath: "/tmp/demo", task: nil, command: nil)
-        // transcript fixture'ı: transcriptsRoot/<encoded>/s1.jsonl
+        // transcript fixture'ı: transcriptsRoot/<encoded>/<terminalId>.jsonl
+        // (gerçek: Lumi `claude --session-id <terminalId>` başlatır → exactFile bu addır)
         let projectDir = tempHome.appendingPathComponent("transcripts")
             .appendingPathComponent(TranscriptParser.projectDirName(forCwd: "/tmp/demo"))
         try FileManager.default.createDirectory(at: projectDir, withIntermediateDirectories: true)
         let line = #"{"type":"assistant","message":{"content":[{"type":"text","text":"gecmis-mesaj"}]}}"#
-        try (line + "\n").data(using: .utf8)!.write(to: projectDir.appendingPathComponent("s1.jsonl"))
+        try (line + "\n").data(using: .utf8)!.write(
+            to: projectDir.appendingPathComponent("\(meta.id.raw.uuidString.lowercased()).jsonl"))
 
         let service = makeService(connection: connection, terminal: terminal)
         await service.start()
@@ -488,7 +490,8 @@ final class RemoteServiceTests: XCTestCase {
             .appendingPathComponent(TranscriptParser.projectDirName(forCwd: "/tmp/demo"))
         try FileManager.default.createDirectory(at: projectDir, withIntermediateDirectories: true)
         let line = #"{"type":"assistant","message":{"model":"claude-opus-4-8","content":[{"type":"text","text":"gecmis"}]}}"#
-        try (line + "\n").data(using: .utf8)!.write(to: projectDir.appendingPathComponent("s1.jsonl"))
+        try (line + "\n").data(using: .utf8)!.write(
+            to: projectDir.appendingPathComponent("\(meta.id.raw.uuidString.lowercased()).jsonl"))
 
         let service = makeService(connection: connection, terminal: terminal)
         await service.start(); await drain()

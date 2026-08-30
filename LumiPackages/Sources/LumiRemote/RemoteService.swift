@@ -42,6 +42,8 @@ public final class RemoteService: RemoteServicing {
     /// Ekranda o an duran interaktif prompt (ekran-scrape, spec 4). Birincil kaynak:
     /// varken transcript AskUserQuestion düşürülür (dedup).
     private var screenPrompt: [TerminalID: DetectedPrompt] = [:]
+    /// Yapısal prompt yokken ham ekran özeti (bare kart bağlamı, spec 4 §K3).
+    private var screenTail: [TerminalID: [String]] = [:]
     private var currentModel: [TerminalID: String] = [:]
     private var running = false
     private var epoch = 0
@@ -180,6 +182,11 @@ public final class RemoteService: RemoteServicing {
             guard let meta = terminal.terminals.first(where: { $0.id == id }) else { return }
             await connection.send(type: "event",
                 payload: SnapshotBuilder.promptEvent(sessionId: meta.id.description, prompt: prompt))
+        case .screenTailChanged(let id, let tail):
+            screenTail[id] = tail.isEmpty ? nil : tail
+            guard let meta = terminal.terminals.first(where: { $0.id == id }) else { return }
+            await connection.send(type: "event",
+                payload: SnapshotBuilder.screenTextEvent(sessionId: meta.id.description, lines: tail))
         default:
             break
         }
@@ -224,6 +231,7 @@ public final class RemoteService: RemoteServicing {
         lastSummary[id] = nil
         awaitingDecision[id] = nil
         screenPrompt[id] = nil
+        screenTail[id] = nil
         currentModel[id] = nil
     }
 
@@ -283,6 +291,7 @@ public final class RemoteService: RemoteServicing {
             // Yeni dosyanın içeriği bunu takip eden canlı transcript öğeleriyle repopüle olur.
             lastSummary[sessionId] = nil
             screenPrompt[sessionId] = nil
+            screenTail[sessionId] = nil
             awaitingDecision[sessionId] = nil
             currentModel[sessionId] = nil
             await connection.send(type: "event",
@@ -303,7 +312,7 @@ public final class RemoteService: RemoteServicing {
         let payload = SnapshotBuilder.snapshot(
             terminals: terminal.terminals, repos: repoList, personas: personaList,
             awaitingDecision: awaitingDecision, currentModel: currentModel,
-            activePrompts: screenPrompt)
+            activePrompts: screenPrompt, screenTails: screenTail)
         rlog("snapshot -> \(terminal.terminals.count) session, watchers=\(watchers.count)")
         await connection.send(type: "snapshot", payload: payload)
     }

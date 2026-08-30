@@ -144,6 +144,31 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(card?.context, "Bash: swift test")
     }
 
+    func testScreenTextBecomesBareCardContext() {
+        // spec 4 §K3: parse edilemeyen bekleyen prompt → bare kart bağlamı = ham ekran özeti
+        // (tool_use özetine yeğlenir).
+        let (model, _, _) = makeModel()
+        model.handle(.snapshot(Snapshot(sessions: [session("s1", repo: "lumi", .working)], repos: [], personas: [])))
+        model.handle(.event(.transcript(sessionId: "s1", item: .toolUse(tool: "Bash", summary: "cm login"))))
+        model.handle(.event(.screenText(sessionId: "s1", lines: ["Select auth method", "1. SSO", "2. Token"])))
+        model.handle(.event(.statusChange(sessionId: "s1", status: .waitingUnseen, repoName: "lumi", summary: nil)))
+
+        let card = model.questionCard(for: "s1")
+        XCTAssertNil(card?.questions)
+        XCTAssertEqual(card?.context, "Select auth method\n1. SSO\n2. Token")
+    }
+
+    func testEmptyScreenTextFallsBackToToolContext() {
+        let (model, _, _) = makeModel()
+        model.handle(.snapshot(Snapshot(sessions: [session("s1", repo: "lumi", .working)], repos: [], personas: [])))
+        model.handle(.event(.transcript(sessionId: "s1", item: .toolUse(tool: "Bash", summary: "swift test"))))
+        model.handle(.event(.screenText(sessionId: "s1", lines: ["stale"])))
+        model.handle(.event(.screenText(sessionId: "s1", lines: [])))  // temizle
+        model.handle(.event(.statusChange(sessionId: "s1", status: .waitingUnseen, repoName: "lumi", summary: nil)))
+
+        XCTAssertEqual(model.questionCard(for: "s1")?.context, "Bash: swift test")
+    }
+
     func testSendTextRecordsCommandAndClearsQuestion() async {
         let (model, client, _) = makeModel()
         model.handle(.snapshot(Snapshot(sessions: [session("s1", repo: "lumi", .waitingUnseen)], repos: [], personas: [])))

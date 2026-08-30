@@ -8,6 +8,8 @@ protocol TerminalSessionDelegate: AnyObject {
     func session(_ session: TerminalSession, didChangeStatus status: TerminalStatus)
     func session(_ session: TerminalSession, didChangeAwaitingDecision awaiting: Bool)
     func session(_ session: TerminalSession, didDetectPrompt prompt: DetectedPrompt?)
+    /// Parse edilemeyen bekleyen prompt için ham ekran özeti (spec 4 §K3, bare kart bağlamı).
+    func session(_ session: TerminalSession, didUpdateScreenTail tail: [String])
     func session(_ session: TerminalSession, didChangeTitle title: String)
     func session(_ session: TerminalSession, didExitWithCode code: Int32)
     func sessionDidBell(_ session: TerminalSession)
@@ -37,8 +39,10 @@ final class TerminalSession {
     private var isTerminated = false
     private var pendingResize: DispatchWorkItem?
     private var lastPrompt: DetectedPrompt?
+    private var lastScreenTail: [String] = []
     private var launchGate = LaunchCommandGate()
-    private var didLogLaunchHold = false
+    /// Launch komutu bekletilirken yapılan quiescence tarama sayısı (teşhis logu).
+    private var launchScanCount = 0
 
     init(repoPath: String, name: String, task: String?, font: NSFont) throws {
         let id = TerminalID()
@@ -159,22 +163,48 @@ final class TerminalSession {
     /// tek istisna bekleyen başlangıç komutunun shell hazırken enjeksiyonu.
     private func runPromptScan() {
         guard !isTerminated else { return }
-        let lines = captureBottomLines()
-        if let command = launchGate.commandToInject(bottomLines: lines) {
-            DiagLog.shared.log("terminal", "launch inject \(id.raw.uuidString.prefix(8))")
+        // Launch-gate grid'in TAMAMINI görür: taze shell prompt'u üstte render olur,
+        // sabit alt-16 penceresi onu kaçırıp gate'i sonsuz hold'a sokuyordu
+        // (sandout_word-puzzle "chat başlamıyor" bugı). Bkz. LaunchGateScan.
+        if let command = launchGate.commandToInject(
+            bottomLines: LaunchGateScan.lines(fromGrid: captureAllLines())) {
+            DiagLog.shared.log("terminal", "launch inject \(id.raw.uuidString.prefix(8)) scan#\(launchScanCount)")
             write(command + "\r")
-        } else if launchGate.isPending, !didLogLaunchHold {
-            // İlk bekletmeyi bir kez kaydet — soru ekranda kaldıkça her
-            // quiescence tick'inde tekrar yazmamak için.
-            didLogLaunchHold = true
-            DiagLog.shared.log(
-                "terminal",
-                "launch hold (shell hazır değil) \(id.raw.uuidString.prefix(8)) son=\(lines.last { !$0.isEmpty } ?? "")")
+        } else if launchGate.isPending {
+            launchScanCount += 1
+            if launchScanCount <= 8 {   // salt-teşhis: neden bekliyoruz (son dolu satır)
+                let last = captureAllLines().last { !$0.trimmingCharacters(in: .whitespaces).isEmpty } ?? ""
+                DiagLog.shared.log(
+                    "terminal",
+                    "launch hold scan#\(launchScanCount) \(id.raw.uuidString.prefix(8)) son=\(last)")
+            }
         }
+        let lines = captureBottomLines()
         let prompt = TerminalPromptScanner.scan(lines: lines)
-        guard prompt != lastPrompt else { return }
-        lastPrompt = prompt
-        delegate?.session(self, didDetectPrompt: prompt)
+        if prompt != lastPrompt {
+            lastPrompt = prompt
+            delegate?.session(self, didDetectPrompt: prompt)
+        }
+        // Yapısal prompt yoksa ham ekran özetini yolla (telefonda bare kart bağlamı);
+        // yapısal prompt varsa özeti temizle (activePrompt zaten tam bilgiyi taşır).
+        let tail = prompt == nil ? TerminalPromptScanner.screenTail(lines: lines) : []
+        if tail != lastScreenTail {
+            lastScreenTail = tail
+            delegate?.session(self, didUpdateScreenTail: tail)
+        }
+    }
+
+    /// Emülatörün TÜM görünür satırlarını düz metin olarak okur (MainActor).
+    /// Launch-gate bunu kullanır: taze shell prompt'u grid'in üstünde render olur,
+    /// sabit alt pencere onu kaçırırdı (bkz. LaunchGateScan, runPromptScan).
+    private func captureAllLines() -> [String] {
+        let terminal = terminalView.getTerminal()
+        let rows = terminal.rows
+        var out: [String] = []
+        for row in 0..<rows {
+            out.append(terminal.getLine(row: row)?.translateToString(trimRight: true) ?? "")
+        }
+        return out
     }
 
     /// Emülatörün görünür alt `n` satırını düz metin olarak okur (MainActor).

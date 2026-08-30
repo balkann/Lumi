@@ -63,9 +63,13 @@ body = `summary` (yoksa duruma göre genel metin).
 `awaitingDecision` yalnızca `true` olduğunda bulunur (yoksa → `false`); oturum bir tool izni/kararı bekliyorsa `true`.
 `model` yalnızca Mac transcript'ten bir model gördüğünde bulunur (yoksa → bilinmiyor); son bilinen çalışan model adı.
 `activePrompt` (opsiyonel): `[{ "header", "question", "options": ["…"] }]` — o an ekranda duran interaktif prompt (izin/soru; ekran-scrape, spec 4). Yoksa alan gelmez. Reconnect'te telefon kartı bu alandan yeniden kurar.
+`screenText` (opsiyonel): `["satır", …]` — yapısal prompt **parse edilemezken** (üçüncü-parti CLI menüsü) bekleyen oturumun ham ekran özeti; bare kartın bağlamı olur (spec 4 §K3). `activePrompt` varken gelmez. Yoksa alan gelmez.
 
 ### `awaiting_decision`
 `{ "kind": "awaiting_decision", "sessionId": "<uuid>", "awaiting": bool }` — Mac bir tool için izin (karar) beklemeye başlayınca `true`, çözülünce `false`. Status'ten ayrı sinyaldir (OSC "needs your permission"); rozet OSC başlığına bağlı olduğundan bu daha güvenilirdir. Relay bu kind'a bakmaz (push kuralı yalnız `status_change`).
+
+### `screen_text`
+`{ "kind": "screen_text", "sessionId": "<uuid>", "lines": ["…", …] }` — Yapısal prompt **parse edilemezken** (Claude footer'ı olmayan üçüncü-parti CLI menüsü, ör. `cm` SSO login) bekleyen oturumun ham ekran alt satırları (kutu-çizgi ayıklanmış, boş satırlar atılmış, en fazla ~6 satır). Telefon bunu bare "Oturum girdi bekliyor" kartının bağlamı olarak gösterir (tool_use özetine yeğler). `lines: []` → özet temizlenir. Yapısal prompt (`promptChanged`) belirince Mac boş liste yollayıp bu özeti kaldırır. Relay bakmaz (push yalnız `status_change`). Bkz. spec 4 §K3.
 
 ### `model_change`
 `{ "kind": "model_change", "sessionId": "<uuid>", "model": string }` — Mac, son assistant transcript kaydının `message.model` alanından çıkardığı güncel modeli, değiştiğinde bildirir. Relay bakmaz (push yalnız `status_change`).

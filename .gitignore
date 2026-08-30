@@ -26,4 +26,6 @@ RelayServer/node_modules/
 # LumiMobile — XcodeGen üretimi + build çıktıları
 LumiMobile/LumiMobile.xcodeproj
 LumiMobile/build/
+LumiMobile/build-device/
+LumiMobile/*.log
 LumiMobile/App/Info.plist

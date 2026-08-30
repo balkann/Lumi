@@ -17,19 +17,30 @@ DIST="$ROOT/dist"
 APP="$DIST/Lumi.app"
 VERSION="${VERSION:-0.6.0}"
 
+# Disk-I/O (.build/build.db) sorunu için opsiyonel scratch-path:
+#   SCRATCH=/private/tmp/lumi-scratch-build Scripts/make-app.sh
+SCRATCH="${SCRATCH:-}"
+if [ -n "$SCRATCH" ]; then
+  BUILD_DIR="$SCRATCH/release"
+  SCRATCH_FLAG=(--scratch-path "$SCRATCH")
+else
+  BUILD_DIR="$PKG/.build/release"
+  SCRATCH_FLAG=()
+fi
+
 echo "▸ Release build…"
 cd "$PKG"
-swift build -c release --product Lumi
+swift build -c release "${SCRATCH_FLAG[@]}" --product Lumi
 
 echo "▸ Bundle iskeleti…"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
-cp "$PKG/.build/release/Lumi" "$APP/Contents/MacOS/Lumi"
+cp "$BUILD_DIR/Lumi" "$APP/Contents/MacOS/Lumi"
 
 # SPM resource bundle'ları (default YAML'lar, fontlar) Bundle.module'ün
 # araması için Resources altına kopyalanır
-for bundle in "$PKG"/.build/release/*.bundle; do
+for bundle in "$BUILD_DIR"/*.bundle; do
   [ -d "$bundle" ] && cp -R "$bundle" "$APP/Contents/Resources/"
 done
 

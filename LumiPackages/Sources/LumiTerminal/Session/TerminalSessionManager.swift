@@ -207,6 +207,11 @@ extension TerminalSessionManager: TerminalSessionDelegate {
         broadcaster.send(.promptChanged(session.id, prompt))
     }
 
+    func session(_ session: TerminalSession, didUpdateScreenTail tail: [String]) {
+        guard isRegistered(session) else { return }
+        broadcaster.send(.screenTailChanged(session.id, tail))
+    }
+
     func session(_ session: TerminalSession, didChangeTitle title: String) {
         guard isRegistered(session) else { return }
         broadcaster.send(.titleChanged(session.id, title))
