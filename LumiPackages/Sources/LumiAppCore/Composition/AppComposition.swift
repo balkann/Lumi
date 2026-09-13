@@ -17,6 +17,8 @@ struct AppComposition {
     /// AppKit kabuğunun (uyanma sonrası tazeleme) hâlâ tipli eriştiği tek
     /// assembly. Faz 6.1 sonrası diğerleri yalnız `ShellComposition`'a girer.
     let repo: RepoFeatureAssembly
+    /// Remote terminal-mirror assembly (Task 5); Task 6'da ShellContext'e verilecek.
+    let remote: RemoteFeatureAssembly
     /// Panel/route/overlay kayıt defteri + kabuk bağlamı (Faz 6.6).
     let shell: ShellComposition
 
@@ -42,10 +44,11 @@ struct AppComposition {
         let repo = RepoFeatureAssembly()
         let workspaceBoot = WorkspaceBootAssembly()
         let statusBar = StatusBarFeatureAssembly()
+        let remote = RemoteFeatureAssembly()
         let container = AppContainer(
             services: registry,
             shared: shared,
-            assemblies: [agentHooks, terminal, notifications, sessionSchedule, usage, repo, workspaceBoot, statusBar]
+            assemblies: [agentHooks, terminal, notifications, sessionSchedule, usage, repo, workspaceBoot, statusBar, remote]
         )
         let shell = ShellComposition.make(
             registry: registry,
@@ -63,6 +66,7 @@ struct AppComposition {
             container: container,
             shared: shared,
             repo: repo,
+            remote: remote,
             shell: shell
         )
     }
