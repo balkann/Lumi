@@ -5,7 +5,10 @@ import LumiState
 
 /// Remote (terminal-ayna) özelliği: RemoteService + RemoteStore kurar, config
 /// etkinse relay'e bağlanır. bootstrapPhase.config — terminal (system) kurulduktan
-/// sonra, ama repo/ui'dan önce başlaması yeterli.
+/// sonra başlaması yeterli.
+///
+/// Bağlantı ayrı Task'a alınır (eski AppContainer'ın `Task { await remoteService.start() }`
+/// deseni): relay el sıkışması / ulaşılamayan relay bootstrap loop'unu bloke etmez.
 @MainActor
 final class RemoteFeatureAssembly: FeatureAssembly {
     let bootstrapPhase = BootstrapPhase.config
@@ -25,9 +28,10 @@ final class RemoteFeatureAssembly: FeatureAssembly {
     }
 
     func start() async {
-        // store event köprüsü + servis bağlantısı (config.enabled=false ise no-op).
+        // store event köprüsü (senkron); servis bağlantısı ayrı Task'ta (bloke etmez).
+        // config.enabled=false ise start() içi no-op.
         remoteStore.start()
-        await remoteService.start()
+        Task { [remoteService] in await remoteService?.start() }
     }
 
     func shutdown() async {
