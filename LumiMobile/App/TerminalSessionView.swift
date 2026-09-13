@@ -14,44 +14,38 @@ struct TerminalSessionView: View {
     @State private var terminalView: TerminalView?
 
     var body: some View {
-        VStack(spacing: 0) {
-            TerminalHostView(
-                onInput: { data in
-                    model.sendInput(sessionId, data)
-                },
-                register: { view in
-                    terminalView = view
-                }
-            )
-            .ignoresSafeArea(edges: .bottom)
-
+        // AccessoryBar `.safeAreaInset(edge: .bottom)` ile → klavye açıldığında
+        // klavyenin ÜSTÜNDE kalır (metin alanı klavyenin altında kaybolmaz).
+        TerminalHostView(
+            onInput: { data in
+                model.sendInput(sessionId, data)
+            },
+            register: { view in
+                terminalView = view
+            }
+        )
+        .safeAreaInset(edge: .bottom, spacing: 0) {
             AccessoryBar { data in
                 model.sendInput(sessionId, data)
             }
         }
         .task(id: sessionId) {
             model.subscribe(sessionId)
+            // SwiftTerm view (`register` callback'i) `.task` ile YARIŞIR. View henüz
+            // kaydolmadan gelen chunk'ı DÜŞÜRMEK, tek-atış scrollback (seq=0) kaybına =
+            // boş terminale yol açar. View hazır olana dek tamponla, sonra sırayla besle.
+            var pending: [TerminalChunk] = []
             for await chunk in model.terminalStream(sessionId) {
-                guard let tv = terminalView else { continue }
-                // Resize first when cols/rows are present (e.g. scrollback chunk header).
-                if let cols = chunk.cols, let rows = chunk.rows {
-                    await MainActor.run {
-                        tv.resize(cols: cols, rows: rows)
-                    }
+                guard let tv = terminalView else {
+                    pending.append(chunk)
+                    continue
                 }
-                // seq==0 → scrollback dump (initial subscribe or reconnect).
-                // Reset the emulator before feeding so reconnect doesn't append a
-                // duplicate scrollback on top of whatever was already rendered.
-                if chunk.seq == 0 {
-                    await MainActor.run {
-                        tv.getTerminal().resetToInitialState()
-                    }
+                if !pending.isEmpty {
+                    let buffered = pending
+                    pending.removeAll()
+                    for p in buffered { await feed(p, into: tv) }
                 }
-                // Feed raw bytes into the emulator.
-                let bytes = [UInt8](chunk.bytes)
-                await MainActor.run {
-                    tv.feed(byteArray: bytes[...])
-                }
+                await feed(chunk, into: tv)
             }
         }
         .onDisappear {
@@ -64,6 +58,19 @@ struct TerminalSessionView: View {
                 toolbarItems
             }
         }
+    }
+
+    /// Tek chunk'ı SwiftTerm emülatörüne besler: cols/rows varsa resize, seq==0 ise
+    /// (scrollback/reconnect) emülatörü sıfırla, sonra ham baytları feed et.
+    private func feed(_ chunk: TerminalChunk, into tv: TerminalView) async {
+        if let cols = chunk.cols, let rows = chunk.rows {
+            await MainActor.run { tv.resize(cols: cols, rows: rows) }
+        }
+        if chunk.seq == 0 {
+            await MainActor.run { tv.getTerminal().resetToInitialState() }
+        }
+        let bytes = [UInt8](chunk.bytes)
+        await MainActor.run { tv.feed(byteArray: bytes[...]) }
     }
 
     // MARK: - Toolbar
