@@ -10,6 +10,7 @@ let package = Package(
         .library(name: "LumiServices", targets: ["LumiServices"]),
         .library(name: "LumiState", targets: ["LumiState"]),
         .library(name: "LumiUI", targets: ["LumiUI"]),
+        .library(name: "LumiRemote", targets: ["LumiRemote"]),
         .executable(name: "Lumi", targets: ["LumiApp"]),
     ],
     dependencies: [
@@ -42,6 +43,7 @@ let package = Package(
             ]
         ),
         .target(name: "LumiState", dependencies: ["LumiKit"]),
+        .target(name: "LumiRemote", dependencies: ["LumiKit"]),
         .target(
             name: "LumiUI",
             dependencies: ["LumiKit", "LumiState"],
@@ -55,7 +57,7 @@ let package = Package(
         // + yalnız `main.swift` içeren ince executable (`LumiApp` → ürün adı `Lumi`).
         .target(
             name: "LumiAppCore",
-            dependencies: ["LumiKit", "LumiTerminal", "LumiServices", "LumiState", "LumiUI"],
+            dependencies: ["LumiKit", "LumiTerminal", "LumiServices", "LumiState", "LumiRemote", "LumiUI"],
             resources: [.copy("Resources/icon.png")]
         ),
         .executableTarget(name: "LumiApp", dependencies: ["LumiAppCore"]),
@@ -68,5 +70,6 @@ let package = Package(
         .testTarget(name: "LumiStateTests", dependencies: ["LumiState", "LumiTestSupport"]),
         .testTarget(name: "LumiUITests", dependencies: ["LumiUI", "LumiTestSupport"]),
         .testTarget(name: "LumiAppTests", dependencies: ["LumiAppCore", "LumiTestSupport"]),
+        .testTarget(name: "LumiRemoteTests", dependencies: ["LumiRemote", "LumiTestSupport"]),
     ]
 )

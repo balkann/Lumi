@@ -1,0 +1,119 @@
+import Foundation
+
+// MARK: - SessionMeta
+
+/// Bir terminal oturumunun aktarım meta verisi.
+struct SessionMeta {
+    let id: String
+    let repoName: String
+    let status: String
+    let title: String?
+    let model: String?
+    let cols: Int
+    let rows: Int
+
+    func toDict() -> [String: Any] {
+        var d: [String: Any] = [
+            "id": id,
+            "repoName": repoName,
+            "status": status,
+            "cols": cols,
+            "rows": rows,
+        ]
+        if let title { d["title"] = title }
+        if let model { d["model"] = model }
+        return d
+    }
+}
+
+// MARK: - RemoteProtocol
+
+/// Zarf codec'i — docs/spec/50-remote-protocol.md ile birebir.
+enum RemoteProtocol {
+    static let version = 1
+
+    static func envelope(type: String, payload: [String: Any]) -> Data? {
+        let dict: [String: Any] = ["v": version, "type": type, "payload": payload]
+        return try? JSONSerialization.data(withJSONObject: dict)
+    }
+
+    static func decode(_ data: Data) -> (type: String, payload: [String: Any])? {
+        guard let object = try? JSONSerialization.jsonObject(with: data),
+              let dict = object as? [String: Any],
+              dict["v"] as? Int == version,
+              let type = dict["type"] as? String,
+              let payload = dict["payload"] as? [String: Any] else { return nil }
+        return (type, payload)
+    }
+
+    static func decode(text: String) -> (type: String, payload: [String: Any])? {
+        guard let data = text.data(using: .utf8) else { return nil }
+        return decode(data)
+    }
+
+    // MARK: Encode helpers (Mac → relay)
+
+    /// `sessions` payload: `{sessions:[SessionMeta]}` — relay welcome/sessions key.
+    static func sessionsPayload(_ metas: [SessionMeta]) -> [String: Any] {
+        ["sessions": metas.map { $0.toDict() }]
+    }
+
+    /// `scrollback` payload: ilk bağlantıda terminal geçmişini gönderir.
+    static func scrollbackPayload(sessionId: String, seq: Int, cols: Int, rows: Int, data: Data) -> [String: Any] {
+        [
+            "sessionId": sessionId,
+            "seq": seq,
+            "cols": cols,
+            "rows": rows,
+            "data": data.base64EncodedString(),
+        ]
+    }
+
+    /// `data` payload: canlı terminal çıktısı.
+    static func dataPayload(sessionId: String, seq: Int, data: Data) -> [String: Any] {
+        [
+            "sessionId": sessionId,
+            "seq": seq,
+            "data": data.base64EncodedString(),
+        ]
+    }
+
+    // MARK: Decode helpers (relay → Mac)
+
+    /// `subscribe` mesajından sessionId çıkarır.
+    static func decodeSubscribe(_ payload: [String: Any]) -> String? {
+        payload["sessionId"] as? String
+    }
+
+    /// `input` mesajından (sessionId, data) çıkarır; base64 decode yapar.
+    static func decodeInput(_ payload: [String: Any]) -> (String, Data)? {
+        guard let sessionId = payload["sessionId"] as? String,
+              let b64 = payload["data"] as? String,
+              let data = Data(base64Encoded: b64) else { return nil }
+        return (sessionId, data)
+    }
+}
+
+/// `press_key` sözleşmesi (protokol dokümanı): yalnız bu beş tuş.
+func keySequence(for key: String) -> String? {
+    switch key {
+    case "1", "2", "3": return key
+    case "enter": return "\r"
+    case "esc": return "\u{1B}"
+    default: return nil
+    }
+}
+
+/// 1,2,4,8,…60 sn üstel geri çekilme.
+struct ReconnectBackoff {
+    private var attempt = 0
+    private let capSeconds: Double = 60
+
+    mutating func nextDelay() -> Double {
+        let delay = min(pow(2, Double(attempt)), capSeconds)
+        attempt += 1
+        return delay
+    }
+
+    mutating func reset() { attempt = 0 }
+}
