@@ -38,6 +38,8 @@ final class TerminalSession {
     private let pty: any PTYControlling
     private let ioQueue: DispatchQueue
     private let pipeline: TerminalPipeline
+    /// Ham PTY bayt batch'leri için broadcaster (remote mirror).
+    private let remoteOutputBroadcaster = EventBroadcaster<Data>()
     let presentation: TerminalPresentation
     /// Exit sonrası her dış etki susar (bell dahil) — bayat sinyal yayılmaz.
     private(set) var isTerminated = false
@@ -146,6 +148,7 @@ final class TerminalSession {
         guard !isTerminated else { return }
         launchGate?.noteOutput()
         pipeline.watchdog.measureFeed { presentation.feed(batch) }
+        remoteOutputBroadcaster.send(batch)
         if pipeline.flow.noteConsumed(batch.count) {
             pty.resumeReading()
         }
@@ -225,6 +228,45 @@ final class TerminalSession {
         ioQueue.async { [pipeline] in
             pipeline.processHookEvent(event)
         }
+    }
+
+    // MARK: - Remote mirror
+
+    func subscribeRemoteOutput() -> AsyncStream<Data> {
+        remoteOutputBroadcaster.stream()
+    }
+
+    func writeRemoteInput(_ data: Data) {
+        write(data)
+    }
+
+    func serializeScrollback() -> (data: Data, cols: Int, rows: Int) {
+        let terminal = presentation.view.getTerminal()
+        let dims = terminal.getDims()
+        let cols = dims.cols
+        let rows = dims.rows
+        // getText with visible display rows only (public API boundary: buffer internals are module-private)
+        let text = terminal.getText(
+            start: Position(col: 0, row: 0),
+            end: Position(col: cols - 1, row: rows - 1)
+        )
+        return (data: Data(text.utf8), cols: cols, rows: rows)
+    }
+
+    // MARK: - Test yardımcıları (LumiTerminalTests)
+
+    @MainActor
+    static func makeForTest() throws -> TerminalSession {
+        try TerminalSession(
+            repoPath: NSTemporaryDirectory(),
+            name: "test",
+            task: nil,
+            font: .monospacedSystemFont(ofSize: 13, weight: .regular)
+        )
+    }
+
+    func injectFlushBatch(_ data: Data) {
+        deliver(data)
     }
 
     /// Tüm PTY-bound yazımların tek hunisi (design/01 §4): klavye, SwiftTerm

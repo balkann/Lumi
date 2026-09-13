@@ -50,6 +50,19 @@ public protocol TerminalSessionControlling: AnyObject, Sendable {
 
     func events() -> AsyncStream<TerminalEvent>
 
+    // MARK: - Remote mirror
+
+    /// Ham PTY bayt batch'leri — RemoteService uzak abone tüketicisi.
+    /// Bilinmeyen id → boş/bitirilmiş stream.
+    func subscribeOutput(_ id: TerminalID) -> AsyncStream<Data>
+
+    /// Baytları PTY'ye yazar (mevcut input filter üzerinden). Bilinmeyen id → no-op.
+    func writeInput(_ data: Data, to id: TerminalID)
+
+    /// Tek atış scrollback snapshot: SwiftTerm buffer'ını UTF-8 Data olarak döker.
+    /// Bilinmeyen id → (Data(), 0, 0).
+    func serializeScrollback(_ id: TerminalID) -> (data: Data, cols: Int, rows: Int)
+
     /// Kapanış simetrisi: global NSEvent monitörleri gibi process-ömürlü
     /// kaynakları bırakır. Idempotent'tir; composition root `shutdown()`
     /// yolunda çağırır (refactor 3.2 — somut tipe inmemek için protokolde).

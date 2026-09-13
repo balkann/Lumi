@@ -202,6 +202,22 @@ public final class TerminalSessionManager: TerminalServicing {
         eventMonitor.stop()
     }
 
+    // MARK: - Remote mirror
+
+    public func subscribeOutput(_ id: TerminalID) -> AsyncStream<Data> {
+        guard let s = session(for: id) else { return AsyncStream { $0.finish() } }
+        return s.subscribeRemoteOutput()
+    }
+
+    public func writeInput(_ data: Data, to id: TerminalID) {
+        session(for: id)?.writeRemoteInput(data)
+    }
+
+    public func serializeScrollback(_ id: TerminalID) -> (data: Data, cols: Int, rows: Int) {
+        guard let s = session(for: id) else { return (Data(), 0, 0) }
+        return s.serializeScrollback()
+    }
+
     private func session(for id: TerminalID) -> TerminalSession? {
         sessions.first { $0.id == id }
     }

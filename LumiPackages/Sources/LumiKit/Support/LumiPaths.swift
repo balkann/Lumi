@@ -15,6 +15,7 @@ public struct LumiPaths: Sendable {
 
     public var configFile: URL { configDir.appendingPathComponent("config.json") }
     public var uiStateFile: URL { configDir.appendingPathComponent("ui-state.json") }
+    public var remoteFile: URL { configDir.appendingPathComponent("remote.json") }
 
     public init(
         mode: Mode,
