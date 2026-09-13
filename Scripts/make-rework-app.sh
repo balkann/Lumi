@@ -24,18 +24,10 @@ mkdir -p "$DEST"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/LumiRework"
-for bundle in "$SCRATCH"/*/release/*.bundle "$SCRATCH"/release/*.bundle; do
-  [ -d "$bundle" ] && cp -R "$bundle" "$APP/Contents/Resources/"
-done
-# SwiftPM macOS resource bundle'ları düz (Info.plist'siz) üretir; geçerli bundle
-# olması için Contents/Info.plist + Contents/Resources ile sar.
-for b in "$APP/Contents/Resources"/*.bundle; do
-  [ -f "$b/Contents/Info.plist" ] && continue
-  name=$(basename "$b" .bundle); tmp="${b}.wrap"; rm -rf "$tmp"; mkdir -p "$tmp/Contents/Resources"
-  (cd "$b" && for it in * .[!.]*; do [ -e "$it" ] && cp -R "$it" "$tmp/Contents/Resources/"; done) 2>/dev/null
-  printf '%s\n' '<?xml version="1.0" encoding="UTF-8"?>' '<plist version="1.0"><dict>' "<key>CFBundleIdentifier</key><string>com.lumi.rework.${name}</string>" "<key>CFBundleName</key><string>${name}</string>" '<key>CFBundlePackageType</key><string>BNDL</string>' '<key>CFBundleInfoDictionaryVersion</key><string>6.0</string>' '</dict></plist>' > "$tmp/Contents/Info.plist"
-  rm -rf "$b" && mv "$tmp" "$b"
-done
+# NOT: Bu SwiftPM sürümünün resource_bundle_accessor'ı resource bundle'ları
+# Bundle(path: buildPath) ile KALICI scratch yolundan okur (Contents/Resources'a
+# bakmaz). Bundle'lar zaten $SCRATCH/*/release/ altında; app-kökü temiz kalsın
+# (imza geçerli → `open` çalışır). Kopyalama/sarma gerekmez.
 
 echo "▸ App icon…"
 ICON_SRC="$ROOT/Assets/icon.png"
