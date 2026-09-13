@@ -1,0 +1,66 @@
+name: LumiMobile
+options:
+  bundleIdPrefix: com.lumi
+  deploymentTarget:
+    iOS: "17.0"
+packages:
+  LumiMobileKit:
+    path: LumiMobileKit
+  SwiftTerm:
+    url: https://github.com/migueldeicaza/SwiftTerm.git
+    revision: 24a68bcadc479d945c7ca32f21ac0a8ab895c690
+schemes:
+  LumiMobile:
+    build:
+      targets:
+        LumiMobile: all
+        LumiMobileUITests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - LumiMobileUITests
+      environmentVariables:
+        PAIRING_STRING: $(PAIRING_STRING)
+
+targets:
+  LumiMobile:
+    type: application
+    platform: iOS
+    sources: [App]
+    dependencies:
+      - package: LumiMobileKit
+      - package: SwiftTerm
+    settings:
+      base:
+        SWIFT_VERSION: "6.0"
+        SWIFT_STRICT_CONCURRENCY: complete
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        CODE_SIGN_ENTITLEMENTS: App/LumiMobile.entitlements
+        # Test build: mevcut uygulamanın YANINA ayrı app olarak kurulsun (farklı bundle id).
+        PRODUCT_BUNDLE_IDENTIFIER: com.lumi.LumiRemoteNew
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: Lumi Remote New
+        NSCameraUsageDescription: Eşleştirme QR kodunu okumak için kamera gerekir.
+        UILaunchScreen: {}
+        CFBundleURLTypes:
+          - CFBundleURLName: com.lumi.LumiMobile.pair
+            CFBundleURLSchemes: [lumi-remote]
+  LumiMobileUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [UITests]
+    dependencies:
+      - target: LumiMobile
+    settings:
+      base:
+        SWIFT_VERSION: "6.0"
+        GENERATE_INFOPLIST_FILE: YES
+
+settings:
+  base:
+    DEVELOPMENT_TEAM: FX46XZGU7U
+    CODE_SIGN_STYLE: Automatic
