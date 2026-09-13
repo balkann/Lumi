@@ -161,6 +161,12 @@ private final class PreviewTerminalService: TerminalServicing {
     func shutdown() {}
     func applyFont(_ font: NSFont) {}
     func applyCursor(shape: TerminalCursorShape, blink: Bool) {}
+
+    // MARK: - Remote mirror
+    private let remoteOutputBroadcaster = EventBroadcaster<Data>()
+    func subscribeOutput(_ id: TerminalID) -> AsyncStream<Data> { remoteOutputBroadcaster.stream() }
+    func writeInput(_ data: Data, to id: TerminalID) {}
+    func serializeScrollback(_ id: TerminalID) -> (data: Data, cols: Int, rows: Int) { (Data(), 0, 0) }
 }
 
 @MainActor

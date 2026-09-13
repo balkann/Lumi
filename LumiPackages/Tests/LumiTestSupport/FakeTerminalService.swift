@@ -156,4 +156,18 @@ public final class FakeTerminalService: TerminalServicing {
     public func emit(_ event: TerminalEvent) {
         broadcaster.send(event)
     }
+
+    // MARK: - Remote mirror
+
+    private let remoteOutputBroadcaster = EventBroadcaster<Data>()
+
+    public func subscribeOutput(_ id: TerminalID) -> AsyncStream<Data> {
+        remoteOutputBroadcaster.stream()
+    }
+
+    public func writeInput(_ data: Data, to id: TerminalID) {}
+
+    public func serializeScrollback(_ id: TerminalID) -> (data: Data, cols: Int, rows: Int) {
+        (Data(), 0, 0)
+    }
 }
