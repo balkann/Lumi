@@ -1,7 +1,9 @@
 import Testing
 import Foundation
+import AppKit
 @testable import LumiRemote
 import LumiKit
+import LumiTestSupport
 
 // MARK: - Test paths helper
 
@@ -115,6 +117,16 @@ final class FakeTerminalServicing: TerminalServicing {
     func events() -> AsyncStream<TerminalEvent> { broadcaster.stream() }
     func outputStream(id: TerminalID) -> AsyncStream<String>? { nil }
 
+    // Yeni main protokol üyeleri (test için no-op).
+    func processID(for id: TerminalID) -> Int32? { nil }
+    func setSurfaceState(_ state: TerminalSurfaceState, for id: TerminalID) {}
+    func setSurfaceState(_ state: TerminalSurfaceState, in sessionID: String?) {}
+    func setAgentHookEndpoint(_ endpoint: AgentHookEndpoint?) {}
+    func applyAgentHookEvent(_ event: AgentHookEvent) {}
+    func shutdown() {}
+    func applyFont(_ font: NSFont) {}
+    func applyCursor(shape: TerminalCursorShape, blink: Bool) {}
+
     func subscribeOutput(_ id: TerminalID) -> AsyncStream<Data> {
         subscribedIDs.append(id)
         return outputBroadcaster(for: id).stream()
@@ -154,26 +166,6 @@ final class FakeTerminalServicing: TerminalServicing {
     }
 }
 
-// MARK: - FakeRepos / FakePersonas
-
-final actor FakeRepos: RepoServicing {
-    func repos() async -> [Repo] { [] }
-    func setRoots(projectsRoot: String, additionalPaths: [AdditionalPath]) async {}
-    func fileTree(repoPath: String) async -> [FileTreeNode] { [] }
-    func watchFileTree(repoPath: String) async {}
-    func unwatchFileTree(repoPath: String) async {}
-    func events() -> AsyncStream<RepoEvent> { AsyncStream { _ in } }
-}
-
-final actor FakePersonas: PersonaServicing {
-    func personas(projectPath: String?) async -> [Persona] { [] }
-    func seedDefaults() async {}
-    func spawn(personaID: String, repoPath: String) async throws -> TerminalMeta {
-        TerminalMeta(id: TerminalID(), name: "P", repoPath: repoPath, createdAt: Date())
-    }
-    func events() -> AsyncStream<Void> { AsyncStream { _ in } }
-}
-
 // MARK: - Tests
 
 @Suite @MainActor struct RemoteServiceTests {
@@ -189,7 +181,7 @@ final actor FakePersonas: PersonaServicing {
         let term = FakeTerminalServicing()
         term.scrollback = ("SCROLL".data(using: .utf8)!, 80, 24)
         let sid = makeSession(term)
-        let svc = RemoteService(paths: .testDefaults(), terminal: term, repos: FakeRepos(), personas: FakePersonas(), connection: conn)
+        let svc = RemoteService(paths: .testDefaults(), terminal: term, repos: FakeRepoService(), connection: conn)
         await svc.start()
 
         await conn.injectInbound(type: "subscribe", payload: ["sessionId": sid])
@@ -210,7 +202,7 @@ final actor FakePersonas: PersonaServicing {
         let conn = FakeRelayConnection()
         let term = FakeTerminalServicing()
         let sid = makeSession(term)
-        let svc = RemoteService(paths: .testDefaults(), terminal: term, repos: FakeRepos(), personas: FakePersonas(), connection: conn)
+        let svc = RemoteService(paths: .testDefaults(), terminal: term, repos: FakeRepoService(), connection: conn)
         await svc.start()
 
         await conn.injectInbound(type: "input", payload: ["sessionId": sid, "data": "aGk="]) // "hi"
@@ -227,7 +219,7 @@ final actor FakePersonas: PersonaServicing {
         term.scrollback = ("X".data(using: .utf8)!, 80, 24)
         let sid = makeSession(term)
         let tid = TerminalID(raw: UUID(uuidString: sid)!)
-        let svc = RemoteService(paths: .testDefaults(), terminal: term, repos: FakeRepos(), personas: FakePersonas(), connection: conn)
+        let svc = RemoteService(paths: .testDefaults(), terminal: term, repos: FakeRepoService(), connection: conn)
         await svc.start()
 
         await conn.injectInbound(type: "subscribe", payload: ["sessionId": sid])

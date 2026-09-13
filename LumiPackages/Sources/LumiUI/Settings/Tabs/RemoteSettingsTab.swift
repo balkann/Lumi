@@ -65,10 +65,10 @@ struct RemoteSettingsTab: SettingsTabContent {
                             .resizable()
                             .frame(width: 180, height: 180)
                             .background(Color.white)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.lg))
                     }
                     Text(remote.pairingString)
-                        .font(.system(size: 10, design: .monospaced))
+                        .font(Theme.Typography.captionMono)
                         .foregroundStyle(Theme.textSecondary)
                         .textSelection(.enabled)
                         .lineLimit(3)
