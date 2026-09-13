@@ -241,16 +241,12 @@ final class TerminalSession {
     }
 
     func serializeScrollback() -> (data: Data, cols: Int, rows: Int) {
+        // getBufferAsData() SwiftTerm'in public API'si (Terminal.swift:5919):
+        // active buffer'ın TÜM satırlarını (scrollback + visible) UTF-8 döker —
+        // telefon subscribe'da tam geçmişi görür. Sadece görünür satırlar YETMEZ.
         let terminal = presentation.view.getTerminal()
         let dims = terminal.getDims()
-        let cols = dims.cols
-        let rows = dims.rows
-        // getText with visible display rows only (public API boundary: buffer internals are module-private)
-        let text = terminal.getText(
-            start: Position(col: 0, row: 0),
-            end: Position(col: cols - 1, row: rows - 1)
-        )
-        return (data: Data(text.utf8), cols: cols, rows: rows)
+        return (data: terminal.getBufferAsData(), cols: dims.cols, rows: dims.rows)
     }
 
     // MARK: - Test yardımcıları (LumiTerminalTests)
