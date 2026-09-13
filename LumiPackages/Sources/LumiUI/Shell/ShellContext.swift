@@ -60,6 +60,7 @@ public final class ShellContext {
     public let commitAssistant: CommitMessageAssistant
     public let fileViewer: FileViewerStore
     public let settings: SettingsStore
+    public let remote: RemoteStore
     public let sessionSchedule: SessionScheduleStore
     public let promptQueue: PromptQueueStore
     public let toasts: ToastStore
@@ -89,6 +90,7 @@ public final class ShellContext {
         agentHistory: AgentHistoryStore,
         fileViewer: FileViewerStore,
         settings: SettingsStore,
+        remote: RemoteStore,
         sessionSchedule: SessionScheduleStore,
         promptQueue: PromptQueueStore,
         toasts: ToastStore,
@@ -112,6 +114,7 @@ public final class ShellContext {
         self.agentHistory = agentHistory
         self.fileViewer = fileViewer
         self.settings = settings
+        self.remote = remote
         self.sessionSchedule = sessionSchedule
         self.promptQueue = promptQueue
         self.toasts = toasts

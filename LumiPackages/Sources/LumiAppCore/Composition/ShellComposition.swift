@@ -36,6 +36,7 @@ struct ShellComposition {
         sessionSchedule: SessionScheduleAssembly,
         workspaceBoot: WorkspaceBootAssembly,
         statusBar: StatusBarFeatureAssembly,
+        remote: RemoteFeatureAssembly,
         contributors: [any ShellContributing]
     ) -> ShellComposition {
         let registries = makeRegistries(contributors: contributors)
@@ -53,6 +54,7 @@ struct ShellComposition {
             agentHistory: repo.agentHistory,
             fileViewer: repo.fileViewer,
             settings: shared.settings,
+            remote: remote.remoteStore,
             sessionSchedule: sessionSchedule.sessionSchedule,
             promptQueue: terminal.promptQueue,
             toasts: shared.toasts,

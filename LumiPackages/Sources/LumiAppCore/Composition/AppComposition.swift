@@ -59,6 +59,7 @@ struct AppComposition {
             sessionSchedule: sessionSchedule,
             workspaceBoot: workspaceBoot,
             statusBar: statusBar,
+            remote: remote,
             contributors: [terminal, repo, usage, statusBar]
         )
         return AppComposition(
