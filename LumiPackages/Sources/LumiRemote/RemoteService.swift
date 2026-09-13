@@ -26,7 +26,6 @@ public final class RemoteService: RemoteServicing {
     private let configService: RemoteConfigService
     private let terminal: any TerminalServicing
     private let repos: any RepoServicing
-    private let personas: any PersonaServicing
     private let connection: any RelayConnecting
     private let commandHandler: RemoteCommandHandler
     private let broadcaster = EventBroadcaster<RemoteEvent>()
@@ -47,15 +46,13 @@ public final class RemoteService: RemoteServicing {
         paths: LumiPaths,
         terminal: any TerminalServicing,
         repos: any RepoServicing,
-        personas: any PersonaServicing,
         connection: (any RelayConnecting)? = nil
     ) {
         self.configService = RemoteConfigService(paths: paths)
         self.terminal = terminal
         self.repos = repos
-        self.personas = personas
         self.connection = connection ?? RelayConnection()
-        self.commandHandler = RemoteCommandHandler(terminal: terminal, personas: personas)
+        self.commandHandler = RemoteCommandHandler(terminal: terminal)
     }
 
     public func events() -> AsyncStream<RemoteEvent> { broadcaster.stream() }
@@ -155,7 +152,7 @@ public final class RemoteService: RemoteServicing {
                 modelCache[id] = nil
             }
             await sendSessions()
-        case .titleChanged, .awaitingDecisionChanged, .bell:
+        case .titleChanged, .awaitingDecisionChanged, .bell, .providerChanged, .writeFailed, .stalled, .viewFocused:
             break
         }
     }

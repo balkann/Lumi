@@ -11,19 +11,9 @@ func shellQuoted(_ s: String) -> String {
 @MainActor
 final class RemoteCommandHandler {
     private let terminal: any TerminalServicing
-    private let personas: any PersonaServicing
-    /// start_session persona yolunda agent CLI'ın açılması için beklenen süre.
-    /// Bilinçli best-effort (tasarım kararı) — test edilebilirlik için enjekte.
-    private let personaPromptDelay: Duration
 
-    init(
-        terminal: any TerminalServicing,
-        personas: any PersonaServicing,
-        personaPromptDelay: Duration = .seconds(3)
-    ) {
+    init(terminal: any TerminalServicing) {
         self.terminal = terminal
-        self.personas = personas
-        self.personaPromptDelay = personaPromptDelay
     }
 
     func handle(_ payload: [String: Any]) async -> sending [String: Any] {
@@ -68,16 +58,8 @@ final class RemoteCommandHandler {
         let repoPath = payload["repoPath"] as? String ?? ""
         let prompt = payload["prompt"] as? String ?? ""
         do {
-            if let personaId = payload["personaId"] as? String, !personaId.isEmpty {
-                let meta = try await personas.spawn(personaID: personaId, repoPath: repoPath)
-                if !prompt.isEmpty {
-                    try? await Task.sleep(for: personaPromptDelay)
-                    try terminal.write(id: meta.id, text: prompt + "\r")
-                }
-            } else {
-                let command = prompt.isEmpty ? "claude" : "claude " + shellQuoted(prompt)
-                _ = try terminal.spawn(repoPath: repoPath, task: nil, command: command)
-            }
+            let command = prompt.isEmpty ? "claude" : "claude " + shellQuoted(prompt)
+            _ = try terminal.spawn(repoPath: repoPath, task: nil, command: command)
             return ["commandId": commandId, "ok": true]
         } catch {
             return ["commandId": commandId, "ok": false, "error": "\(error)"]
