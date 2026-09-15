@@ -141,6 +141,23 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(frame!.contains("aGk="), "input base64 (\"hi\" == aGk=)")
     }
 
+    /// Chat/komut gönderimi: metin ve Enter (CR) AYRI iki input frame'i olmalı,
+    /// birleşik `metin\r` DEĞİL. Birleşik write Claude Code TUI'sinde paste ingest'i
+    /// tamamlanmadan gelen Enter olarak yutulur ve submit tetiklenmez (orca
+    /// runtime-terminal-writer paritesi: text → settle → CR).
+    func testSubmitTextSplitsTextAndEnterIntoSeparateFrames() async {
+        let (model, client, _) = makeModel()
+        model.submitSettle = .zero  // testi hızlandır (gecikme davranışı ayrı)
+        model.submitText("s1", "hi")
+        await awaitFrame(client, containing: "DQ==")  // CR frame'i (en son gelir)
+        let inputs = client.sentFrames.filter { $0.contains(#""type":"input""#) }
+        XCTAssertEqual(inputs.count, 2, "metin ve CR ayrı iki input frame olmalı")
+        XCTAssertTrue(inputs[0].contains("aGk="), #"ilk frame metin ("hi" == aGk=)"#)
+        XCTAssertTrue(inputs[1].contains("DQ=="), #"ikinci frame CR (\r == DQ==)"#)
+        XCTAssertFalse(inputs.contains { $0.contains("aGkN") },
+                       #"birleşik "hi\r" (== aGkN) frame'i OLMAMALI"#)
+    }
+
     /// unsubscribe ÇAĞRILMADAN başka session'a subscribe edilince eski stream sonlanmalı.
     func testSubscribeSwitchFinishesPreviousStream() async {
         let (model, _, _) = makeModel()

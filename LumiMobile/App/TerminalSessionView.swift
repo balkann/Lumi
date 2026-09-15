@@ -43,7 +43,8 @@ struct TerminalSessionView: View {
     private var terminalBody: some View {
         VStack(spacing: 0) {
             TerminalHostView(onInput: { model.sendInput(sessionId, $0) }, buffer: buffer)
-            AccessoryBar { model.sendInput(sessionId, $0) }
+            AccessoryBar(sendInput: { model.sendInput(sessionId, $0) },
+                         submitText: { model.submitText(sessionId, $0) })
         }
         // Otomatik klavye kaçınmasını kapat; yüksekliği manuel uygula → çubuk daima
         // klavyenin üstünde, terminal onun üstünde kalır.

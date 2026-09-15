@@ -53,7 +53,9 @@ struct MobileChatView: View {
                     .lineLimit(1...5)
                 Button {
                     guard !draft.isEmpty else { return }
-                    model.sendInput(sessionId, Data((draft + "\r").utf8))
+                    // Metni yaz → settle → Enter'ı AYRI yolla (submitText). Tek
+                    // write'taki birleşik `metin\r` Claude TUI'sinde submit olmaz.
+                    model.submitText(sessionId, draft)
                     draft = ""
                 } label: {
                     Image(systemName: "arrow.up.circle.fill").imageScale(.large)

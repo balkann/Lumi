@@ -271,6 +271,31 @@ public final class AppModel {
         Task { await client.send(frame: PhoneProtocol.inputFrame(sessionId: sessionId, data: data)) }
     }
 
+    /// Serbest metin gönderiminde (`submitText`) metin ile Enter arasındaki "settle"
+    /// penceresi. Varsayılan orca paritesi (`AGENT_PROMPT_SUBMIT_SETTLE_MS` = 500 ms);
+    /// test'ler hızlandırmak için sıfırlayabilir.
+    public var submitSettle: Duration = .milliseconds(500)
+
+    /// Serbest metin gönderimi (chat composer / terminal metin çubuğu): metni bir
+    /// `input` frame'iyle yollar, ajanın paste'i sindirmesi için `submitSettle`
+    /// bekler, sonra Enter'ı (CR) AYRI bir `input` frame'iyle yollar.
+    ///
+    /// Neden ayrı: tek write'taki birleşik `metin\r`, Claude Code TUI'sinde paste
+    /// ingest'i tamamlanmadan gelen Enter olarak yutulur ve submit tetiklenmez —
+    /// metin input satırında görünür ama gönderilmez (orca
+    /// `runtime-terminal-writer` paritesi: text → settle → CR). İki write'ı TEK
+    /// Task içinde sıralı tutar; ayrı `sendInput` çağrıları Task sırasını garanti
+    /// etmez ve Enter metni geçebilir.
+    public func submitText(_ sessionId: String, _ text: String) {
+        Task {
+            if !text.isEmpty {
+                await client.send(frame: PhoneProtocol.inputFrame(sessionId: sessionId, data: Data(text.utf8)))
+                try? await Task.sleep(for: submitSettle)
+            }
+            await client.send(frame: PhoneProtocol.inputFrame(sessionId: sessionId, data: Data([0x0D])))
+        }
+    }
+
     /// Verilen oturuma gelen scrollback + canlı data chunk'larının akışı.
     /// Bağlanınca önce (subscribe sonrası biriken) replay tamponu sırayla verilir,
     /// sonra canlı chunk'lar akar. Aynı anda tek tüketici desteklenir; yeni stream

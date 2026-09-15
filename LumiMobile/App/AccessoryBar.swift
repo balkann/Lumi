@@ -4,8 +4,10 @@ import LumiMobileKit
 /// Aksesuar tuş çubuğu: ok tuşları, kontrol tuşları ve serbest metin girişi.
 /// Her buton veya metin gönderimi `sendInput` closure'ı üzerinden PTY'ye iletilir.
 struct AccessoryBar: View {
-    /// Gönderilecek ham baytları alan closure; caller PTY'ye yönlendirir.
+    /// Gönderilecek ham baytları alan closure; caller PTY'ye yönlendirir (ok/kontrol tuşları).
     let sendInput: (Data) -> Void
+    /// Serbest metin gönderimi; caller metni yazar, settle bekler, Enter'ı AYRI yollar.
+    let submitText: (String) -> Void
 
     @State private var text: String = ""
     @FocusState private var textFieldFocused: Bool
@@ -66,15 +68,16 @@ struct AccessoryBar: View {
 
     private func commitText() {
         guard !text.isEmpty else { return }
-        // "Gönder" = metni yaz + Enter (CR) → satırı submit et (orca buffered-send
-        // davranışı). Enter olmadan metin terminalde görünür ama gönderilmez.
-        sendInput(Data(text.utf8) + Data([0x0D]))
+        // "Gönder" = metni yaz → settle → Enter'ı AYRI yolla (submitText). Tek
+        // write'taki birleşik `metin\r` Claude TUI'sinde paste ingest'i bitmeden
+        // gelen Enter olarak yutulur; metin görünür ama satır submit edilmez.
+        submitText(text)
         text = ""
     }
 }
 
 #if DEBUG
 #Preview {
-    AccessoryBar { _ in }
+    AccessoryBar(sendInput: { _ in }, submitText: { _ in })
 }
 #endif
