@@ -44,7 +44,7 @@ import LumiKit
         #expect(more.map(\.id) == ["a1"])
     }
 
-    @Test func missingFileEmitsEmptySnapshotThenFills() async throws {
+    @Test func missingFileEmitsEmptySnapshot() async throws {
         let sid = "22222222-2222-2222-2222-222222222222"
         let repo = "/Users/x/empty"
         // Dosya yok; source boş snapshot verip dosya belirince append etmeli.

@@ -51,7 +51,7 @@ public struct TranscriptChatSource: ChatTranscriptSourcing {
     private func readAppended(_ file: URL, from offset: UInt64, index: Int) -> ([ChatMessage], UInt64, Int) {
         guard let handle = try? FileHandle(forReadingFrom: file) else { return ([], offset, index) }
         defer { try? handle.close() }
-        try? handle.seek(toOffset: offset)
+        do { try handle.seek(toOffset: offset) } catch { return ([], offset, index) }
         guard let data = try? handle.readToEnd(), !data.isEmpty else { return ([], offset, index) }
         // Son newline'a kadar tam satırlar; yarım son satır bir sonraki poll'a kalsın.
         guard let lastNL = data.lastIndex(of: 0x0A) else { return ([], offset, index) }
