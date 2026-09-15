@@ -37,6 +37,9 @@ public final class RemoteService: RemoteServicing {
     private let hookEvents: AsyncStream<AgentHookEvent>
     private let turnClock: @Sendable () -> Date
     private var turnReducers: [TerminalID: TurnStatusReducer] = [:]
+    /// Faz 3: session başına etkileşimli prompt journal'ı.
+    private var promptJournals: [TerminalID: PromptJournal] = [:]
+    private var promptSeq = 0
     private var hookTask: Task<Void, Never>?
 
     private var inboundTask: Task<Void, Never>?
@@ -119,6 +122,7 @@ public final class RemoteService: RemoteServicing {
         chatSubscriptions.removeAll()
         hookTask?.cancel(); hookTask = nil
         turnReducers.removeAll()
+        promptJournals.removeAll()
         seqCounters.removeAll()
         await connection.stop()
         setState(.disconnected)
@@ -157,6 +161,8 @@ public final class RemoteService: RemoteServicing {
                 handleUnsubscribe(payload)
             case "input":
                 handleInput(payload)
+            case "prompt_respond":
+                handlePromptRespond(payload)
             case "command":
                 let result = await commandHandler.handle(payload)
                 let ok = result["ok"] as? Bool == true
@@ -178,6 +184,7 @@ public final class RemoteService: RemoteServicing {
                 cancelChatSubscription(id)
                 modelCache[id] = nil
                 turnReducers[id] = nil
+                promptJournals[id] = nil
             }
             await sendSessions()
         case .titleChanged, .awaitingDecisionChanged, .bell, .providerChanged, .writeFailed, .stalled, .viewFocused:
@@ -259,6 +266,9 @@ public final class RemoteService: RemoteServicing {
             chatSubscriptions[id] = task
             let snapshot = turnReducers[id]?.status ?? .idle
             await emitTurnStatus(id: id, status: snapshot)
+            for item in (promptJournals[id]?.items ?? []) where item.state == .pending {
+                await emitPrompt(id: id, prompt: item)
+            }
             return
         }
 
@@ -312,9 +322,17 @@ public final class RemoteService: RemoteServicing {
             turnReducers[id] = r
             return r
         }()
-        guard let status = reducer.reduce(event) else { return }
+        // Reducer + journal abone olunmasa da ilerler (subscribe snapshot doğruluğu).
+        let status = reducer.reduce(event)
+        let journal = promptJournals[id] ?? {
+            let j = PromptJournal(seq: { [weak self] in self?.promptSeq += 1; return self?.promptSeq ?? 0 })
+            promptJournals[id] = j
+            return j
+        }()
+        let changedPrompts = journal.reduce(event)
         guard chatSubscriptions[id] != nil else { return }
-        await emitTurnStatus(id: id, status: status)
+        if let status { await emitTurnStatus(id: id, status: status) }
+        for item in changedPrompts { await emitPrompt(id: id, prompt: item) }
     }
 
     private func emitTurnStatus(id: TerminalID, status: ChatTurnStatus) async {
@@ -322,6 +340,40 @@ public final class RemoteService: RemoteServicing {
             type: "chat_status",
             payload: RemoteProtocol.chatStatusPayload(sessionId: id.description, status: status)
         )
+    }
+
+    private func emitPrompt(id: TerminalID, prompt: ChatPrompt) async {
+        await connection.send(
+            type: "prompt",
+            payload: RemoteProtocol.promptPayload(sessionId: id.description, prompt: prompt)
+        )
+    }
+
+    /// Faz 3: telefon cevabını (optionId) keystroke'a çevirip PTY'ye yazar + resolved yayınlar.
+    private func handlePromptRespond(_ payload: [String: Any]) {
+        guard let r = RemoteProtocol.decodePromptRespond(payload),
+              let id = terminalID(from: r.sessionId),
+              let journal = promptJournals[id],
+              let item = journal.items.first(where: { $0.itemId == r.itemId }),
+              item.state == .pending, item.revision == r.expectedRevision,
+              let keys = keystroke(for: item, optionId: r.optionId) else { return }
+        terminal.writeInput(keys, to: id)
+        if let resolved = journal.resolve(itemId: r.itemId, optionId: r.optionId) {
+            Task { await emitPrompt(id: id, prompt: resolved) }
+        }
+    }
+
+    /// orca keystroke haritası (kesin): allow="1", deny=ESC, question index i → "1"+i. Trailing Enter yok.
+    private func keystroke(for item: ChatPrompt, optionId: String) -> Data? {
+        switch item.kind {
+        case .approval:
+            if optionId == "allow" { return Data([0x31]) }
+            if optionId == "deny" { return Data([0x1b]) }
+            return nil
+        case .question:
+            guard let i = item.options.firstIndex(where: { $0.id == optionId }), i < 9 else { return nil }
+            return Data([UInt8(0x31 + i)])
+        }
     }
 
     private func emitData(id: TerminalID, sessionId: String, batch: Data) async {
