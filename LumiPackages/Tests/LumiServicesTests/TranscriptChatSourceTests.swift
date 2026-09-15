@@ -9,7 +9,7 @@ import LumiKit
     private func makeTranscript(sid: String, repoPath: String, lines: [String]) throws -> URL {
         let home = FileManager.default.temporaryDirectory
             .appendingPathComponent("lumi-chat-\(UUID().uuidString)")
-        let encoded = repoPath.replacingOccurrences(of: "/", with: "-")
+        let encoded = AgentDataRoots.encodedProjectName(repoPath)
         let dir = home.appendingPathComponent(".claude/projects/\(encoded)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let file = dir.appendingPathComponent("\(sid).jsonl")
@@ -23,7 +23,7 @@ import LumiKit
         let line1 = #"{"type":"user","uuid":"u1","message":{"content":"selam"}}"#
         let home = try makeTranscript(sid: sid, repoPath: repo, lines: [line1])
         let file = home.appendingPathComponent(
-            ".claude/projects/\(repo.replacingOccurrences(of: "/", with: "-"))/\(sid).jsonl")
+            ".claude/projects/\(AgentDataRoots.encodedProjectName(repo))/\(sid).jsonl")
 
         let source = TranscriptChatSource(home: home, pollInterval: .milliseconds(20))
         var iterator = source.stream(sessionID: sid, repoPath: repo).makeAsyncIterator()
@@ -42,6 +42,19 @@ import LumiKit
         let second = await iterator.next()
         guard case let .append(more)? = second else { Issue.record("append bekleniyordu"); return }
         #expect(more.map(\.id) == ["a1"])
+    }
+
+    /// Claude proje klasörü cwd'deki alfanümerik OLMAYAN her karakteri `-` yapar
+    /// (`_`, `.` dahil). Yalnız `/`→`-` yapan kodlama, alt çizgili repo'da
+    /// (ör. `sandout_word-puzzle`) yanlış klasöre bakar → transcript bulunamaz →
+    /// chat boş kalır. AgentDataRoots.encodedProjectName paritesi.
+    @Test func encodesNonAlphanumericPathCharactersLikeClaude() {
+        let url = TranscriptChatSource.transcriptURL(
+            home: URL(fileURLWithPath: "/home"),
+            sessionID: "sid",
+            repoPath: "/Users/balkan/wkspaces/sandout_word-puzzle")
+        #expect(url.path
+            == "/home/.claude/projects/-Users-balkan-wkspaces-sandout-word-puzzle/sid.jsonl")
     }
 
     @Test func missingFileEmitsEmptySnapshot() async throws {

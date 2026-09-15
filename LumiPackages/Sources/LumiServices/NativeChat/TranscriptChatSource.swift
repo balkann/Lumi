@@ -41,9 +41,13 @@ public struct TranscriptChatSource: ChatTranscriptSourcing {
         }
     }
 
-    /// `<home>/.claude/projects/<encoded-cwd>/<sid>.jsonl` (AgentDataRoots paritesi).
+    /// `<home>/.claude/projects/<encoded-cwd>/<sid>.jsonl`. Klasör adı Claude'un
+    /// kuralıyla kodlanır: cwd'deki alfanümerik OLMAYAN her karakter `-` olur
+    /// (`_`, `.` dahil). Yalnız `/`→`-` yapmak alt çizgili/nokta içeren repo'da
+    /// (ör. `sandout_word-puzzle`) yanlış klasöre bakıp transcript'i kaçırırdı —
+    /// tek kaynak `AgentDataRoots.encodedProjectName`.
     static func transcriptURL(home: URL, sessionID: String, repoPath: String) -> URL {
-        let encoded = repoPath.replacingOccurrences(of: "/", with: "-")
+        let encoded = AgentDataRoots.encodedProjectName(repoPath)
         return home.appendingPathComponent(".claude/projects/\(encoded)/\(sessionID).jsonl")
     }
 
