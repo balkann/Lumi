@@ -89,24 +89,25 @@ hook script (tool_input dahil) → AgentHookServer.events() ──┐
 
 ### 4.1 Hook `tool_input` genişletmesi
 
-- **`~/.lumi/hooks`** script'leri: PreToolUse ve PermissionRequest için hook JSON'undaki
-  `tool_input`'u (ve varsa `tool_use_id`'yi) POST payload'ına ekle. Diğer olaylar değişmez.
-- **`AgentHookServer`** (LumiServices): payload'dan `tool_input`'u okuyup
-  `AgentHookEvent.toolInput`'a koyar. Boyut tavanı: makul bir sınır (ör. 16 KB) — orca
-  truncate etmez ama biz DoS'a karşı tavan koyarız; aşarsa `nil` (kart gösterilmez, log'lanır).
-- **`AgentHookEvent`** (LumiKit): yeni alan
+**Ölçüm çözüldü (orca kodundan):** Feasibility gate, gerçek Claude çalıştırıp ölçmek
+yerine orca'nın kanıtlanmış kodundan karşılandı (keystroke haritası §4.4). Ayrıca
+mevcut hook altyapımız keşfedildi:
+
+- **`~/.lumi/hooks` script'leri: DEĞİŞİKLİK GEREKMEZ.** `AgentHookScript.posix` zaten hook
+  JSON'unun **tamamını** (`--data-binary @-`) POST ediyor — `tool_input` gövdede zaten var.
+- **`AgentHookInstaller`/`ClaudeHookSettings`: DEĞİŞİKLİK GEREKMEZ.** `PermissionRequest`
+  (matcher `*`) ve `PreToolUse` (`*`) zaten kayıtlı (`ClaudeHookSettings.events`).
+- **Tek değişiklik — decoder:** `AgentHookEvent.decode` (`LumiKit/Models/AgentHookModels.swift`,
+  ~satır 153-176; `hook_event_name`/`tool_name`/`prompt` okuyan yer) `tool_input`'u okuyup
+  (nesne → `JSONSerialization` ile string'e serialize) ve `tool_use_id`'yi çıkarır.
+  Boyut tavanı: 16 KB — aşarsa `toolInput=nil` (kart gösterilmez, log'lanır; DoS koruması).
+- **`AgentHookEvent`** (LumiKit): yeni alanlar (init'e additive; mevcut çağrı yerleri default'la derlenir)
   ```
   public let toolInput: String?   // PreToolUse/PermissionRequest ham tool_input JSON'u (yoksa nil)
-  public let toolUseID: String?   // varsa hook'tan tool_use id (itemId stabilitesi için)
+  public let toolUseID: String?   // hook'tan tool_use id (itemId stabilitesi; yoksa nil)
   ```
-  Mevcut init'e additive; tüm mevcut çağrı yerleri default'la derlenmeye devam eder.
-- **Feasibility doğrulama adımı (ZORUNLU, implementasyondan önce):** Claude CLI'da
-  gerçek bir Bash-izin prompt'u ve bir AskUserQuestion tetikleyip `~/.lumi/logs/mac.log`'da
-  (DiagLog) hook payload'ını incele: (a) PreToolUse(AskUserQuestion) `tool_input`'unda
-  `questions[]` var mı? (b) izin için hangi olay geliyor (PermissionRequest mi, yalnız
-  PreToolUse mu) ve `tool_input`'u ne içeriyor? (c) izin prompt'unun terminal menüsü
-  hangi tuşlarla cevaplanıyor (numara/ok/Enter/ESC)? Bu ölçüm keystroke haritasını (§4.4)
-  ve permission kartının seçeneklerini kilitler. Ölçüm sonucu spec'e/plan'a işlenir.
+- **Cihaz doğrulaması** (kullanıcı, launch-env): uçtan-uca gerçek Claude izin/soru senaryosu
+  keystroke haritasını (§4.4) canlı teyit eder — ama haritanın kaynağı orca kodu, tahmin değil.
 
 ### 4.2 `ChatPrompt` modeli (LumiKit + LumiMobileKit kopyası)
 
@@ -166,16 +167,17 @@ Değişmez wire modeli (Faz 1/2 kalıbı): LumiKit'te tanımlanır, LumiMobileKi
   - item'ı `resolved` (selectedOptionId=optionId, revision+1) yap → `prompt` frame yayınla.
 - `.exited`/unsubscribe/shutdown'da journal temizlenir (Faz 2 cleanup yanında).
 
-### 4.4 Cevap actuation — optionId → keystroke (§4.1 ölçümüyle kilitlenir)
+### 4.4 Cevap actuation — optionId → keystroke (orca kodundan, kesin)
 
-- **Approval**: `allow` → izin menüsünün "Yes" tuşu (ölçüme göre `"1"` veya ok+Enter);
-  `deny` → `ESC` (`0x1b`) veya "No" tuşu. Kesin tuşlar §4.1 feasibility ölçümünden gelir.
-- **Question (tek-soru tek-seçim)**: seçilen index'e göre — ölçüme göre ya numara
-  (`"\(index+1)"`+Enter) ya da `index` kez Down-arrow (`0x1b 0x5b 0x42`) + Enter.
-- Tek keystroke grubu; Faz 2'deki gibi ham `writeInput` yeterli (submitText metin→settle→CR
-  ayrımı GEREKMEZ).
-- **Not:** keystroke haritası kırılgandır; journal telefon UX'ini korur ama actuation
-  doğruluğu cihaz testinde doğrulanır (§6).
+orca'nın kanıtlanmış değerleri (deterministik, Faz 3.0 için TEK bayt yazımı):
+
+- **Approval**: `allow` → `Data([0x31])` (`"1"`); `deny` → `Data([0x1b])` (ESC). **Trailing Enter YOK.**
+- **Question (tek-soru tek-seçim)**: index `i` seçilince → `Data(String(i+1).utf8)` (ASCII
+  `"1"`..`"9"`, yani `0x31`..`0x39`). **Trailing Enter YOK** (tek-soruda digit hem seçer hem gönderir).
+- Tek keystroke; `terminal.writeInput(bytes, to: id)` ile yazılır (Faz 2 kanalı). Arrow/pacing
+  YOK (onlar yalnız ertelenen multiSelect/gruplu çok-soru için gerekir — orca `buildAskAnswerKeys`).
+- **Kaynak:** orca `native-chat-interactive-prompt.ts` (allow=`'1'`, deny=ESC) + `native-chat-ask.ts`
+  `buildAskAnswerKeys` (tek-select index → `String(i+1)`, trailing Enter yalnız çok-soru finalinde).
 
 ### 4.5 Wire — `prompt` ve `prompt_respond` frame'leri
 
@@ -231,12 +233,12 @@ Değişmez wire modeli (Faz 1/2 kalıbı): LumiKit'te tanımlanır, LumiMobileKi
 - **`PromptJournal` birim** (LumiKitTests): event dizileri (preTool+AskUserQuestion→question
   item; permissionRequest→approval item; postTool→cancelled; stop→hepsi cancelled; clear→reset;
   idempotent; revision artışı; tool_input parse edge'leri). Enjekte deterministik id/seq.
-- **`AgentHookEvent.toolInput`** (LumiKitTests): additive alan decode/erişim.
+- **`AgentHookEvent.decode` toolInput/toolUseID** (LumiKitTests): hook JSON'unda `tool_input`
+  nesnesi → string; `tool_use_id` → toolUseID; 16 KB tavan aşımında nil; mevcut alanlar korunur.
 - **RemoteService** (LumiRemoteTests): fake hook stream (toolInput'lu) + chat abonesi →
   `prompt` frame yayılır; abonesi olmayan session'a yayılmaz; subscribe'da snapshot; `prompt_respond`
   → `writeInput` çağrılır (FakeTerminalServicing.writtenInput doğrulanır) + resolved frame yayılır;
   bayat revision yok sayılır.
-- **Hook forward** (LumiServicesTests): AgentHookServer `tool_input`'u AgentHookEvent'e koyuyor.
 - **AppModel** (LumiMobileKitTests): `prompt` decode + merge (pending ekle, resolved düş);
   ölü oturum temizliği; `promptRespondFrame` encode.
 - **Wire** (RelayServer): `prompt` mac→phone passthrough; `prompt_respond` phone→mac forward;
@@ -256,9 +258,7 @@ Değişmez wire modeli (Faz 1/2 kalıbı): LumiKit'te tanımlanır, LumiMobileKi
 
 | Katman | Dosya | İş |
 |---|---|---|
-| Hook script | `~/.lumi/hooks/*` (AgentHookInstaller şablonları, LumiServices) | tool_input forward |
-| Hook server | `LumiServices/AgentHooks/AgentHookServer.swift` | tool_input → event |
-| Model | `LumiKit/Models/AgentHookModels.swift` | AgentHookEvent.toolInput/toolUseID |
+| Hook decoder | `LumiKit/Models/AgentHookModels.swift` (~153-176) | AgentHookEvent.toolInput/toolUseID (tool_input JSON→string) — hook script/installer DEĞİŞMEZ |
 | Model | `LumiKit/Models/ChatPrompt.swift` (+ LumiMobileKit kopyası) | wire modeli |
 | Journal | `LumiKit/NativeChat/PromptJournal.swift` | hook→prompt item'ları |
 | Servis | `LumiRemote/RemoteService.swift` | journal tap + prompt yayını + prompt_respond + keystroke |
@@ -282,8 +282,10 @@ cd RelayServer && npm test
 # Mac + relay deploy + cihaz testi: KULLANICI (launch-env kuralı; relay lumi-relay servisi)
 ```
 
-**Sıralama (kritik):** §4.1 feasibility ölçümü **ilk task** olmalı — permission hook'unun
-ne verdiği ve keystroke haritası, geri kalan tasarımı (§4.3/§4.4/§4.6 permission dalı) kilitler.
+**Sıralama:** §4.1 feasibility gate orca kodundan çözüldü (keystroke haritası §4.4 kesin,
+hook plumbing değişiklik gerektirmiyor). Doğal sıra: decoder (tool_input) → ChatPrompt modeli →
+PromptJournal → RemoteService (journal+prompt+respond+keystroke) → relay → telefon decode/model →
+UI. Nihai keystroke doğruluğu cihaz testinde (kullanıcı) teyit edilir.
 
 **Launch-env kuralı:** LumiRework'ü Claude Code bash'ından başlatma; KULLANICI Finder/Dock'tan
 temiz env'de başlatır (aksi halde CLAUDECODE env'i spawn edilen claude'lara sızar).
