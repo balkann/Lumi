@@ -51,6 +51,16 @@ import LumiKit
         #expect(msgs?.first?["id"] as? String == "m1")
     }
 
+    @Test func chatAppendPayloadShape() {
+        let msg = ChatMessage(id: "m9", role: .assistant,
+                              blocks: [.text("done", presentation: nil)],
+                              timestampMs: nil, turnId: nil)
+        let p = RemoteProtocol.chatAppendPayload(sessionId: "s2", messages: [msg])
+        #expect(p["sessionId"] as? String == "s2")
+        let msgs = p["messages"] as? [[String: Any]]
+        #expect(msgs?.first?["id"] as? String == "m9")
+    }
+
     @Test func subscribeModeDefaultsTerminal() {
         #expect(RemoteProtocol.decodeSubscribeMode(["sessionId": "s"]) == "terminal")
         #expect(RemoteProtocol.decodeSubscribeMode(["sessionId": "s", "mode": "chat"]) == "chat")
