@@ -50,4 +50,9 @@ import LumiKit
         #expect(decoder.decode(["type": "user", "isMeta": true, "message": ["content": "x"]], index: 0) == nil)
         #expect(decoder.decode(["type": "summary"], index: 0) == nil)
     }
+
+    @Test func returnsNilForEmptyContent() {
+        #expect(decoder.decode(["type": "user", "uuid": "e1", "message": ["content": "   "]], index: 0) == nil)
+        #expect(decoder.decode(["type": "assistant", "uuid": "e2", "message": ["content": []]], index: 0) == nil)
+    }
 }
