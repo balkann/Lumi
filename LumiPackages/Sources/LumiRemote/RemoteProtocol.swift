@@ -94,6 +94,13 @@ enum RemoteProtocol {
         ["sessionId": sessionId, "messages": messages.map { $0.toDict() }]
     }
 
+    /// `chat_status` payload: bir oturumun canlı turn-status'u (Faz 2). Mac→telefon.
+    static func chatStatusPayload(sessionId: String, status: ChatTurnStatus) -> [String: Any] {
+        var dict = status.toDict()
+        dict["sessionId"] = sessionId
+        return dict
+    }
+
     // MARK: Decode helpers (relay → Mac)
 
     /// `subscribe` mesajından sessionId çıkarır.

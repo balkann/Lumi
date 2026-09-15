@@ -65,4 +65,15 @@ import LumiKit
         #expect(RemoteProtocol.decodeSubscribeMode(["sessionId": "s"]) == "terminal")
         #expect(RemoteProtocol.decodeSubscribeMode(["sessionId": "s", "mode": "chat"]) == "chat")
     }
+
+    @Test func chatStatusPayloadCarriesSessionIdAndFields() {
+        let p = RemoteProtocol.chatStatusPayload(
+            sessionId: "s1",
+            status: ChatTurnStatus(working: true, startedAtMs: 42, tool: "Read")
+        )
+        #expect(p["sessionId"] as? String == "s1")
+        #expect(p["working"] as? Bool == true)
+        #expect(p["startedAtMs"] as? Int == 42)
+        #expect(p["tool"] as? String == "Read")
+    }
 }
