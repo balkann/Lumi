@@ -179,15 +179,18 @@ public struct Welcome: Decodable, Sendable, Equatable {
     public let lastSeenAt: Double?
     /// Terminal-mirror protokolü: aktif terminal oturumlarının listesi.
     public let sessions: [SessionMeta]?
+    /// Telefondan yeni oturum başlatmak için repo listesi (relay room cache'inden).
+    public let repos: [Repo]?
 
-    public init(macOnline: Bool, lastSeenAt: Double?, sessions: [SessionMeta]? = nil) {
+    public init(macOnline: Bool, lastSeenAt: Double?, sessions: [SessionMeta]? = nil, repos: [Repo]? = nil) {
         self.macOnline = macOnline
         self.lastSeenAt = lastSeenAt
         self.sessions = sessions
+        self.repos = repos
     }
 
     private enum CodingKeys: String, CodingKey {
-        case macOnline, lastSeenAt, sessions
+        case macOnline, lastSeenAt, sessions, repos
     }
 
     public init(from decoder: Decoder) throws {
@@ -195,6 +198,7 @@ public struct Welcome: Decodable, Sendable, Equatable {
         self.macOnline = try c.decode(Bool.self, forKey: .macOnline)
         self.lastSeenAt = try c.decodeIfPresent(Double.self, forKey: .lastSeenAt)
         self.sessions = try c.decodeIfPresent([SessionMeta].self, forKey: .sessions)
+        self.repos = try c.decodeIfPresent([Repo].self, forKey: .repos)
     }
 }
 

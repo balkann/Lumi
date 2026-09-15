@@ -56,6 +56,13 @@ final actor FakeRelayConnection: RelayConnecting {
         sent.first { $0.type == type }?.payload[key] as? Int
     }
 
+    /// `repos` mesajının payload'ındaki repo adları (Sendable sınır-güvenli).
+    func repoNames() -> [String] {
+        guard let payload = sent.first(where: { $0.type == "repos" })?.payload,
+              let list = payload["repos"] as? [[String: String]] else { return [] }
+        return list.compactMap { $0["name"] }
+    }
+
     func count(type: String) -> Int {
         sent.filter { $0.type == type }.count
     }
@@ -195,6 +202,24 @@ final class FakeTerminalServicing: TerminalServicing {
         #expect(await conn.firstInt(type: "scrollback", key: "seq") == 0)
         #expect(await conn.firstString(type: "data", key: "data") == "TElWRQ==")       // base64 "LIVE"
         #expect(await conn.firstInt(type: "data", key: "seq") == 1)
+        svc.stop()
+    }
+
+    @Test func welcomeSendsSessionsAndRepos() async throws {
+        let conn = FakeRelayConnection()
+        let term = FakeTerminalServicing()
+        let repoSvc = FakeRepoService()
+        await repoSvc.setRepos([
+            Repo(name: "lumi", path: "/a/lumi", isGitRepo: true, source: .standalone),
+            Repo(name: "beta", path: "/a/beta", isGitRepo: false, source: .standalone),
+        ])
+        let svc = RemoteService(paths: .testDefaults(), terminal: term, repos: repoSvc, connection: conn)
+        await svc.start()
+
+        await conn.injectInbound(type: "welcome", payload: [:])
+        try await conn.waitForSent(types: ["sessions", "repos"])
+
+        #expect(await conn.repoNames() == ["lumi", "beta"])
         svc.stop()
     }
 

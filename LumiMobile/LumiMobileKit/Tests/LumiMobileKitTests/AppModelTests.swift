@@ -195,6 +195,32 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(model.macOnline, "sessions mesajı Mac'ten gelir → online")
     }
 
+    // MARK: Repos (yeni oturum seçici — bug #2)
+
+    func testWelcomeAppliesRepos() {
+        let (model, _, _) = makeModel()
+        model.handle(.welcome(Welcome(macOnline: true, lastSeenAt: nil, sessions: [],
+                                      repos: [Repo(name: "lumi", path: "/a/lumi"),
+                                              Repo(name: "beta", path: "/a/beta")])))
+        XCTAssertEqual(model.repos.map(\.name), ["lumi", "beta"])
+        XCTAssertEqual(model.repos.map(\.path), ["/a/lumi", "/a/beta"])
+    }
+
+    func testReposMessageUpdatesListAndMarksMacOnline() {
+        let (model, _, _) = makeModel()
+        model.handle(.repos([Repo(name: "lumi", path: "/a/lumi")]))
+        XCTAssertEqual(model.repos.count, 1)
+        XCTAssertTrue(model.macOnline, "repos mesajı Mac'ten gelir → online")
+    }
+
+    func testReposDecodeFromWire() {
+        let frame = #"{"v":1,"type":"repos","payload":{"repos":[{"name":"lumi","path":"/a/lumi"}]}}"#
+        guard case .repos(let repos)? = PhoneProtocol.decodeServerMessage(frame) else {
+            return XCTFail("repos frame decode edilemedi")
+        }
+        XCTAssertEqual(repos, [Repo(name: "lumi", path: "/a/lumi")])
+    }
+
     func testOrderedSessionsPutWaitingFirstThenErrorWorkingIdle() {
         let (model, _, _) = makeModel()
         model.handle(.sessions([

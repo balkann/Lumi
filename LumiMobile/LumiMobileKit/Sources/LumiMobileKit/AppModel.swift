@@ -133,11 +133,17 @@ public final class AppModel {
             macOnline = welcome.macOnline
             lastSeenAt = welcome.lastSeenAt.map { Date(timeIntervalSince1970: $0 / 1000) }
             if let metas = welcome.sessions { applySessions(metas) }
+            if let repos = welcome.repos { self.repos = repos }
 
         case .sessions(let metas):
             // sessions mesajını yalnız Mac gönderebilir → Mac online.
             macOnline = true
             applySessions(metas)
+
+        case .repos(let repos):
+            // repos mesajını yalnız Mac gönderebilir → Mac online.
+            macOnline = true
+            self.repos = repos
 
         case .scrollback(let chunk), .data(let chunk):
             macOnline = true
@@ -171,6 +177,8 @@ public final class AppModel {
             "scrollback \(chunk.sessionId.prefix(8)) seq=\(chunk.seq)"
         case .data(let chunk):
             "data \(chunk.sessionId.prefix(8)) seq=\(chunk.seq)"
+        case .repos(let repos):
+            "repos count=\(repos.count)"
         }
     }
 

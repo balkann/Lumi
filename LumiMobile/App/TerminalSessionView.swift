@@ -1,5 +1,4 @@
 import SwiftUI
-import SwiftTerm
 import LumiMobileKit
 
 /// Full-screen terminal view for a single Claude Code session.
@@ -10,45 +9,35 @@ struct TerminalSessionView: View {
     let model: AppModel
     let sessionId: String
 
-    /// Strong reference to the live SwiftTerm view so we can feed bytes into it.
-    @State private var terminalView: TerminalView?
+    /// View hazır olana dek chunk'ları tamponlayıp attach anında boşaltan referans-tip
+    /// tampon (bug #3: eski `@State` view handshake'i chunk'ları hiç teslim etmiyordu).
+    @State private var buffer = TerminalFeedBuffer()
+    /// Klavye yüksekliğini izler; alt çubuğu manuel olarak klavyenin üstüne taşır (bug #1).
+    @StateObject private var keyboard = KeyboardObserver()
 
     var body: some View {
-        // AccessoryBar `.safeAreaInset(edge: .bottom)` ile → klavye açıldığında
-        // klavyenin ÜSTÜNDE kalır (metin alanı klavyenin altında kaybolmaz).
-        TerminalHostView(
-            onInput: { data in
-                model.sendInput(sessionId, data)
-            },
-            register: { view in
-                terminalView = view
-            }
-        )
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+        VStack(spacing: 0) {
+            TerminalHostView(
+                onInput: { data in model.sendInput(sessionId, data) },
+                buffer: buffer
+            )
             AccessoryBar { data in
                 model.sendInput(sessionId, data)
             }
         }
+        // Otomatik klavye kaçınmasını kapat; yüksekliği manuel uygula → çubuk daima
+        // klavyenin üstünde, terminal onun üstünde kalır.
+        .padding(.bottom, keyboard.height)
+        .ignoresSafeArea(.keyboard, edges: .bottom)
+        .animation(.easeOut(duration: 0.25), value: keyboard.height)
         .task(id: sessionId) {
             model.subscribe(sessionId)
-            // SwiftTerm view (`register` callback'i) `.task` ile YARIŞIR. View henüz
-            // kaydolmadan gelen chunk'ı DÜŞÜRMEK, tek-atış scrollback (seq=0) kaybına =
-            // boş terminale yol açar. View hazır olana dek tamponla, sonra sırayla besle.
-            var pending: [TerminalChunk] = []
             for await chunk in model.terminalStream(sessionId) {
-                guard let tv = terminalView else {
-                    pending.append(chunk)
-                    continue
-                }
-                if !pending.isEmpty {
-                    let buffered = pending
-                    pending.removeAll()
-                    for p in buffered { await feed(p, into: tv) }
-                }
-                await feed(chunk, into: tv)
+                buffer.feed(chunk)
             }
         }
         .onDisappear {
+            buffer.detach()
             model.unsubscribe(sessionId)
         }
         .navigationTitle(model.session(sessionId)?.repoName ?? "Oturum")
@@ -58,19 +47,6 @@ struct TerminalSessionView: View {
                 toolbarItems
             }
         }
-    }
-
-    /// Tek chunk'ı SwiftTerm emülatörüne besler: cols/rows varsa resize, seq==0 ise
-    /// (scrollback/reconnect) emülatörü sıfırla, sonra ham baytları feed et.
-    private func feed(_ chunk: TerminalChunk, into tv: TerminalView) async {
-        if let cols = chunk.cols, let rows = chunk.rows {
-            await MainActor.run { tv.resize(cols: cols, rows: rows) }
-        }
-        if chunk.seq == 0 {
-            await MainActor.run { tv.getTerminal().resetToInitialState() }
-        }
-        let bytes = [UInt8](chunk.bytes)
-        await MainActor.run { tv.feed(byteArray: bytes[...]) }
     }
 
     // MARK: - Toolbar

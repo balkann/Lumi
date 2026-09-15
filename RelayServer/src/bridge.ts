@@ -24,6 +24,7 @@ export class Bridge {
     if (hello.role === 'phone') {
       client.send(envelope('welcome', {
         sessions: room.sessions ?? [],
+        repos: room.repos ?? [],
         macOnline: room.mac !== null,
         lastSeenAt: room.lastSeenAt,
       }))
@@ -51,6 +52,14 @@ export class Bridge {
         const list = Array.isArray(env.payload.sessions) ? env.payload.sessions : null
         room.sessions = list
         this.broadcast(room, envelope('sessions', env.payload))
+        break
+      }
+      case 'repos': {
+        // Cache the repo list (symmetric with sessions) so phones that connect
+        // later receive it in their welcome; broadcast to already-connected phones.
+        const list = Array.isArray(env.payload.repos) ? env.payload.repos : null
+        room.repos = list
+        this.broadcast(room, envelope('repos', env.payload))
         break
       }
       case 'scrollback':

@@ -58,6 +58,11 @@ enum RemoteProtocol {
         ["sessions": metas.map { $0.toDict() }]
     }
 
+    /// `repos` payload: `{repos:[{name,path}]}` — telefondan yeni oturum başlatma seçici.
+    static func reposPayload(_ repos: [[String: String]]) -> [String: Any] {
+        ["repos": repos]
+    }
+
     /// `scrollback` payload: ilk bağlantıda terminal geçmişini gönderir.
     static func scrollbackPayload(sessionId: String, seq: Int, cols: Int, rows: Int, data: Data) -> [String: Any] {
         [

@@ -125,6 +125,7 @@ public final class RemoteService: RemoteServicing {
             switch type {
             case "welcome":
                 await sendSessions()
+                await sendRepos()
             case "subscribe":
                 await handleSubscribe(payload)
             case "unsubscribe":
@@ -184,6 +185,13 @@ public final class RemoteService: RemoteServicing {
         var map: [String: String] = [:]
         for repo in await repos.repos() { map[repo.path] = repo.name }
         return map
+    }
+
+    /// Telefonun "yeni oturum" seçicisi için repo listesini yollar. Relay bunu room'da
+    /// cache'ler → sonradan bağlanan telefon welcome ile alır; bağlı telefonlara yayınlar.
+    private func sendRepos() async {
+        let list = await repos.repos().map { ["name": $0.name, "path": $0.path] }
+        await connection.send(type: "repos", payload: RemoteProtocol.reposPayload(list))
     }
 
     // MARK: - Subscribe / Unsubscribe

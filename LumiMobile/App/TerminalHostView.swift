@@ -1,15 +1,33 @@
 import SwiftUI
 import SwiftTerm
+import LumiMobileKit
+
+/// Ayna terminal görünümü: Mac'in PTY baytlarını gösterir; giriş yalnız AccessoryBar'dan
+/// gelir. Bu yüzden terminal KENDİ klavyesini açmamalı — aksi halde terminale dokununca
+/// SwiftTerm first responder olup kendi klavyesini açar ve AccessoryBar TextField'ıyla
+/// yarışır (bug #1: "yukarı dokununca yazamıyorum", çubuk klavye altında kalıyor).
+final class MirrorTerminalView: TerminalView {
+    override var canBecomeFirstResponder: Bool { false }
+    override var canBecomeFocused: Bool { false }
+}
+
+/// Gerçek `TerminalView`'ı `TerminalFeeder` olarak sarar (LumiMobileKit sınırı).
+@MainActor
+final class TerminalViewFeeder: TerminalFeeder {
+    private let view: TerminalView
+    init(_ view: TerminalView) { self.view = view }
+    func resize(cols: Int, rows: Int) { view.resize(cols: cols, rows: rows) }
+    func reset() { view.getTerminal().resetToInitialState() }
+    func feed(bytes: [UInt8]) { view.feed(byteArray: bytes[...]) }
+}
 
 /// UIViewRepresentable wrapping SwiftTerm's TerminalView for iOS.
 /// - `onInput`: called when the user types in the terminal (sends bytes to Mac PTY).
-/// - `register`: called once with the created TerminalView so the SwiftUI parent
-///   can hold a reference and feed bytes into it later.
+/// - `buffer`: view hazır olunca `attach` edilir; SwiftUI `@State` handshake'i yerine
+///   referans-tip tampon kullanılır (bkz. `TerminalFeedBuffer` — bug #3).
 struct TerminalHostView: UIViewRepresentable {
-    // Both closures are @Sendable + @MainActor-bound because TerminalView is a UIView
-    // (main-actor only). `onInput` is @Sendable for Swift 6 strict concurrency.
     let onInput: @MainActor (Data) -> Void
-    let register: @MainActor (TerminalView) -> Void
+    let buffer: TerminalFeedBuffer
 
     func makeCoordinator() -> Coordinator {
         Coordinator(onInput: onInput)
@@ -17,9 +35,10 @@ struct TerminalHostView: UIViewRepresentable {
 
     @MainActor
     func makeUIView(context: Context) -> TerminalView {
-        let v = TerminalView(frame: .zero)
+        let v = MirrorTerminalView(frame: .zero)
         v.terminalDelegate = context.coordinator
-        register(v)
+        // View hazır: tamponu bağla → birikmiş scrollback/data hemen uygulanır.
+        buffer.attach(TerminalViewFeeder(v))
         return v
     }
 

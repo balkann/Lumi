@@ -51,6 +51,31 @@ test('telefon hello → welcome içinde sessions ve macOnline gelir', () => {
   expect(phone.last().payload.lastSeenAt).toBe(5000)
 })
 
+test('telefon hello → welcome içinde repos gelir (mac önce cache etmişse)', () => {
+  const { bridge } = setup()
+  const mac = new FakeClient()
+  const macSession = bridge.handleHello(mac, env('hello', { role: 'mac', token: TOKEN }))!
+  macSession.room.repos = [{ name: 'lumi', path: '/a/lumi' }]
+
+  const phone = new FakeClient()
+  bridge.handleHello(phone, env('hello', { role: 'phone', token: TOKEN }))
+  expect(phone.last().payload.repos).toEqual([{ name: 'lumi', path: '/a/lumi' }])
+})
+
+test('mac repos mesajı → cache + bağlı telefonlara yayınlanır', () => {
+  const { bridge } = setup()
+  const phone = new FakeClient()
+  bridge.handleHello(phone, env('hello', { role: 'phone', token: TOKEN }))
+  const macSession = bridge.handleHello(new FakeClient(), env('hello', { role: 'mac', token: TOKEN }))!
+
+  const repos = [{ name: 'lumi', path: '/a/lumi' }]
+  bridge.handleMessage(macSession, env('repos', { repos }))
+
+  expect(macSession.room.repos).toEqual(repos)      // cache
+  expect(phone.last().type).toBe('repos')            // broadcast
+  expect(phone.last().payload.repos).toEqual(repos)
+})
+
 test('mac hello → welcome içinde phoneCount gelir', () => {
   const { bridge } = setup()
   const mac = new FakeClient()

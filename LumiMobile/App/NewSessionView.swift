@@ -58,10 +58,8 @@ struct NewSessionView: View {
     }
 
     private var canSubmit: Bool {
-        // Phone-initiated new-session picker (repos/personas population) is a documented
-        // v1 deferral (docs/spec/01-decisions.md). model.repos is always empty in the
-        // terminal-mirror protocol, so canSubmit requires a non-empty repoPath which can
-        // never be satisfied; this keeps the button safely disabled.
+        // Repo listesi Mac'ten `repos`/`welcome` ile gelir; Mac çevrimdışıysa veya liste
+        // henüz gelmediyse buton pasif kalır. Persona bu build'de yok (picker "Yok" tek).
         model.macOnline
             && !model.repos.isEmpty
             && !repoPath.isEmpty

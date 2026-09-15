@@ -9,6 +9,8 @@ public enum ServerMessage: Sendable, Equatable {
     case sessions([SessionMeta])
     case scrollback(TerminalChunk)
     case data(TerminalChunk)
+    // Telefondan yeni oturum için repo listesi
+    case repos([Repo])
 }
 
 public enum CommandAction: Sendable, Equatable {
@@ -59,6 +61,9 @@ public enum PhoneProtocol {
             return decodePayload(SessionsPayload.self).map { ServerMessage.sessions($0.sessions) }
         case "scrollback": return decodeTerminalChunk(payload).map(ServerMessage.scrollback)
         case "data": return decodeTerminalChunk(payload).map(ServerMessage.data)
+        case "repos":
+            struct ReposPayload: Decodable { let repos: [Repo] }
+            return decodePayload(ReposPayload.self).map { ServerMessage.repos($0.repos) }
         default: return nil
         }
     }
