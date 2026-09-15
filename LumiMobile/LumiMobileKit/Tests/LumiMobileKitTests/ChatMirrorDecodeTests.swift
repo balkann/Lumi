@@ -32,4 +32,22 @@ final class ChatMirrorDecodeTests: XCTestCase {
         let frame = PhoneProtocol.subscribeFrame(sessionId: "s1", mode: "chat")
         XCTAssertTrue(frame.contains("\"mode\":\"chat\""))
     }
+
+    func testDecodeBlockVariantsAndTolerance() {
+        let frame = #"""
+        {"v":1,"type":"chat","payload":{"sessionId":"s1","messages":[
+          {"id":"m1","role":"assistant","timestamp":7,"turnId":"t1","blocks":[
+            {"type":"image-ref","path":"/a.png","alt":"pic"},
+            {"type":"code-fence","lang":"swift"}]},
+          {"role":"assistant","blocks":[{"type":"text","text":"no id → dropped"}]}]}}
+        """#
+        guard case let .chat(_, messages)? = PhoneProtocol.decodeServerMessage(frame) else {
+            return XCTFail("chat decode edilemedi")
+        }
+        XCTAssertEqual(messages.count, 1, "id'siz mesaj compactMap ile düşürülür")
+        XCTAssertEqual(messages[0].timestampMs, 7)
+        XCTAssertEqual(messages[0].turnId, "t1")
+        XCTAssertEqual(messages[0].blocks[0], .imageRef(path: "/a.png", url: nil, alt: "pic"))
+        XCTAssertEqual(messages[0].blocks[1], .unknown, "bilinmeyen blok tipi → .unknown")
+    }
 }
