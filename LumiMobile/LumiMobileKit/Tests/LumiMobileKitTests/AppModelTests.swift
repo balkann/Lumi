@@ -467,4 +467,28 @@ final class AppModelTests: XCTestCase {
             "aktif session yokken connected'da subscribe frame'i gönderilmemeli"
         )
     }
+
+    // MARK: Chat durumu + append merge (Task 10)
+
+    func testChatSnapshotThenAppendMerges() async {
+        let (model, _, _) = makeModel()
+        let m1 = ChatMessage(id: "m1", role: .user, blocks: [.text("hi", presentation: nil)], timestampMs: nil, turnId: nil)
+        let m2 = ChatMessage(id: "m2", role: .assistant, blocks: [.text("yo", presentation: nil)], timestampMs: nil, turnId: nil)
+        model.handle(.chat(sessionId: "s1", messages: [m1]))
+        XCTAssertEqual(model.chatMessages("s1").map(\.id), ["m1"])
+        model.handle(.chatAppend(sessionId: "s1", messages: [m2]))
+        XCTAssertEqual(model.chatMessages("s1").map(\.id), ["m1", "m2"])
+        // Aynı id tekrar gelirse güncellenir, çoğalmaz.
+        let m2b = ChatMessage(id: "m2", role: .assistant, blocks: [.text("yo!", presentation: nil)], timestampMs: nil, turnId: nil)
+        model.handle(.chatAppend(sessionId: "s1", messages: [m2b]))
+        XCTAssertEqual(model.chatMessages("s1").map(\.id), ["m1", "m2"])
+        XCTAssertEqual(model.chatMessages("s1").last?.blocks, [.text("yo!", presentation: nil)])
+    }
+
+    func testSubscribeChatSendsModeFrame() async {
+        let (model, client, _) = makeModel()
+        model.subscribeChat("s1")
+        await awaitFrame(client, containing: "\"mode\":\"chat\"")
+        XCTAssertTrue(client.sentFrames.contains { $0.contains("\"mode\":\"chat\"") })
+    }
 }

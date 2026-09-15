@@ -50,6 +50,11 @@ public final class AppModel {
     /// View `terminalStream` çağırınca önce bunlar sırayla replay edilir, sonra canlı akış.
     private var replayBuffers: [String: [TerminalChunk]] = [:]
 
+    // MARK: Chat durumu (mode=chat; orca native-chat)
+
+    /// sessionId → chat mesajları (mode=chat aboneliği; orca native-chat).
+    private var chatBySession: [String: [ChatMessage]] = [:]
+
     public init(client: any RelayClienting, store: any SecureStore, prefs: any PreferenceStore = UserDefaultsPreferenceStore()) {
         self.client = client
         self.store = store
@@ -116,6 +121,7 @@ public final class AppModel {
         for continuation in terminalSinks.values { continuation.finish() }
         terminalSinks = [:]
         replayBuffers = [:]
+        chatBySession = [:]
         models = [:]
         lastCommandError = [:]
         commandTargets = [:]
@@ -160,8 +166,21 @@ public final class AppModel {
         case .pong:
             break
 
-        case .chat, .chatAppend:
-            break
+        case .chat(let sessionId, let messages):
+            macOnline = true
+            chatBySession[sessionId] = messages
+
+        case .chatAppend(let sessionId, let messages):
+            macOnline = true
+            var current = chatBySession[sessionId] ?? []
+            for message in messages {
+                if let idx = current.firstIndex(where: { $0.id == message.id }) {
+                    current[idx] = message
+                } else {
+                    current.append(message)
+                }
+            }
+            chatBySession[sessionId] = current
         }
     }
 
@@ -204,6 +223,7 @@ public final class AppModel {
             terminalSinks[active]?.finish()
             terminalSinks[active] = nil
             replayBuffers[active] = nil
+            chatBySession[active] = nil
         }
     }
 
@@ -271,6 +291,19 @@ public final class AppModel {
                 }
             }
         }
+    }
+
+    // MARK: Chat abonelik API'si (Task 10)
+
+    /// mode=chat aboneliği: activeSessionId ayarla + chat frame'i gönder.
+    public func subscribeChat(_ sessionId: String) {
+        activeSessionId = sessionId
+        chatBySession[sessionId] = chatBySession[sessionId] ?? []
+        Task { await client.send(frame: PhoneProtocol.subscribeFrame(sessionId: sessionId, mode: "chat")) }
+    }
+
+    public func chatMessages(_ sessionId: String) -> [ChatMessage] {
+        chatBySession[sessionId] ?? []
     }
 
     // MARK: Türetilmiş durum
