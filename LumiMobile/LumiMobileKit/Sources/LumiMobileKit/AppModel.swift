@@ -22,6 +22,10 @@ public final class AppModel {
     public private(set) var sessions: [SessionMeta] = []
     /// Şu an abone olunan (görüntülenen) oturum; reconnect'te yeniden abone olmak için (Task 11).
     public private(set) var activeSessionId: String?
+    /// Aktif aboneliğin modu (chat mı terminal mi). Reconnect'te AYNI modda yeniden
+    /// abone olmak için — aksi halde chat modda kopunca terminal moduna düşer ve
+    /// `chat`/`chat_append` frame'leri gelmez, mesajlar telefona ulaşmaz (handoff #6).
+    private var activeChatMode = false
     public private(set) var repos: [Repo] = []
     public private(set) var personas: [Persona] = []
     public private(set) var lastCommandError: [String: String] = [:]
@@ -80,7 +84,8 @@ public final class AppModel {
                     // gönder; Mac taze scrollback + canlı data akışını yeniden başlatır.
                     // activeSessionId nil ise (ilk bağlantı veya abone yok) işlem yapılmaz.
                     if state == .connected, let sid = self.activeSessionId {
-                        Task { await self.client.send(frame: PhoneProtocol.subscribeFrame(sessionId: sid)) }
+                        let mode = self.activeChatMode ? "chat" : "terminal"
+                        Task { await self.client.send(frame: PhoneProtocol.subscribeFrame(sessionId: sid, mode: mode)) }
                     }
                 case .message(let message):
                     self.handle(message)
@@ -252,6 +257,7 @@ public final class AppModel {
             replayBuffers[old] = nil
         }
         activeSessionId = sessionId
+        activeChatMode = false
         replayBuffers[sessionId] = []
         Task { await client.send(frame: PhoneProtocol.subscribeFrame(sessionId: sessionId)) }
     }
@@ -259,7 +265,7 @@ public final class AppModel {
     /// Aboneliği bırakır: aktif eşleşiyorsa temizler, `unsubscribe` frame'i gönderir,
     /// canlı stream'i sonlandırır.
     public func unsubscribe(_ sessionId: String) {
-        if activeSessionId == sessionId { activeSessionId = nil }
+        if activeSessionId == sessionId { activeSessionId = nil; activeChatMode = false }
         terminalSinks[sessionId]?.finish()
         terminalSinks[sessionId] = nil
         replayBuffers[sessionId] = nil
@@ -323,6 +329,7 @@ public final class AppModel {
     /// mode=chat aboneliği: activeSessionId ayarla + chat frame'i gönder.
     public func subscribeChat(_ sessionId: String) {
         activeSessionId = sessionId
+        activeChatMode = true
         chatBySession[sessionId] = chatBySession[sessionId] ?? []
         Task { await client.send(frame: PhoneProtocol.subscribeFrame(sessionId: sessionId, mode: "chat")) }
     }

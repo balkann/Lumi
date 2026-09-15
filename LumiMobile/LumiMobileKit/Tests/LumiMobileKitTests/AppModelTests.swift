@@ -472,6 +472,39 @@ final class AppModelTests: XCTestCase {
         )
     }
 
+    /// Chat modunda kopup dönünce reconnect TERMINAL değil CHAT modunda yeniden
+    /// subscribe etmeli — aksi halde chat sessizce terminale düşer ve mesajlar
+    /// telefona gelmez (handoff #6).
+    func testResubscribesInChatModeOnReconnectWhenChatActive() async throws {
+        let (model, client, _) = makeModel()
+        await model.start()
+        model.subscribeChat("s1")
+        await awaitFrame(client, containing: #""mode":"chat""#)
+        client.clearSentFrames()
+        client.emit(.stateChanged(.disconnected))
+        client.emit(.stateChanged(.connected))
+        try await Task.sleep(for: .milliseconds(50))
+        let sub = client.sentFrames.first { $0.contains(#""type":"subscribe""#) && $0.contains("s1") }
+        XCTAssertNotNil(sub, "reconnect sonrası s1 için yeniden subscribe gönderilmeli")
+        XCTAssertTrue(sub!.contains(#""mode":"chat""#),
+                      "chat modunda reconnect chat modunda yeniden subscribe etmeli, terminale düşmemeli")
+    }
+
+    /// Terminal modunda reconnect terminal modunda kalmalı (chat'e sızmamalı).
+    func testResubscribesInTerminalModeOnReconnectWhenTerminalActive() async throws {
+        let (model, client, _) = makeModel()
+        await model.start()
+        model.subscribe("s1")
+        await awaitFrame(client, containing: #""type":"subscribe""#)
+        client.clearSentFrames()
+        client.emit(.stateChanged(.disconnected))
+        client.emit(.stateChanged(.connected))
+        try await Task.sleep(for: .milliseconds(50))
+        let sub = client.sentFrames.first { $0.contains(#""type":"subscribe""#) && $0.contains("s1") }
+        XCTAssertNotNil(sub)
+        XCTAssertTrue(sub!.contains(#""mode":"terminal""#), "terminal modunda reconnect terminal kalmalı")
+    }
+
     /// Aktif session yokken bağlantı kurulunca subscribe frame'i gönderilmemeli.
     func testNoResubscribeWhenNoActiveSessionOnConnect() async throws {
         let (model, client, _) = makeModel()
