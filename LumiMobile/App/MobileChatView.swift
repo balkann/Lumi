@@ -42,6 +42,11 @@ struct MobileChatView: View {
                     model.sendInput(sessionId, Data([0x03]))
                 }
             }
+            if let pending = model.prompts[sessionId]?.last(where: { $0.state == .pending }) {
+                MobileChatPromptCard(prompt: pending) { optionId in
+                    model.respondPrompt(sessionId, itemId: pending.itemId, revision: pending.revision, optionId: optionId)
+                }
+            }
             composer
         }
         .padding(.bottom, keyboard.height)
