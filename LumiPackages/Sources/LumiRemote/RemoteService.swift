@@ -50,13 +50,14 @@ public final class RemoteService: RemoteServicing {
         terminal: any TerminalServicing,
         repos: any RepoServicing,
         connection: (any RelayConnecting)? = nil,
-        chatSource: any ChatTranscriptSourcing
+        chatSource: any ChatTranscriptSourcing,
+        trust: any ClaudeWorkspaceTrusting = NoopClaudeWorkspaceTrust()
     ) {
         self.configService = RemoteConfigService(paths: paths)
         self.terminal = terminal
         self.repos = repos
         self.connection = connection ?? RelayConnection()
-        self.commandHandler = RemoteCommandHandler(terminal: terminal)
+        self.commandHandler = RemoteCommandHandler(terminal: terminal, trust: trust)
         self.chatSource = chatSource
     }
 

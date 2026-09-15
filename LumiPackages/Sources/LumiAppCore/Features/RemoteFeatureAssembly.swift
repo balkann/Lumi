@@ -24,7 +24,8 @@ final class RemoteFeatureAssembly: FeatureAssembly {
             paths: services.paths,
             terminal: services.terminal,
             repos: services.repo,
-            chatSource: TranscriptChatSource()
+            chatSource: TranscriptChatSource(),
+            trust: ClaudeWorkspaceTrust()
         )
         remoteStore = RemoteStore(service: remoteService)
     }

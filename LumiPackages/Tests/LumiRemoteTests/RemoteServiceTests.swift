@@ -238,6 +238,28 @@ final class FakeTerminalServicing: TerminalServicing {
         svc.stop()
     }
 
+    /// start_session, spawn'dan ÖNCE çalışma alanını güvenli işaretlemeli —
+    /// remote claude ilk-açılış güven menüsünde takılıp transcript yazmayı
+    /// bırakmasın (chat "yükleniyor"da kalmasın).
+    @Test func startSessionMarksWorkspaceTrusted() async throws {
+        let conn = FakeRelayConnection()
+        let term = FakeTerminalServicing()
+        let trust = FakeClaudeWorkspaceTrust()
+        let svc = RemoteService(paths: .testDefaults(), terminal: term, repos: FakeRepoService(),
+                                connection: conn, chatSource: FakeChatTranscriptSource(events: []),
+                                trust: trust)
+        await svc.start()
+
+        await conn.injectInbound(type: "command", payload: [
+            "action": "start_session", "repoPath": "/repo/untrusted",
+            "prompt": "merhaba", "commandId": "c1"])
+        try await conn.waitForSent(types: ["command_result"])
+
+        #expect(trust.trusted == ["/repo/untrusted"])
+        #expect(term.metas.map(\.repoPath) == ["/repo/untrusted"]) // spawn da oldu
+        svc.stop()
+    }
+
     @Test func exitedEventCancelsPerSessionDataTask() async throws {
         let conn = FakeRelayConnection()
         let term = FakeTerminalServicing()

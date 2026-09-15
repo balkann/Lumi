@@ -11,9 +11,11 @@ func shellQuoted(_ s: String) -> String {
 @MainActor
 final class RemoteCommandHandler {
     private let terminal: any TerminalServicing
+    private let trust: any ClaudeWorkspaceTrusting
 
-    init(terminal: any TerminalServicing) {
+    init(terminal: any TerminalServicing, trust: any ClaudeWorkspaceTrusting) {
         self.terminal = terminal
+        self.trust = trust
     }
 
     func handle(_ payload: [String: Any]) async -> sending [String: Any] {
@@ -58,6 +60,10 @@ final class RemoteCommandHandler {
         let repoPath = payload["repoPath"] as? String ?? ""
         let prompt = payload["prompt"] as? String ?? ""
         do {
+            // Remote'tan başlatılan claude, ilk-açılış güven menüsünde takılmasın:
+            // çalışma alanını spawn'dan ÖNCE güvenli işaretle (telefon chat modu bu
+            // menüyü gösteremez → transcript yazılmaz → chat "yükleniyor"da kalır).
+            trust.markTrusted(repoPath: repoPath)
             let command = prompt.isEmpty ? "claude" : "claude " + shellQuoted(prompt)
             _ = try terminal.spawn(repoPath: repoPath, task: nil, command: command)
             return ["commandId": commandId, "ok": true]
