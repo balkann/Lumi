@@ -56,11 +56,15 @@ import Foundation
         #expect(j.reduce(ev(.preToolUse, tool: "Bash", input: "{}")).isEmpty)
     }
 
-    @Test func clearResetsJournal() {
+    @Test func clearResetsJournalAndCancelsPending() {
         let j = journal()
         _ = j.reduce(ev(.permissionRequest, tool: "Bash", input: "{}", useID: "tu5"))
-        _ = j.reduce(ev(.sessionStart, source: "clear"))
+        let changed = j.reduce(ev(.sessionStart, source: "clear"))
         #expect(j.items.isEmpty)
+        // pending item cancelled olarak yayınlanır (telefon kartı düşsün)
+        #expect(changed.count == 1)
+        #expect(changed.first?.state == .cancelled)
+        #expect(changed.first?.itemId == "tu5")
     }
 
     @Test func resolveMarksResolvedAndBumpsRevision() {

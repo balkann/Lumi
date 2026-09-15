@@ -24,9 +24,13 @@ public final class PromptJournal {
             guard event.isLead else { return [] }
             return cancel(where: { $0.state == .pending })
         case .sessionStart where event.source == "clear":
-            // /clear journal'ı sıfırlar; yayına gerek yok (telefon /clear'ı ayrı işler).
+            // /clear: pending item'ları cancelled olarak yayınla (telefon kartı düşsün),
+            // sonra journal'ı sıfırla. Abone değilken yayın olmaz ama journal temizlenir.
+            let cancelled = items.filter { $0.state == .pending }.map { item -> ChatPrompt in
+                var c = item; c.state = .cancelled; c.revision += 1; return c
+            }
             items.removeAll()
-            return []
+            return cancelled
         default:
             return []
         }
