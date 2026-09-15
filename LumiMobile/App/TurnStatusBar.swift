@@ -22,6 +22,8 @@ struct TurnStatusBar: View {
                 if let tool = status.tool {
                     Text(tool)
                         .font(.system(.footnote, design: .monospaced))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
                         .background(Color(uiColor: .secondarySystemBackground),
