@@ -60,6 +60,8 @@ public final class AppModel {
     private var chatBySession: [String: [ChatMessage]] = [:]
     /// sessionId → son canlı turn status (Faz 2; chat_status frame'inden).
     public private(set) var turnStatus: [String: ChatTurnStatus] = [:]
+    /// Faz 3: session başına aktif (pending) etkileşimli prompt'lar.
+    public private(set) var prompts: [String: [ChatPrompt]] = [:]
 
     public init(client: any RelayClienting, store: any SecureStore, prefs: any PreferenceStore = UserDefaultsPreferenceStore()) {
         self.client = client
@@ -130,6 +132,7 @@ public final class AppModel {
         replayBuffers = [:]
         chatBySession = [:]
         turnStatus = [:]
+        prompts = [:]
         models = [:]
         lastCommandError = [:]
         commandTargets = [:]
@@ -193,6 +196,13 @@ public final class AppModel {
         case .chatStatus(let sessionId, let status):
             macOnline = true
             turnStatus[sessionId] = status
+
+        case .prompt(let sessionId, let p):
+            macOnline = true
+            var list = prompts[sessionId] ?? []
+            list.removeAll { $0.itemId == p.itemId }
+            if p.state == .pending { list.append(p) }   // resolved/cancelled → listede tutma
+            prompts[sessionId] = list
         }
     }
 
@@ -219,6 +229,8 @@ public final class AppModel {
             "chat_append count=\(messages.count)"
         case .chatStatus(let sessionId, _):
             "chat_status \(sessionId.prefix(8))"
+        case .prompt(let sessionId, let p):
+            "prompt \(sessionId.prefix(8)) \(p.kind.rawValue) \(p.state.rawValue)"
         }
     }
 
@@ -239,6 +251,7 @@ public final class AppModel {
             replayBuffers[active] = nil
             chatBySession[active] = nil
             turnStatus[active] = nil
+            prompts[active] = nil
         }
     }
 
@@ -285,6 +298,13 @@ public final class AppModel {
     /// Tuş vuruşu / bayt dizisini `input` frame'i olarak Mac PTY'sine yollar.
     public func sendInput(_ sessionId: String, _ data: Data) {
         Task { await client.send(frame: PhoneProtocol.inputFrame(sessionId: sessionId, data: data)) }
+    }
+
+    /// Faz 3: etkileşimli prompt cevabı. Optimistic dismiss yok — kart, resolution
+    /// broadcast'i (state=resolved/cancelled) gelince `handle(.prompt)` üzerinden düşer.
+    public func respondPrompt(_ sessionId: String, itemId: String, revision: Int, optionId: String) {
+        Task { await client.send(frame: PhoneProtocol.promptRespondFrame(
+            sessionId: sessionId, itemId: itemId, expectedRevision: revision, optionId: optionId)) }
     }
 
     /// Serbest metin gönderiminde (`submitText`) metin ile Enter arasındaki "settle"

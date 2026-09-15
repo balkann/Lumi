@@ -15,6 +15,8 @@ public enum ServerMessage: Sendable, Equatable {
     case chat(sessionId: String, messages: [ChatMessage])
     case chatAppend(sessionId: String, messages: [ChatMessage])
     case chatStatus(sessionId: String, status: ChatTurnStatus)
+    // Faz 3: etkileşimli prompt
+    case prompt(sessionId: String, prompt: ChatPrompt)
 }
 
 public enum CommandAction: Sendable, Equatable {
@@ -77,6 +79,10 @@ public enum PhoneProtocol {
         case "chat_status":
             guard let sessionId = payload["sessionId"] as? String else { return nil }
             return .chatStatus(sessionId: sessionId, status: ChatTurnStatus.decode(payload))
+        case "prompt":
+            guard let sessionId = payload["sessionId"] as? String,
+                  let p = ChatPrompt.decode(payload) else { return nil }
+            return .prompt(sessionId: sessionId, prompt: p)
         default: return nil
         }
     }
@@ -111,6 +117,14 @@ public enum PhoneProtocol {
         frame(type: "input", payload: [
             "sessionId": sessionId,
             "data": data.base64EncodedString()
+        ])
+    }
+
+    /// Faz 3: etkileşimli prompt cevabı (telefon→Mac).
+    public static func promptRespondFrame(sessionId: String, itemId: String, expectedRevision: Int, optionId: String) -> String {
+        frame(type: "prompt_respond", payload: [
+            "sessionId": sessionId, "itemId": itemId,
+            "expectedRevision": expectedRevision, "optionId": optionId,
         ])
     }
 
