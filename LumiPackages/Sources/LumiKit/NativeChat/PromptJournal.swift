@@ -21,6 +21,7 @@ public final class PromptJournal {
             guard event.isLead, let id = event.toolUseID else { return [] }
             return cancel(where: { $0.itemId == id })
         case .stop, .stopFailure:
+            guard event.isLead else { return [] }
             return cancel(where: { $0.state == .pending })
         case .sessionStart where event.source == "clear":
             // /clear journal'ı sıfırlar; yayına gerek yok (telefon /clear'ı ayrı işler).
@@ -31,13 +32,16 @@ public final class PromptJournal {
         }
     }
 
-    /// Bir item'ı resolved yapar (revision+1). Cevap actuation sonrası çağrılır.
-    public func resolve(itemId: String, optionId: String) {
+    /// Bir item'ı resolved yapar (revision+1). Güncellenen item'ı döndürür (yoksa/
+    /// zaten çözülmüşse nil) — `reduce` ile tutarlı API. Cevap actuation sonrası çağrılır.
+    @discardableResult
+    public func resolve(itemId: String, optionId: String) -> ChatPrompt? {
         guard let idx = items.firstIndex(where: { $0.itemId == itemId }),
-              items[idx].state == .pending else { return }
+              items[idx].state == .pending else { return nil }
         items[idx].state = .resolved
         items[idx].selectedOptionId = optionId
         items[idx].revision += 1
+        return items[idx]
     }
 
     private func itemId(_ event: AgentHookEvent) -> String { event.toolUseID ?? "item-\(seq())" }

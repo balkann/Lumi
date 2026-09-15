@@ -66,10 +66,25 @@ import Foundation
     @Test func resolveMarksResolvedAndBumpsRevision() {
         let j = journal()
         _ = j.reduce(ev(.permissionRequest, tool: "Bash", input: "{}", useID: "tu6"))
-        j.resolve(itemId: "tu6", optionId: "allow")
-        let item = j.items.first { $0.itemId == "tu6" }
-        #expect(item?.state == .resolved)
-        #expect(item?.selectedOptionId == "allow")
-        #expect(item?.revision == 1)
+        let resolved = j.resolve(itemId: "tu6", optionId: "allow")
+        #expect(resolved?.state == .resolved)
+        #expect(resolved?.selectedOptionId == "allow")
+        #expect(resolved?.revision == 1)
+        #expect(j.items.first { $0.itemId == "tu6" }?.state == .resolved)
+    }
+
+    @Test func stopFromSubagentDoesNotCancel() {
+        let j = journal()
+        _ = j.reduce(ev(.permissionRequest, tool: "Bash", input: "{}", useID: "tu7"))
+        #expect(j.reduce(ev(.stop, agentID: "sub")).isEmpty)  // isLead=false → dokunmaz
+        #expect(j.items.first { $0.itemId == "tu7" }?.state == .pending)
+    }
+
+    @Test func questionWithoutOptionsNotCreated() {
+        let j = journal()
+        let changed = j.reduce(ev(.preToolUse, tool: "AskUserQuestion",
+                                   input: #"{"questions":[{"question":"Q"}]}"#, useID: "tu8"))
+        #expect(changed.isEmpty)   // options yok → item yaratılmaz
+        #expect(j.items.isEmpty)
     }
 }
