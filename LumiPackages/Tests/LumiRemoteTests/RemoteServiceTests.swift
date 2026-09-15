@@ -288,4 +288,42 @@ final class FakeTerminalServicing: TerminalServicing {
         #expect(await conn.count(type: "scrollback") == 0)  // chat mode: terminal göndermez
         svc.stop()
     }
+
+    @Test func exitedCancelsChatSubscription() async throws {
+        let conn = FakeRelayConnection()
+        let term = FakeTerminalServicing()
+        let uuid = UUID()
+        let meta = TerminalMeta(id: TerminalID(raw: uuid), name: "T", repoPath: "/repo",
+                                createdAt: Date(), claudeSessionID: uuid.uuidString)
+        term.metas.append(meta)
+        let sid = meta.id.description
+        let m1 = ChatMessage(id: "m1", role: .user, blocks: [.text("hi", presentation: nil)],
+                             timestampMs: nil, turnId: nil)
+        let chat = FakeChatTranscriptSource(events: [.snapshot([m1])], keepOpen: true)
+        let svc = RemoteService(paths: .testDefaults(), terminal: term, repos: FakeRepoService(),
+                                connection: conn, chatSource: chat)
+        await svc.start()
+        await conn.injectInbound(type: "subscribe", payload: ["sessionId": sid, "mode": "chat"])
+        try await conn.waitForSent(types: ["chat"])
+        #expect(svc.hasActiveChatSubscription(TerminalID(raw: uuid)) == true)
+
+        term.emit(.exited(TerminalID(raw: uuid), code: 0))
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(svc.hasActiveChatSubscription(TerminalID(raw: uuid)) == false)
+        svc.stop()
+    }
+
+    @Test func chatModeWithoutSessionIDFallsBackToTerminal() async throws {
+        let conn = FakeRelayConnection()
+        let term = FakeTerminalServicing()
+        term.scrollback = ("X".data(using: .utf8)!, 80, 24)
+        let sid = makeSession(term)  // no claudeSessionID
+        let svc = RemoteService(paths: .testDefaults(), terminal: term, repos: FakeRepoService(),
+                                connection: conn, chatSource: FakeChatTranscriptSource(events: []))
+        await svc.start()
+        await conn.injectInbound(type: "subscribe", payload: ["sessionId": sid, "mode": "chat"])
+        try await conn.waitForSent(types: ["scrollback"])   // fell back to terminal mode
+        #expect(await conn.count(type: "chat") == 0)
+        svc.stop()
+    }
 }

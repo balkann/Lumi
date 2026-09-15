@@ -157,6 +157,7 @@ public final class RemoteService: RemoteServicing {
         case .spawned, .exited, .statusChanged:
             if case let .exited(id, _) = event {
                 cancelSubscription(id)
+                cancelChatSubscription(id)
                 modelCache[id] = nil
             }
             await sendSessions()
@@ -317,6 +318,11 @@ public final class RemoteService: RemoteServicing {
     /// Test hook'u — verilen session'ın aktif canlı-çıktı task'ı var mı.
     func hasActiveSubscription(_ id: TerminalID) -> Bool {
         subscriptions[id] != nil
+    }
+
+    /// Test hook'u — verilen session'ın aktif chat tail task'ı var mı.
+    func hasActiveChatSubscription(_ id: TerminalID) -> Bool {
+        chatSubscriptions[id] != nil
     }
 
     // MARK: - Yardımcılar
