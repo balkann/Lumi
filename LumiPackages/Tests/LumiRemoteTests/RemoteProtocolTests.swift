@@ -77,3 +77,23 @@ import LumiKit
         #expect(p["tool"] as? String == "Read")
     }
 }
+
+@Suite struct RemoteProtocolPromptTests {
+    @Test func promptPayloadCarriesSessionIdAndItem() {
+        let p = ChatPrompt(itemId: "i1", revision: 0, kind: .approval, title: "Bash?", detail: "npm i",
+            options: [ChatPromptOption(id: "allow", label: "Allow", description: nil)],
+            state: .pending, selectedOptionId: nil)
+        let d = RemoteProtocol.promptPayload(sessionId: "s1", prompt: p)
+        #expect(d["sessionId"] as? String == "s1")
+        #expect(d["itemId"] as? String == "i1")
+        #expect(d["kind"] as? String == "approval")
+    }
+    @Test func decodePromptRespondParsesFields() {
+        let r = RemoteProtocol.decodePromptRespond(["sessionId": "s1", "itemId": "i1", "expectedRevision": 2, "optionId": "allow"])
+        #expect(r?.sessionId == "s1"); #expect(r?.itemId == "i1")
+        #expect(r?.expectedRevision == 2); #expect(r?.optionId == "allow")
+    }
+    @Test func decodePromptRespondNilOnMissing() {
+        #expect(RemoteProtocol.decodePromptRespond(["sessionId": "s1"]) == nil)
+    }
+}

@@ -101,7 +101,23 @@ enum RemoteProtocol {
         return dict
     }
 
+    /// `prompt` payload: bir oturumun etkileşimli prompt item'ı (Faz 3). Mac→telefon.
+    static func promptPayload(sessionId: String, prompt: ChatPrompt) -> [String: Any] {
+        var dict = prompt.toDict()
+        dict["sessionId"] = sessionId
+        return dict
+    }
+
     // MARK: Decode helpers (relay → Mac)
+
+    /// `prompt_respond` çözer (Faz 3). Telefon→Mac.
+    static func decodePromptRespond(_ payload: [String: Any]) -> (sessionId: String, itemId: String, expectedRevision: Int, optionId: String)? {
+        guard let sessionId = payload["sessionId"] as? String,
+              let itemId = payload["itemId"] as? String,
+              let rev = payload["expectedRevision"] as? Int,
+              let optionId = payload["optionId"] as? String else { return nil }
+        return (sessionId, itemId, rev, optionId)
+    }
 
     /// `subscribe` mesajından sessionId çıkarır.
     static func decodeSubscribe(_ payload: [String: Any]) -> String? {
