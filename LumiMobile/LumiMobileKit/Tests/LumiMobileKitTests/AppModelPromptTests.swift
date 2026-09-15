@@ -29,4 +29,22 @@ final class AppModelPromptTests: XCTestCase {
         m.handle(.prompt(sessionId: "s1", prompt: prompt("i1", state: .cancelled)))
         XCTAssertTrue((m.prompts["s1"] ?? []).isEmpty)
     }
+
+    func testPendingPromptUpdatedInPlace() {
+        let m = makeModel()
+        m.handle(.prompt(sessionId: "s1", prompt: prompt("i1", state: .pending)))
+        m.handle(.prompt(sessionId: "s1", prompt: ChatPrompt(
+            itemId: "i1", revision: 1, kind: .approval, title: "t2", detail: nil,
+            options: [], state: .pending, selectedOptionId: nil)))
+        XCTAssertEqual(m.prompts["s1"]?.count, 1)   // dedup by itemId
+        XCTAssertEqual(m.prompts["s1"]?.first?.revision, 1)
+    }
+
+    func testDeadActiveSessionClearsPrompts() {
+        let m = makeModel()
+        m.handle(.prompt(sessionId: "s1", prompt: prompt("i1", state: .pending)))
+        m.subscribeChat("s1")   // aktif oturum = s1
+        m.handle(.sessions([]))  // s1 artık canlı değil
+        XCTAssertNil(m.prompts["s1"])
+    }
 }
