@@ -68,6 +68,12 @@ export class Bridge {
       case 'data':
         this.broadcast(room, envelope('data', env.payload))
         break
+      case 'chat':
+        this.broadcast(room, envelope('chat', env.payload))
+        break
+      case 'chat_append':
+        this.broadcast(room, envelope('chat_append', env.payload))
+        break
       case 'command_result':
         this.broadcast(room, envelope('command_result', env.payload))
         break

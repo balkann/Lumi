@@ -177,6 +177,30 @@ test('unregister_push bilinmeyen token no-op, hata vermez', () => {
   expect(registry.get(TOKEN)!.pushTokens.size).toBe(0)
 })
 
+test('mac chat/chat_append → telefonlara broadcast', () => {
+  const { bridge } = setup()
+  const phone = new FakeClient()
+  bridge.handleHello(phone, env('hello', { role: 'phone', token: TOKEN }))
+  const macSession = bridge.handleHello(new FakeClient(), env('hello', { role: 'mac', token: TOKEN }))!
+
+  bridge.handleMessage(macSession, env('chat', { sessionId: 's1', messages: [{ id: 'm1' }] }))
+  expect(phone.last().type).toBe('chat')
+  expect(phone.last().payload.sessionId).toBe('s1')
+
+  bridge.handleMessage(macSession, env('chat_append', { sessionId: 's1', messages: [{ id: 'm2' }] }))
+  expect(phone.last().type).toBe('chat_append')
+})
+
+test('subscribe mode alanı opak geçer (phone→mac)', () => {
+  const { bridge } = setup()
+  const mac = new FakeClient()
+  bridge.handleHello(mac, env('hello', { role: 'mac', token: TOKEN }))
+  const phoneSession = bridge.handleHello(new FakeClient(), env('hello', { role: 'phone', token: TOKEN }))!
+  bridge.handleMessage(phoneSession, env('subscribe', { sessionId: 's1', mode: 'chat' }))
+  expect(mac.last().type).toBe('subscribe')
+  expect(mac.last().payload.mode).toBe('chat')
+})
+
 // --- Terminal-stream routing tests (brief Step 7) ---
 
 function fakeClient() {

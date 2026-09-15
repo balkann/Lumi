@@ -15,7 +15,7 @@ export interface HelloPayload {
 
 const KNOWN_TYPES = new Set([
   'hello', 'welcome', 'sessions', 'repos', 'subscribe', 'unsubscribe',
-  'scrollback', 'data', 'input', 'command', 'command_result',
+  'scrollback', 'data', 'chat', 'chat_append', 'input', 'command', 'command_result',
   'register_push', 'unregister_push', 'ping', 'pong',
 ])
 
