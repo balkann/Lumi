@@ -29,6 +29,9 @@ public final class RemoteService: RemoteServicing {
     private let connection: any RelayConnecting
     private let commandHandler: RemoteCommandHandler
     private let broadcaster = EventBroadcaster<RemoteEvent>()
+    private let chatSource: any ChatTranscriptSourcing
+    /// Session başına chat tail task'ı (mode=chat aboneliği).
+    private var chatSubscriptions: [TerminalID: Task<Void, Never>] = [:]
 
     private var inboundTask: Task<Void, Never>?
     private var terminalTask: Task<Void, Never>?
@@ -46,13 +49,15 @@ public final class RemoteService: RemoteServicing {
         paths: LumiPaths,
         terminal: any TerminalServicing,
         repos: any RepoServicing,
-        connection: (any RelayConnecting)? = nil
+        connection: (any RelayConnecting)? = nil,
+        chatSource: any ChatTranscriptSourcing
     ) {
         self.configService = RemoteConfigService(paths: paths)
         self.terminal = terminal
         self.repos = repos
         self.connection = connection ?? RelayConnection()
         self.commandHandler = RemoteCommandHandler(terminal: terminal)
+        self.chatSource = chatSource
     }
 
     public func events() -> AsyncStream<RemoteEvent> { broadcaster.stream() }
@@ -94,6 +99,8 @@ public final class RemoteService: RemoteServicing {
         terminalTask?.cancel(); terminalTask = nil
         for task in subscriptions.values { task.cancel() }
         subscriptions.removeAll()
+        for task in chatSubscriptions.values { task.cancel() }
+        chatSubscriptions.removeAll()
         seqCounters.removeAll()
         await connection.stop()
         setState(.disconnected)
@@ -200,8 +207,24 @@ public final class RemoteService: RemoteServicing {
         guard let raw = RemoteProtocol.decodeSubscribe(payload),
               let id = terminalID(from: raw) else { return }
 
-        // Yeni abonelik: eskisini iptal et, seq'i sıfırla.
         cancelSubscription(id)
+        cancelChatSubscription(id)
+
+        if RemoteProtocol.decodeSubscribeMode(payload) == "chat",
+           let meta = terminal.terminals.first(where: { $0.id == id }),
+           let claudeSessionID = meta.claudeSessionID {
+            let stream = chatSource.stream(sessionID: claudeSessionID, repoPath: meta.repoPath)
+            let task = Task { [weak self] in
+                for await event in stream {
+                    guard !Task.isCancelled else { break }
+                    await self?.emitChat(sessionId: raw, event: event)
+                }
+            }
+            chatSubscriptions[id] = task
+            return
+        }
+
+        // terminal mode (mevcut davranış)
         seqCounters[id] = 0
 
         // (a) scrollback (seq=0, otoriter cols/rows)
@@ -224,6 +247,23 @@ public final class RemoteService: RemoteServicing {
         subscriptions[id] = task
     }
 
+    private func emitChat(sessionId: String, event: ChatMirrorEvent) async {
+        switch event {
+        case .snapshot(let messages):
+            await connection.send(type: "chat",
+                payload: RemoteProtocol.chatPayload(sessionId: sessionId, messages: messages))
+        case .append(let messages):
+            guard !messages.isEmpty else { return }
+            await connection.send(type: "chat_append",
+                payload: RemoteProtocol.chatAppendPayload(sessionId: sessionId, messages: messages))
+        }
+    }
+
+    private func cancelChatSubscription(_ id: TerminalID) {
+        chatSubscriptions[id]?.cancel()
+        chatSubscriptions[id] = nil
+    }
+
     private func emitData(id: TerminalID, sessionId: String, batch: Data) async {
         guard subscriptions[id] != nil else { return }
         let seq = (seqCounters[id] ?? 0) + 1
@@ -238,6 +278,7 @@ public final class RemoteService: RemoteServicing {
         guard let raw = RemoteProtocol.decodeSubscribe(payload),
               let id = terminalID(from: raw) else { return }
         cancelSubscription(id)
+        cancelChatSubscription(id)
     }
 
     private func cancelSubscription(_ id: TerminalID) {

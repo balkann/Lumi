@@ -188,7 +188,7 @@ final class FakeTerminalServicing: TerminalServicing {
         let term = FakeTerminalServicing()
         term.scrollback = ("SCROLL".data(using: .utf8)!, 80, 24)
         let sid = makeSession(term)
-        let svc = RemoteService(paths: .testDefaults(), terminal: term, repos: FakeRepoService(), connection: conn)
+        let svc = RemoteService(paths: .testDefaults(), terminal: term, repos: FakeRepoService(), connection: conn, chatSource: FakeChatTranscriptSource(events: []))
         await svc.start()
 
         await conn.injectInbound(type: "subscribe", payload: ["sessionId": sid])
@@ -213,7 +213,7 @@ final class FakeTerminalServicing: TerminalServicing {
             Repo(name: "lumi", path: "/a/lumi", isGitRepo: true, source: .standalone),
             Repo(name: "beta", path: "/a/beta", isGitRepo: false, source: .standalone),
         ])
-        let svc = RemoteService(paths: .testDefaults(), terminal: term, repos: repoSvc, connection: conn)
+        let svc = RemoteService(paths: .testDefaults(), terminal: term, repos: repoSvc, connection: conn, chatSource: FakeChatTranscriptSource(events: []))
         await svc.start()
 
         await conn.injectInbound(type: "welcome", payload: [:])
@@ -227,7 +227,7 @@ final class FakeTerminalServicing: TerminalServicing {
         let conn = FakeRelayConnection()
         let term = FakeTerminalServicing()
         let sid = makeSession(term)
-        let svc = RemoteService(paths: .testDefaults(), terminal: term, repos: FakeRepoService(), connection: conn)
+        let svc = RemoteService(paths: .testDefaults(), terminal: term, repos: FakeRepoService(), connection: conn, chatSource: FakeChatTranscriptSource(events: []))
         await svc.start()
 
         await conn.injectInbound(type: "input", payload: ["sessionId": sid, "data": "aGk="]) // "hi"
@@ -244,7 +244,7 @@ final class FakeTerminalServicing: TerminalServicing {
         term.scrollback = ("X".data(using: .utf8)!, 80, 24)
         let sid = makeSession(term)
         let tid = TerminalID(raw: UUID(uuidString: sid)!)
-        let svc = RemoteService(paths: .testDefaults(), terminal: term, repos: FakeRepoService(), connection: conn)
+        let svc = RemoteService(paths: .testDefaults(), terminal: term, repos: FakeRepoService(), connection: conn, chatSource: FakeChatTranscriptSource(events: []))
         await svc.start()
 
         await conn.injectInbound(type: "subscribe", payload: ["sessionId": sid])
@@ -262,6 +262,30 @@ final class FakeTerminalServicing: TerminalServicing {
 
         // Exit sonrası yeni 'data' gelmemeli
         try await conn.waitForNoSent(type: "data", after: dataCountBefore, for: .milliseconds(100))
+        svc.stop()
+    }
+
+    @Test func subscribeChatModeSendsChatThenAppend() async throws {
+        let conn = FakeRelayConnection()
+        let term = FakeTerminalServicing()
+        let uuid = UUID()
+        let meta = TerminalMeta(id: TerminalID(raw: uuid), name: "T", repoPath: "/repo",
+                                createdAt: Date(), claudeSessionID: uuid.uuidString)
+        term.metas.append(meta)
+        let sid = meta.id.description
+        let m1 = ChatMessage(id: "m1", role: .user, blocks: [.text("hi", presentation: nil)],
+                             timestampMs: nil, turnId: nil)
+        let m2 = ChatMessage(id: "m2", role: .assistant, blocks: [.text("yo", presentation: nil)],
+                             timestampMs: nil, turnId: nil)
+        let chat = FakeChatTranscriptSource(events: [.snapshot([m1]), .append([m2])])
+        let svc = RemoteService(paths: .testDefaults(), terminal: term, repos: FakeRepoService(),
+                                connection: conn, chatSource: chat)
+        await svc.start()
+
+        await conn.injectInbound(type: "subscribe", payload: ["sessionId": sid, "mode": "chat"])
+        try await conn.waitForSent(types: ["chat", "chat_append"])
+
+        #expect(await conn.count(type: "scrollback") == 0)  // chat mode: terminal göndermez
         svc.stop()
     }
 }
