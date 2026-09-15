@@ -37,4 +37,16 @@ import Foundation
         #expect(blocks?[1]["type"] as? String == "tool-result")
         #expect(blocks?[1]["output"] as? String == "ok")
     }
+
+    @Test func subagentGroupToDict() {
+        let block = ChatBlock.subagentGroup(groupId: "g1", agents: [
+            ChatSubagentEntry(id: "c1", label: "child", state: "working", tokens: 42),
+        ])
+        let d = block.toDict()
+        #expect(d["type"] as? String == "subagent-group")
+        #expect(d["groupId"] as? String == "g1")
+        let agents = d["agents"] as? [[String: Any]]
+        #expect(agents?.first?["id"] as? String == "c1")
+        #expect(agents?.first?["tokens"] as? Int == 42)
+    }
 }

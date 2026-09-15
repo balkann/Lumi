@@ -6,12 +6,36 @@ public enum ChatRole: String, Sendable, Equatable {
     case user, assistant, tool, reasoning, system
 }
 
+/// orca `NativeChatSubagentEntry` paritesi — bir spawn grubundaki alt ajan.
+public struct ChatSubagentEntry: Sendable, Equatable {
+    public let id: String
+    public let label: String
+    public let state: String
+    public let tokens: Int?
+    public let startedAt: Int?
+    public let settledAt: Int?
+
+    public init(id: String, label: String, state: String,
+                tokens: Int? = nil, startedAt: Int? = nil, settledAt: Int? = nil) {
+        self.id = id; self.label = label; self.state = state
+        self.tokens = tokens; self.startedAt = startedAt; self.settledAt = settledAt
+    }
+
+    func toDict() -> [String: Any] {
+        var d: [String: Any] = ["id": id, "label": label, "state": state]
+        if let tokens { d["tokens"] = tokens }
+        if let startedAt { d["startedAt"] = startedAt }
+        if let settledAt { d["settledAt"] = settledAt }
+        return d
+    }
+}
+
 public enum ChatBlock: Sendable, Equatable {
     case text(String, presentation: String?)
     case toolCall(name: String, inputPreview: String, state: String?)
     case toolResult(output: String, isError: Bool)
     case imageRef(path: String?, url: String?, alt: String?)
-    case subagentGroup(groupId: String, agentsJSON: [[String: String]])
+    case subagentGroup(groupId: String, agents: [ChatSubagentEntry])
 
     func toDict() -> [String: Any] {
         switch self {
@@ -31,8 +55,8 @@ public enum ChatBlock: Sendable, Equatable {
             if let url { d["url"] = url }
             if let alt { d["alt"] = alt }
             return d
-        case let .subagentGroup(groupId, agentsJSON):
-            return ["type": "subagent-group", "groupId": groupId, "agents": agentsJSON]
+        case let .subagentGroup(groupId, agents):
+            return ["type": "subagent-group", "groupId": groupId, "agents": agents.map { $0.toDict() }]
         }
     }
 }
