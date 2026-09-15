@@ -191,6 +191,20 @@ test('mac chat/chat_append → telefonlara broadcast', () => {
   expect(phone.last().type).toBe('chat_append')
 })
 
+test('mac chat_status → telefonlara broadcast', () => {
+  const { bridge } = setup()
+  const phone = new FakeClient()
+  bridge.handleHello(phone, env('hello', { role: 'phone', token: TOKEN }))
+  const macSession = bridge.handleHello(new FakeClient(), env('hello', { role: 'mac', token: TOKEN }))!
+
+  bridge.handleMessage(macSession, env('chat_status', {
+    sessionId: 's1', working: true, startedAtMs: 42, tool: 'Bash',
+  }))
+  expect(phone.last().type).toBe('chat_status')
+  expect(phone.last().payload.sessionId).toBe('s1')
+  expect(phone.last().payload.tool).toBe('Bash')
+})
+
 test('subscribe mode alanı opak geçer (phone→mac)', () => {
   const { bridge } = setup()
   const mac = new FakeClient()
