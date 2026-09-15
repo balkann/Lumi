@@ -33,6 +33,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let unPresenter = UNNotificationPresenter.isAvailable ? UNNotificationPresenter() : nil
         let presenter: any NotificationPresenting = unPresenter ?? LogNotificationPresenter()
         composition = AppComposition.live(mode: pathsMode, notificationPresenter: presenter)
+        // Teşhis günlüğünü etkinleştir (GUI app'te stderr kaybolur): ~/.lumi/logs/mac.log.
+        // rlog çağrıları (remote bağlantı/komut/chat) buraya düşer.
+        DiagLog.shared.configure(
+            directory: composition.registry.paths.configDir.appendingPathComponent("logs"),
+            filename: "mac.log")
         windowController = MainWindowController(config: composition.registry.config)
         unPresenter?.onClick = { [weak self] terminalID in
             self?.shared.terminals.restoreAndFocus(terminalID)

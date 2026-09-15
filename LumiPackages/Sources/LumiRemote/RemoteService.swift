@@ -212,9 +212,25 @@ public final class RemoteService: RemoteServicing {
         cancelSubscription(id)
         cancelChatSubscription(id)
 
-        if RemoteProtocol.decodeSubscribeMode(payload) == "chat",
-           let meta = terminal.terminals.first(where: { $0.id == id }),
-           let claudeSessionID = meta.claudeSessionID {
+        if RemoteProtocol.decodeSubscribeMode(payload) == "chat" {
+            let meta = terminal.terminals.first(where: { $0.id == id })
+            guard let meta, let claudeSessionID = meta.claudeSessionID else {
+                rlog("chat subscribe DÜŞTÜ→terminal: metaVar=\(meta != nil) claudeSessionID=\(meta?.claudeSessionID ?? "nil") repo=\(meta?.repoPath ?? "-")")
+                // Aşağıdaki terminal moduna düş.
+                seqCounters[id] = 0
+                let (data, cols, rows) = terminal.serializeScrollback(id)
+                await connection.send(type: "scrollback",
+                    payload: RemoteProtocol.scrollbackPayload(sessionId: raw, seq: 0, cols: cols, rows: rows, data: data))
+                let stream = terminal.subscribeOutput(id)
+                subscriptions[id] = Task { [weak self] in
+                    for await batch in stream { guard !Task.isCancelled else { break }; await self?.emitData(id: id, sessionId: raw, batch: batch) }
+                }
+                return
+            }
+            let encoded = meta.repoPath.replacingOccurrences(of: "[^a-zA-Z0-9]", with: "-", options: .regularExpression)
+            let path = FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent(".claude/projects/\(encoded)/\(claudeSessionID).jsonl").path
+            rlog("chat subscribe: sid=\(raw.prefix(8)) claudeSessionID=\(claudeSessionID) repo=\(meta.repoPath) → \(path) exists=\(FileManager.default.fileExists(atPath: path))")
             let stream = chatSource.stream(sessionID: claudeSessionID, repoPath: meta.repoPath)
             let task = Task { [weak self] in
                 for await event in stream {
@@ -252,6 +268,7 @@ public final class RemoteService: RemoteServicing {
     private func emitChat(sessionId: String, event: ChatMirrorEvent) async {
         switch event {
         case .snapshot(let messages):
+            rlog("chat snapshot gönderiliyor: sid=\(sessionId.prefix(8)) count=\(messages.count)")
             await connection.send(type: "chat",
                 payload: RemoteProtocol.chatPayload(sessionId: sessionId, messages: messages))
         case .append(let messages):
