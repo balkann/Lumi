@@ -56,7 +56,7 @@
 - Test: `LumiPackages/Tests/LumiKitTests/ChatMirrorModelsTests.swift`
 
 **Interfaces:**
-- Produces: `enum ChatRole: String { user, assistant, tool, reasoning, system }`; `enum ChatBlock` (`.text(String, presentation: String?)`, `.toolCall(name: String, inputPreview: String, state: String?)`, `.toolResult(output: String, isError: Bool)`, `.imageRef(path: String?, url: String?, alt: String?)`, `.subagentGroup(groupId: String, agentsJSON: [[String: Any]])`); `struct ChatMessage { id: String; role: ChatRole; blocks: [ChatBlock]; timestampMs: Int?; turnId: String? }` with `func toDict() -> [String: Any]`; `enum ChatMirrorEvent: Sendable { case snapshot([ChatMessage]); case append([ChatMessage]) }`.
+- Produces: `enum ChatRole: String { user, assistant, tool, reasoning, system }`; `enum ChatBlock` (`.text(String, presentation: String?)`, `.toolCall(name: String, inputPreview: String, state: String?)`, `.toolResult(output: String, isError: Bool)`, `.imageRef(path: String?, url: String?, alt: String?)`, `.subagentGroup(groupId: String, agents: [ChatSubagentEntry])`); `struct ChatMessage { id: String; role: ChatRole; blocks: [ChatBlock]; timestampMs: Int?; turnId: String? }` with `func toDict() -> [String: Any]`; `enum ChatMirrorEvent: Sendable { case snapshot([ChatMessage]); case append([ChatMessage]) }`.
 
 - [ ] **Step 1: Write the failing test**
 
