@@ -93,6 +93,10 @@ public struct AgentHookEvent: Sendable, Equatable {
     /// `background_tasks` envanteri (Claude): lider `Stop`'ta hâlâ koşan alt
     /// ajan kimlikleri. `nil` = alan yok (eski Claude); boş = hepsi bitti.
     public let runningBackgroundAgentIDs: [String]?
+    /// PreToolUse/PermissionRequest ham `tool_input` JSON'u (string; ≤16 KB, yoksa nil).
+    public let toolInput: String?
+    /// Hook'tan `tool_use_id` — prompt itemId stabilitesi için.
+    public let toolUseID: String?
     public let receivedAt: Date
 
     public init(
@@ -107,6 +111,8 @@ public struct AgentHookEvent: Sendable, Equatable {
         isInterrupt: Bool = false,
         promptHead: String? = nil,
         runningBackgroundAgentIDs: [String]? = nil,
+        toolInput: String? = nil,
+        toolUseID: String? = nil,
         receivedAt: Date = Date()
     ) {
         self.provider = provider
@@ -120,6 +126,8 @@ public struct AgentHookEvent: Sendable, Equatable {
         self.isInterrupt = isInterrupt
         self.promptHead = promptHead
         self.runningBackgroundAgentIDs = runningBackgroundAgentIDs
+        self.toolInput = toolInput
+        self.toolUseID = toolUseID
         self.receivedAt = receivedAt
     }
 
@@ -173,6 +181,8 @@ extension AgentHookEvent {
             isInterrupt: dict["is_interrupt"] as? Bool ?? false,
             promptHead: string(dict["prompt"]).map { String($0.prefix(promptHeadLimit)) },
             runningBackgroundAgentIDs: runningAgentTasks(dict["background_tasks"]),
+            toolInput: serializedToolInput(dict["tool_input"]),
+            toolUseID: string(dict["tool_use_id"]),
             receivedAt: receivedAt
         )
     }
@@ -181,6 +191,18 @@ extension AgentHookEvent {
         guard let text = value as? String else { return nil }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
+    }
+
+    /// tool_input nesnesini/array'ini JSON string'e çevirir (16 KB tavanı; aşarsa nil).
+    private static func serializedToolInput(_ value: Any?) -> String? {
+        guard let value, !(value is NSNull) else { return nil }
+        let obj: Any
+        if value is [String: Any] || value is [Any] { obj = value }
+        else if let s = value as? String { return s.count <= 16_384 ? s : nil }
+        else { return nil }
+        guard let data = try? JSONSerialization.data(withJSONObject: obj),
+              data.count <= 16_384, let s = String(data: data, encoding: .utf8) else { return nil }
+        return s
     }
 
     /// Orca `readClaudeBackgroundAgentTasks` sadeleştirmesi: yalnız
