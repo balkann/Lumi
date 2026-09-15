@@ -58,6 +58,8 @@ public final class AppModel {
 
     /// sessionId → chat mesajları (mode=chat aboneliği; orca native-chat).
     private var chatBySession: [String: [ChatMessage]] = [:]
+    /// sessionId → son canlı turn status (Faz 2; chat_status frame'inden).
+    public private(set) var turnStatus: [String: ChatTurnStatus] = [:]
 
     public init(client: any RelayClienting, store: any SecureStore, prefs: any PreferenceStore = UserDefaultsPreferenceStore()) {
         self.client = client
@@ -127,6 +129,7 @@ public final class AppModel {
         terminalSinks = [:]
         replayBuffers = [:]
         chatBySession = [:]
+        turnStatus = [:]
         models = [:]
         lastCommandError = [:]
         commandTargets = [:]
@@ -186,6 +189,10 @@ public final class AppModel {
                 }
             }
             chatBySession[sessionId] = current
+
+        case .chatStatus(let sessionId, let status):
+            macOnline = true
+            turnStatus[sessionId] = status
         }
     }
 
@@ -210,6 +217,8 @@ public final class AppModel {
             "chat count=\(messages.count)"
         case .chatAppend(_, let messages):
             "chat_append count=\(messages.count)"
+        case .chatStatus(let sessionId, _):
+            "chat_status \(sessionId.prefix(8))"
         }
     }
 
@@ -229,6 +238,7 @@ public final class AppModel {
             terminalSinks[active] = nil
             replayBuffers[active] = nil
             chatBySession[active] = nil
+            turnStatus[active] = nil
         }
     }
 

@@ -14,6 +14,7 @@ public enum ServerMessage: Sendable, Equatable {
     // Chat-mirror mesajları
     case chat(sessionId: String, messages: [ChatMessage])
     case chatAppend(sessionId: String, messages: [ChatMessage])
+    case chatStatus(sessionId: String, status: ChatTurnStatus)
 }
 
 public enum CommandAction: Sendable, Equatable {
@@ -73,6 +74,9 @@ public enum PhoneProtocol {
             let messages = raw.compactMap(ChatMessage.decode)
             return type == "chat" ? .chat(sessionId: sessionId, messages: messages)
                                   : .chatAppend(sessionId: sessionId, messages: messages)
+        case "chat_status":
+            guard let sessionId = payload["sessionId"] as? String else { return nil }
+            return .chatStatus(sessionId: sessionId, status: ChatTurnStatus.decode(payload))
         default: return nil
         }
     }
