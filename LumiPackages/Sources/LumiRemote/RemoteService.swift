@@ -325,7 +325,12 @@ public final class RemoteService: RemoteServicing {
         // Reducer + journal abone olunmasa da ilerler (subscribe snapshot doğruluğu).
         let status = reducer.reduce(event)
         let journal = promptJournals[id] ?? {
-            let j = PromptJournal(seq: { [weak self] in self?.promptSeq += 1; return self?.promptSeq ?? 0 })
+            // weak: journal self'e ait; strong olsa self→dict→journal→closure→self döngüsü olur.
+            let j = PromptJournal(seq: { [weak self] in
+                guard let self else { return 0 }
+                self.promptSeq += 1
+                return self.promptSeq
+            })
             promptJournals[id] = j
             return j
         }()
@@ -363,7 +368,8 @@ public final class RemoteService: RemoteServicing {
         }
     }
 
-    /// orca keystroke haritası (kesin): allow="1", deny=ESC, question index i → "1"+i. Trailing Enter yok.
+    /// orca keystroke haritası (kesin): allow=byte 0x31 ('1'), deny=0x1b (ESC),
+    /// question index i (0-tabanlı) → byte 0x31+i ('1'…'9'). Trailing Enter yok.
     private func keystroke(for item: ChatPrompt, optionId: String) -> Data? {
         switch item.kind {
         case .approval:
