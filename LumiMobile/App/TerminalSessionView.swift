@@ -14,16 +14,35 @@ struct TerminalSessionView: View {
     @State private var buffer = TerminalFeedBuffer()
     /// Klavye yüksekliğini izler; alt çubuğu manuel olarak klavyenin üstüne taşır (bug #1).
     @StateObject private var keyboard = KeyboardObserver()
+    @State private var showChat = true
 
     var body: some View {
-        VStack(spacing: 0) {
-            TerminalHostView(
-                onInput: { data in model.sendInput(sessionId, data) },
-                buffer: buffer
-            )
-            AccessoryBar { data in
-                model.sendInput(sessionId, data)
+        Group {
+            if showChat {
+                MobileChatView(model: model, sessionId: sessionId)
+            } else {
+                terminalBody
             }
+        }
+        .navigationTitle(model.session(sessionId)?.repoName ?? "Oturum")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showChat.toggle()
+                } label: {
+                    Image(systemName: showChat ? "terminal" : "bubble.left.and.bubble.right")
+                }
+            }
+            ToolbarItem(placement: .topBarTrailing) { toolbarItems }
+        }
+    }
+
+    /// Mevcut terminal-mirror gövdesi (VStack + klavye padding + .task subscribe/feed).
+    private var terminalBody: some View {
+        VStack(spacing: 0) {
+            TerminalHostView(onInput: { model.sendInput(sessionId, $0) }, buffer: buffer)
+            AccessoryBar { model.sendInput(sessionId, $0) }
         }
         // Otomatik klavye kaçınmasını kapat; yüksekliği manuel uygula → çubuk daima
         // klavyenin üstünde, terminal onun üstünde kalır.
@@ -39,13 +58,6 @@ struct TerminalSessionView: View {
         .onDisappear {
             buffer.detach()
             model.unsubscribe(sessionId)
-        }
-        .navigationTitle(model.session(sessionId)?.repoName ?? "Oturum")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                toolbarItems
-            }
         }
     }
 
