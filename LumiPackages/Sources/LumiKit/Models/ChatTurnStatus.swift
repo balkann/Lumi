@@ -1,0 +1,26 @@
+import Foundation
+
+/// Faz 2 canlı turn-status wire modeli. Değişmez pattern: LumiKit'te tanımlanır,
+/// LumiMobileKit'e birebir kopyalanır (bkz. `ChatMessage`). `sessionId` frame
+/// zarfında taşınır, modelin parçası değildir.
+public struct ChatTurnStatus: Sendable, Equatable {
+    public var working: Bool
+    public var startedAtMs: Int?   // tur başı (epoch ms); working=false ise nil
+    public var tool: String?       // o an koşan lider araç adı; yoksa nil
+
+    public init(working: Bool, startedAtMs: Int?, tool: String?) {
+        self.working = working
+        self.startedAtMs = startedAtMs
+        self.tool = tool
+    }
+
+    public static let idle = ChatTurnStatus(working: false, startedAtMs: nil, tool: nil)
+
+    public func toDict() -> [String: Any] {
+        [
+            "working": working,
+            "startedAtMs": startedAtMs.map { $0 as Any } ?? NSNull(),
+            "tool": tool.map { $0 as Any } ?? NSNull(),
+        ]
+    }
+}
