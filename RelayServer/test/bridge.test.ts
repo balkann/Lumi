@@ -191,6 +191,22 @@ test('mac chat/chat_append → telefonlara broadcast', () => {
   expect(phone.last().type).toBe('chat_append')
 })
 
+test('mac prompt → telefon broadcast; telefon prompt_respond → mac forward', () => {
+  const { bridge } = setup()
+  const phone = new FakeClient()
+  const phoneSession = bridge.handleHello(phone, env('hello', { role: 'phone', token: TOKEN }))!
+  const mac = new FakeClient()
+  const macSession = bridge.handleHello(mac, env('hello', { role: 'mac', token: TOKEN }))!
+
+  bridge.handleMessage(macSession, env('prompt', { sessionId: 's1', itemId: 'i1', kind: 'approval', state: 'pending' }))
+  expect(phone.last().type).toBe('prompt')
+  expect(phone.last().payload.itemId).toBe('i1')
+
+  bridge.handleMessage(phoneSession, env('prompt_respond', { sessionId: 's1', itemId: 'i1', expectedRevision: 0, optionId: 'allow' }))
+  expect(mac.last().type).toBe('prompt_respond')
+  expect(mac.last().payload.optionId).toBe('allow')
+})
+
 test('mac chat_status → telefonlara broadcast', () => {
   const { bridge } = setup()
   const phone = new FakeClient()

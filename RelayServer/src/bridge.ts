@@ -77,6 +77,9 @@ export class Bridge {
       case 'chat_status':
         this.broadcast(room, envelope('chat_status', env.payload))
         break
+      case 'prompt':
+        this.broadcast(room, envelope('prompt', env.payload))
+        break
       case 'command_result':
         this.broadcast(room, envelope('command_result', env.payload))
         break
@@ -89,6 +92,7 @@ export class Bridge {
       case 'subscribe':
       case 'unsubscribe':
       case 'input':
+      case 'prompt_respond':
         if (room.mac) {
           room.mac.send(envelope(env.type, env.payload))
         }
