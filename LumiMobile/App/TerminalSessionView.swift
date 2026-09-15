@@ -24,6 +24,7 @@ struct TerminalSessionView: View {
                 terminalBody
             }
         }
+        .onDisappear { model.unsubscribe(sessionId) }
         .navigationTitle(model.session(sessionId)?.repoName ?? "Oturum")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -57,7 +58,6 @@ struct TerminalSessionView: View {
         }
         .onDisappear {
             buffer.detach()
-            model.unsubscribe(sessionId)
         }
     }
 

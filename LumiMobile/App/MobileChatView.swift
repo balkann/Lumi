@@ -42,7 +42,6 @@ struct MobileChatView: View {
         .ignoresSafeArea(.keyboard, edges: .bottom)
         .animation(.easeOut(duration: 0.25), value: keyboard.height)
         .task(id: sessionId) { model.subscribeChat(sessionId) }
-        .onDisappear { model.unsubscribe(sessionId) }
     }
 
     private var composer: some View {
