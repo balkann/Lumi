@@ -21,17 +21,24 @@ struct MobileChatMessageView: View {
     private func blockView(_ block: ChatBlock) -> some View {
         switch block {
         case let .text(text, _):
-            Text(LocalizedStringKey(text))     // markdown inline render
+            Text(LocalizedStringKey(text))
                 .textSelection(.enabled)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
                 .background(bubbleColor, in: RoundedRectangle(cornerRadius: 14))
                 .foregroundStyle(turn.message.role == .user ? Color.white : Color.primary)
                 .frame(maxWidth: 300, alignment: turn.message.role == .user ? .trailing : .leading)
+        case let .toolCall(name, preview, _):
+            Text("▶ \(name) \(preview)")
+                .font(.system(.caption, design: .monospaced))
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+                .frame(maxWidth: .infinity, alignment: .leading)
         case let .toolResult(output, isError):
             Text(output)
                 .font(.system(.caption, design: .monospaced))
                 .foregroundStyle(isError ? .red : .secondary)
+                .lineLimit(6)
                 .frame(maxWidth: .infinity, alignment: .leading)
         default:
             EmptyView()

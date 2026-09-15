@@ -26,9 +26,11 @@ struct MobileChatToolRunView: View {
                 .buttonStyle(.plain)
 
                 if expanded {
-                    ForEach(activity) { message in
-                        ForEach(Array(message.blocks.enumerated()), id: \.offset) { _, block in
-                            toolLine(block)
+                    VStack(alignment: .leading, spacing: 2) {
+                        ForEach(activity) { message in
+                            ForEach(Array(message.blocks.enumerated()), id: \.offset) { _, block in
+                                toolLine(block)
+                            }
                         }
                     }
                     .padding(.leading, 18)
