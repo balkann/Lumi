@@ -1,6 +1,7 @@
 import Foundation
 import LumiKit
 import LumiRemote
+import LumiServices
 import LumiState
 
 /// Remote (terminal-ayna) özelliği: RemoteService + RemoteStore kurar, config
@@ -22,7 +23,8 @@ final class RemoteFeatureAssembly: FeatureAssembly {
         remoteService = RemoteService(
             paths: services.paths,
             terminal: services.terminal,
-            repos: services.repo
+            repos: services.repo,
+            chatSource: TranscriptChatSource()
         )
         remoteStore = RemoteStore(service: remoteService)
     }
