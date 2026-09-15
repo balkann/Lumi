@@ -1,6 +1,7 @@
 // LumiMobile/App/MobileChatView.swift
 import SwiftUI
 import LumiMobileKit
+import Foundation
 
 /// Native chat görünümü: transcript'ten türeyen mesajları satır-saran balonlar
 /// olarak gösterir (yatay scroll yok). Composer serbest metin gönderir.
@@ -34,6 +35,11 @@ struct MobileChatView: View {
                 }
                 .onChange(of: turns.count) { _, _ in
                     withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
+                }
+            }
+            if let status = model.turnStatus[sessionId], status.working {
+                TurnStatusBar(status: status) {
+                    model.sendInput(sessionId, Data([0x03]))
                 }
             }
             composer
