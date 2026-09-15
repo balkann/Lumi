@@ -1,42 +1,58 @@
 import Foundation
-import XCTest
+import Testing
+import LumiKit
 @testable import LumiRemote
 
-final class RemoteProtocolTests: XCTestCase {
-    func testEnvelopeRoundTrip() throws {
-        let data = try XCTUnwrap(RemoteProtocol.envelope(type: "hello", payload: ["role": "mac", "token": "t-1234567890123456"]))
-        let decoded = try XCTUnwrap(RemoteProtocol.decode(data))
-        XCTAssertEqual(decoded.type, "hello")
-        XCTAssertEqual(decoded.payload["role"] as? String, "mac")
+@Suite final class RemoteProtocolTests {
+    @Test func envelopeRoundTrip() throws {
+        let data = try #require(RemoteProtocol.envelope(type: "hello", payload: ["role": "mac", "token": "t-1234567890123456"]))
+        let decoded = try #require(RemoteProtocol.decode(data))
+        #expect(decoded.type == "hello")
+        #expect(decoded.payload["role"] as? String == "mac")
         let dict = try JSONSerialization.jsonObject(with: data) as! [String: Any]
-        XCTAssertEqual(dict["v"] as? Int, 1)
+        #expect((dict["v"] as? Int) == 1)
     }
 
-    func testDecodeRejectsBadInput() {
-        XCTAssertNil(RemoteProtocol.decode(text: "not json"))
-        XCTAssertNil(RemoteProtocol.decode(text: #"{"v":2,"type":"ping","payload":{}}"#))
-        XCTAssertNil(RemoteProtocol.decode(text: #"{"v":1,"payload":{}}"#))
-        XCTAssertNil(RemoteProtocol.decode(text: #"{"v":1,"type":"ping"}"#))
+    @Test func decodeRejectsBadInput() {
+        #expect(RemoteProtocol.decode(text: "not json") == nil)
+        #expect(RemoteProtocol.decode(text: #"{"v":2,"type":"ping","payload":{}}"#) == nil)
+        #expect(RemoteProtocol.decode(text: #"{"v":1,"payload":{}}"#) == nil)
+        #expect(RemoteProtocol.decode(text: #"{"v":1,"type":"ping"}"#) == nil)
     }
 
-    func testKeySequenceMap() {
-        XCTAssertEqual(keySequence(for: "1"), "1")
-        XCTAssertEqual(keySequence(for: "2"), "2")
-        XCTAssertEqual(keySequence(for: "3"), "3")
-        XCTAssertEqual(keySequence(for: "enter"), "\r")
-        XCTAssertEqual(keySequence(for: "esc"), "\u{1B}")
-        XCTAssertNil(keySequence(for: "rm -rf"))
-        XCTAssertNil(keySequence(for: "f4"))
+    @Test func keySequenceMap() {
+        #expect(keySequence(for: "1") == "1")
+        #expect(keySequence(for: "2") == "2")
+        #expect(keySequence(for: "3") == "3")
+        #expect(keySequence(for: "enter") == "\r")
+        #expect(keySequence(for: "esc") == "\u{1B}")
+        #expect(keySequence(for: "rm -rf") == nil)
+        #expect(keySequence(for: "f4") == nil)
     }
 
-    func testBackoffDoublesAndCapsAndResets() {
+    @Test func backoffDoublesAndCapsAndResets() {
         var backoff = ReconnectBackoff()
-        XCTAssertEqual(backoff.nextDelay(), 1)
-        XCTAssertEqual(backoff.nextDelay(), 2)
-        XCTAssertEqual(backoff.nextDelay(), 4)
+        #expect(backoff.nextDelay() == 1)
+        #expect(backoff.nextDelay() == 2)
+        #expect(backoff.nextDelay() == 4)
         for _ in 0..<10 { _ = backoff.nextDelay() }
-        XCTAssertEqual(backoff.nextDelay(), 60)
+        #expect(backoff.nextDelay() == 60)
         backoff.reset()
-        XCTAssertEqual(backoff.nextDelay(), 1)
+        #expect(backoff.nextDelay() == 1)
+    }
+
+    @Test func chatPayloadShape() {
+        let msg = ChatMessage(id: "m1", role: .assistant,
+                              blocks: [.text("hi", presentation: nil)],
+                              timestampMs: 5, turnId: nil)
+        let p = RemoteProtocol.chatPayload(sessionId: "s1", messages: [msg])
+        #expect(p["sessionId"] as? String == "s1")
+        let msgs = p["messages"] as? [[String: Any]]
+        #expect(msgs?.first?["id"] as? String == "m1")
+    }
+
+    @Test func subscribeModeDefaultsTerminal() {
+        #expect(RemoteProtocol.decodeSubscribeMode(["sessionId": "s"]) == "terminal")
+        #expect(RemoteProtocol.decodeSubscribeMode(["sessionId": "s", "mode": "chat"]) == "chat")
     }
 }

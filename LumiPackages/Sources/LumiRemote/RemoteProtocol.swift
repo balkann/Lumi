@@ -1,4 +1,5 @@
 import Foundation
+import LumiKit
 
 // MARK: - SessionMeta
 
@@ -83,6 +84,16 @@ enum RemoteProtocol {
         ]
     }
 
+    /// `chat` payload: bir oturumun tam mesaj listesi (snapshot).
+    static func chatPayload(sessionId: String, messages: [ChatMessage]) -> [String: Any] {
+        ["sessionId": sessionId, "messages": messages.map { $0.toDict() }]
+    }
+
+    /// `chat_append` payload: tail'de gelen yeni mesajlar.
+    static func chatAppendPayload(sessionId: String, messages: [ChatMessage]) -> [String: Any] {
+        ["sessionId": sessionId, "messages": messages.map { $0.toDict() }]
+    }
+
     // MARK: Decode helpers (relay → Mac)
 
     /// `subscribe` mesajından sessionId çıkarır.
@@ -96,6 +107,11 @@ enum RemoteProtocol {
               let b64 = payload["data"] as? String,
               let data = Data(base64Encoded: b64) else { return nil }
         return (sessionId, data)
+    }
+
+    /// `subscribe` payload'ından mode; yoksa geriye-uyumlu `terminal`.
+    static func decodeSubscribeMode(_ payload: [String: Any]) -> String {
+        payload["mode"] as? String ?? "terminal"
     }
 }
 
