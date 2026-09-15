@@ -11,6 +11,9 @@ public enum ServerMessage: Sendable, Equatable {
     case data(TerminalChunk)
     // Telefondan yeni oturum için repo listesi
     case repos([Repo])
+    // Chat-mirror mesajları
+    case chat(sessionId: String, messages: [ChatMessage])
+    case chatAppend(sessionId: String, messages: [ChatMessage])
 }
 
 public enum CommandAction: Sendable, Equatable {
@@ -64,6 +67,12 @@ public enum PhoneProtocol {
         case "repos":
             struct ReposPayload: Decodable { let repos: [Repo] }
             return decodePayload(ReposPayload.self).map { ServerMessage.repos($0.repos) }
+        case "chat", "chat_append":
+            guard let sessionId = payload["sessionId"] as? String,
+                  let raw = payload["messages"] as? [[String: Any]] else { return nil }
+            let messages = raw.compactMap(ChatMessage.decode)
+            return type == "chat" ? .chat(sessionId: sessionId, messages: messages)
+                                  : .chatAppend(sessionId: sessionId, messages: messages)
         default: return nil
         }
     }
@@ -86,8 +95,8 @@ public enum PhoneProtocol {
 
     // MARK: Terminal-mirror encoders
 
-    public static func subscribeFrame(sessionId: String) -> String {
-        frame(type: "subscribe", payload: ["sessionId": sessionId])
+    public static func subscribeFrame(sessionId: String, mode: String = "terminal") -> String {
+        frame(type: "subscribe", payload: ["sessionId": sessionId, "mode": mode])
     }
 
     public static func unsubscribeFrame(sessionId: String) -> String {

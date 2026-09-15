@@ -159,6 +159,9 @@ public final class AppModel {
 
         case .pong:
             break
+
+        case .chat, .chatAppend:
+            break
         }
     }
 
@@ -179,6 +182,10 @@ public final class AppModel {
             "data \(chunk.sessionId.prefix(8)) seq=\(chunk.seq)"
         case .repos(let repos):
             "repos count=\(repos.count)"
+        case .chat(_, let messages):
+            "chat count=\(messages.count)"
+        case .chatAppend(_, let messages):
+            "chat_append count=\(messages.count)"
         }
     }
 
