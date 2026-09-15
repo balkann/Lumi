@@ -88,6 +88,18 @@ final actor FakeRelayConnection: RelayConnecting {
         }
     }
 
+    func lastBool(type: String, key: String) -> Bool? { sent.last { $0.type == type }?.payload[key] as? Bool }
+    func lastInt(type: String, key: String) -> Int? { sent.last { $0.type == type }?.payload[key] as? Int }
+    func lastString(type: String, key: String) -> String? { sent.last { $0.type == type }?.payload[key] as? String }
+    func waitForCount(type: String, atLeast n: Int) async throws {
+        let deadline = Date().addingTimeInterval(2)
+        while Date() < deadline {
+            if sent.filter({ $0.type == type }).count >= n { return }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        throw FakeError.timeout("expected >= \(n) '\(type)', have \(count(type: type))")
+    }
+
     enum FakeError: Error { case timeout(String) }
 }
 

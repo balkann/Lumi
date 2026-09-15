@@ -33,6 +33,12 @@ public final class RemoteService: RemoteServicing {
     /// Session başına chat tail task'ı (mode=chat aboneliği).
     private var chatSubscriptions: [TerminalID: Task<Void, Never>] = [:]
 
+    /// Faz 2: hook olay akışı + session başına turn-status reducer'ları.
+    private let hookEvents: AsyncStream<AgentHookEvent>
+    private let turnClock: @Sendable () -> Date
+    private var turnReducers: [TerminalID: TurnStatusReducer] = [:]
+    private var hookTask: Task<Void, Never>?
+
     private var inboundTask: Task<Void, Never>?
     private var terminalTask: Task<Void, Never>?
     private var running = false
@@ -51,7 +57,9 @@ public final class RemoteService: RemoteServicing {
         repos: any RepoServicing,
         connection: (any RelayConnecting)? = nil,
         chatSource: any ChatTranscriptSourcing,
-        trust: any ClaudeWorkspaceTrusting = NoopClaudeWorkspaceTrust()
+        trust: any ClaudeWorkspaceTrusting = NoopClaudeWorkspaceTrust(),
+        hookEvents: AsyncStream<AgentHookEvent> = AsyncStream { _ in },
+        turnClock: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.configService = RemoteConfigService(paths: paths)
         self.terminal = terminal
@@ -59,6 +67,8 @@ public final class RemoteService: RemoteServicing {
         self.connection = connection ?? RelayConnection()
         self.commandHandler = RemoteCommandHandler(terminal: terminal, trust: trust)
         self.chatSource = chatSource
+        self.hookEvents = hookEvents
+        self.turnClock = turnClock
     }
 
     public func events() -> AsyncStream<RemoteEvent> { broadcaster.stream() }
@@ -84,6 +94,11 @@ public final class RemoteService: RemoteServicing {
                 await self?.handleTerminalEvent(event)
             }
         }
+        hookTask = Task { [weak self, hookEvents] in
+            for await event in hookEvents {
+                await self?.handleHookEvent(event)
+            }
+        }
         await connection.start(url: url, hello: ["role": "mac", "token": currentConfig.token])
         guard myEpoch == epoch else { return }
         setState(.connecting)
@@ -102,6 +117,8 @@ public final class RemoteService: RemoteServicing {
         subscriptions.removeAll()
         for task in chatSubscriptions.values { task.cancel() }
         chatSubscriptions.removeAll()
+        hookTask?.cancel(); hookTask = nil
+        turnReducers.removeAll()
         seqCounters.removeAll()
         await connection.stop()
         setState(.disconnected)
@@ -160,6 +177,7 @@ public final class RemoteService: RemoteServicing {
                 cancelSubscription(id)
                 cancelChatSubscription(id)
                 modelCache[id] = nil
+                turnReducers[id] = nil
             }
             await sendSessions()
         case .titleChanged, .awaitingDecisionChanged, .bell, .providerChanged, .writeFailed, .stalled, .viewFocused:
@@ -239,6 +257,8 @@ public final class RemoteService: RemoteServicing {
                 }
             }
             chatSubscriptions[id] = task
+            let snapshot = turnReducers[id]?.status ?? .idle
+            await emitTurnStatus(id: id, status: snapshot)
             return
         }
 
@@ -281,6 +301,27 @@ public final class RemoteService: RemoteServicing {
     private func cancelChatSubscription(_ id: TerminalID) {
         chatSubscriptions[id]?.cancel()
         chatSubscriptions[id] = nil
+    }
+
+    // MARK: - Turn status (Faz 2)
+
+    private func handleHookEvent(_ event: AgentHookEvent) async {
+        let id = event.terminalID
+        let reducer = turnReducers[id] ?? {
+            let r = TurnStatusReducer(now: turnClock)
+            turnReducers[id] = r
+            return r
+        }()
+        guard let status = reducer.reduce(event) else { return }
+        guard chatSubscriptions[id] != nil else { return }
+        await emitTurnStatus(id: id, status: status)
+    }
+
+    private func emitTurnStatus(id: TerminalID, status: ChatTurnStatus) async {
+        await connection.send(
+            type: "chat_status",
+            payload: RemoteProtocol.chatStatusPayload(sessionId: id.description, status: status)
+        )
     }
 
     private func emitData(id: TerminalID, sessionId: String, batch: Data) async {
