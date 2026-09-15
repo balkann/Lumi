@@ -29,4 +29,9 @@ import Foundation
         let e = parse(#"{"hook_event_name":"PreToolUse","tool_input":{"blob":"\#(big)"}}"#)
         #expect(e?.toolInput == nil)   // 16 KB tavan aşıldı
     }
+
+    @Test func nilWhenToolInputIsExplicitNull() {
+        let e = parse(#"{"hook_event_name":"Stop","tool_input":null}"#)
+        #expect(e?.toolInput == nil)
+    }
 }
