@@ -14,7 +14,11 @@ struct LumiSectionTitle: View {
             Text(description)
                 .font(Theme.Typography.bodyMono)
                 .foregroundStyle(Theme.textSecondary)
+                // Metin kendi ideal yüksekliğini alır: aksi hâlde satır
+                // yuvarlamasıyla son harf tek başına alt satıra düşüyordu.
+                .fixedSize(horizontal: false, vertical: true)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.bottom, Theme.Spacing.xxl)
     }
 }

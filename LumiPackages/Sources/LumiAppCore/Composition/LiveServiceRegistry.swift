@@ -77,9 +77,10 @@ final class LiveServiceRegistry: ServiceRegistry {
         ))
         notifications = NotificationService(presenter: notificationPresenter)
         // K38-A: her kullanım kaynağı 5 dk TTL cache dekoratörüyle sarılır
-        // (design/05 §cache "≥5 dk TTL"). En küçük otomatik tazeleme aralığı da
-        // 5 dk olduğundan (`UsageAutoRefresh.allowedIntervals`) döngü cache'e
-        // takılıp boşa dönmez; manuel yenileme cache'i açıkça geçersizler.
+        // (design/05 §cache "≥5 dk TTL"). Otomatik döngü de manuel yenileme de
+        // `UsageStore.refresh()`'ten geçip cache'i açıkça geçersizlediği için
+        // 1 dk'lık aralık (karar 55) TTL'e takılmaz; TTL yalnız art arda gelen
+        // KENDİLİĞİNDEN okumaları (ilk yükleme) sınırlar.
         usageServices = [
             .claude: Self.cached(ClaudeUsageService()),
             // Karar 55: Codex probe'u (süreç spawn'ı + RPC) asılabiliyordu;

@@ -173,7 +173,7 @@ final class ConfigCodecIntegrityTests: XCTestCase {
         ),
         autoMinimizeOnSend: true,
         sessionTrigger: SessionTrigger(enabled: true, hour: 22, minute: 45, prompt: "go"),
-        usageAutoRefresh: UsageAutoRefresh(enabled: true, intervalMinutes: 15),
+        usageAutoRefresh: UsageAutoRefresh(enabled: true, intervalMinutes: 1),
         usageIndicators: UsageIndicators(claude: false, codex: true),
         computerAwakeMode: .auto,
         agentHooksEnabled: false,
@@ -253,7 +253,7 @@ extension ConfigCodecIntegrityTests {
     }
 
     func testUsageAutoRefreshCodecCoversEveryField() {
-        let value = UsageAutoRefresh(enabled: true, intervalMinutes: 30)
+        let value = UsageAutoRefresh(enabled: true, intervalMinutes: 1)
         assertOverlayMatchesFields(value, overlay: UsageAutoRefreshCodec.overlay(value))
         XCTAssertEqual(UsageAutoRefreshCodec.decode(UsageAutoRefreshCodec.overlay(value)), value)
     }
