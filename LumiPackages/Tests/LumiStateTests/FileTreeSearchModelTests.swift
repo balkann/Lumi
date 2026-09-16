@@ -39,6 +39,23 @@ final class FileTreeSearchModelTests: XCTestCase {
         try? await Task.sleep(for: debounce * 6)
     }
 
+    /// Yüklü CI runner'ında 20 ms'lik debounce penceresi sabit uykuyla
+    /// yakalanamıyor (task planlaması gecikiyor). Bir şeyin OLMASINI bekleyen
+    /// assert'ler koşula kadar yoklar; sabit uyku yalnız bir şeyin OLMAMASINI
+    /// doğrulayan testlerde kalır.
+    private func waitUntil(
+        _ description: String,
+        timeout: Duration = .seconds(5),
+        _ condition: () async -> Bool
+    ) async {
+        let deadline = ContinuousClock.now + timeout
+        while ContinuousClock.now < deadline {
+            if await condition() { return }
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+        XCTFail("zaman aşımı: \(description)")
+    }
+
     // MARK: - Debounce
 
     func testRapidTypingRunsSearchOnce() async {
@@ -48,7 +65,8 @@ final class FileTreeSearchModelTests: XCTestCase {
         model.setQuery("m", tree: tree)
         model.setQuery("ma", tree: tree)
         model.setQuery("mai", tree: tree)
-        await settle()
+        await waitUntil("debounce penceresi kapanmalı") { await spy.callCount >= 1 }
+        await settle() // pencere kapandıktan sonra ikinci bir arama doğmadığını da görelim
 
         let count = await spy.callCount
         let last = await spy.last
@@ -73,9 +91,9 @@ final class FileTreeSearchModelTests: XCTestCase {
         let model = makeModel(spy: spy)
 
         model.setQuery("first", tree: tree)
-        try? await Task.sleep(for: debounce * 3)
+        await waitUntil("ilk pencere kapanmalı") { await spy.callCount >= 1 }
         model.setQuery("second", tree: tree)
-        await settle()
+        await waitUntil("ikinci pencere kapanmalı") { await spy.callCount >= 2 }
 
         let queries = await spy.queries
         XCTAssertEqual(queries, ["first", "second"], "her tamamlanan pencere bir kez koşar")
@@ -104,8 +122,7 @@ final class FileTreeSearchModelTests: XCTestCase {
         let model = makeModel(spy: spy)
 
         model.setQuery("main", tree: tree)
-        await settle()
-        XCTAssertNotNil(model.results)
+        await waitUntil("ilk arama sonuç üretmeli") { model.results != nil }
 
         model.setQuery("", tree: tree)
         await settle()
@@ -134,7 +151,7 @@ final class FileTreeSearchModelTests: XCTestCase {
         let model = makeModel(spy: spy)
 
         model.setQuery("  main  ", tree: tree)
-        await settle()
+        await waitUntil("arama koşmalı") { await spy.callCount >= 1 }
 
         let last = await spy.last
         XCTAssertEqual(last, "main")
@@ -148,13 +165,15 @@ final class FileTreeSearchModelTests: XCTestCase {
         let model = makeModel(spy: spy)
 
         model.setQuery("main", tree: tree)
-        await settle()
+        await waitUntil("ilk arama sonuç üretmeli") { model.results == ["src:main"] }
 
         let grown = tree + [
             FileTreeNode(name: "docs", path: "docs", type: .folder, isIgnored: false, children: []),
         ]
         model.setQuery(model.query, tree: grown)
-        await settle()
+        await waitUntil("tazelenen ağaç yeniden aranmalı") {
+            model.results == ["src:main", "docs:main"]
+        }
 
         XCTAssertEqual(model.results, ["src:main", "docs:main"], "watcher tazelemesi sonucu günceller")
     }
