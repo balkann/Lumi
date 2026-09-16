@@ -52,6 +52,7 @@ public extension ShellContext {
                 onComplete: {}
             ),
             usage: [:],
+            deepSeek: DeepSeekStore(service: PreviewDeepSeekEnvironmentService(), toasts: shared.toasts),
             computerAwake: ComputerAwakeStore(
                 terminals: shared.terminals, settings: shared.settings, assertion: PreviewSleepAssertion()
             ),
@@ -169,6 +170,20 @@ private final class PreviewSleepAssertion: SleepAsserting {
     func setPreventingSleep(_ prevent: Bool, reason: String) -> Bool {
         isPreventingSleep = prevent
         return true
+    }
+}
+
+private struct PreviewDeepSeekEnvironmentService: DeepSeekEnvironmentServicing {
+    func read() async -> DeepSeekSetup {
+        DeepSeekSetup(envFilePath: "/Users/preview/.claude/deepseek.env", apiKey: nil)
+    }
+
+    func install(apiKey: String) async throws -> DeepSeekSetup {
+        DeepSeekSetup(envFilePath: "/Users/preview/.claude/deepseek.env", apiKey: apiKey)
+    }
+
+    func remove() async throws -> DeepSeekSetup {
+        DeepSeekSetup(envFilePath: "/Users/preview/.claude/deepseek.env", apiKey: nil)
     }
 }
 

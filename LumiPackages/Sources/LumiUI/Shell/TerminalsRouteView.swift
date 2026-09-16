@@ -79,7 +79,7 @@ public struct TerminalsRouteView: View {
                         command: shell.settings.current.aiProvider.launchCommand
                     )
                 },
-                onNewBash: { shell.terminals.spawn(in: repoPath, task: "Bash") }
+                items: NewTerminalMenu.items(shell: shell, repoPath: repoPath)
             )
         }
     }

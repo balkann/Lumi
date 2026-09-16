@@ -2,18 +2,40 @@ import LumiKit
 import LumiState
 import SwiftUI
 
+/// Dropdown'daki tek seçenek (karar 54): ikon + etiket + eylem. Liste
+/// çağırandan gelir — buton hangi ajanların kurulu olduğunu bilmez.
+struct NewTerminalMenuItem: Identifiable {
+    /// Satır ikonu: sağlayıcı marka glyph'i ya da SF Symbol.
+    enum Glyph {
+        case provider(AgentProvider)
+        case symbol(String)
+    }
+
+    let label: String
+    let glyph: Glyph
+    let action: () -> Void
+
+    var id: String { label }
+
+    init(label: String, glyph: Glyph, action: @escaping () -> Void) {
+        self.label = label
+        self.glyph = glyph
+        self.action = action
+    }
+}
+
 /// Modern "New <Provider>" split-button (v1 paritesi): solid mor; sol kısım
 /// aktif provider'ı spawn eder, sağ chevron özel koyu dropdown'u **hover'da**
-/// açar (New Bash). Buton VEYA popover üstünde hover olduğu sürece
-/// açık kalır; ikisinden de ayrılınca kısa grace period sonra kapanır. Native
-/// NSMenu DEĞİL — temalı popover.
+/// açar (diğer ajanlar + New Bash). Buton VEYA popover üstünde hover olduğu
+/// sürece açık kalır; ikisinden de ayrılınca kısa grace period sonra kapanır.
+/// Native NSMenu DEĞİL — temalı popover.
 struct NewTerminalButton: View {
     static let hoverOpenDelay = Theme.Motion.hoverOpenDelay
     static let hoverCloseDelay = Theme.Motion.hoverCloseDelay
 
     let provider: AgentProvider
     let onNewProvider: () -> Void
-    let onNewBash: () -> Void
+    let items: [NewTerminalMenuItem]
 
     @State private var isOpen = false
     @State private var openTask: Task<Void, Never>?
@@ -89,9 +111,11 @@ struct NewTerminalButton: View {
 
     private var dropdown: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
-            NewTerminalDropdownItem(icon: "terminal", label: "New Bash") {
-                isOpen = false
-                onNewBash()
+            ForEach(items) { item in
+                NewTerminalDropdownItem(glyph: item.glyph, label: item.label) {
+                    isOpen = false
+                    item.action()
+                }
             }
         }
         .padding(Theme.Spacing.sm)
@@ -102,20 +126,16 @@ struct NewTerminalButton: View {
 
 /// Dropdown satırı — hover'da highlight (v1 dark dropdown paritesi).
 private struct NewTerminalDropdownItem: View {
-    let icon: String?
+    let glyph: NewTerminalMenuItem.Glyph
     let label: String
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: Theme.Spacing.md) {
-                if let icon {
-                    Image(systemName: icon)
-                        .font(Theme.Typography.ui(.body))
-                        .foregroundStyle(Theme.textMuted)
-                        .frame(width: Theme.Spacing.xl)
-                        .accessibilityHidden(true)
-                }
+                icon
+                    .frame(width: Theme.Spacing.xl)
+                    .accessibilityHidden(true)
                 Text(label)
                     .font(Theme.Typography.mono(.body))
                 Spacer(minLength: 0)
@@ -132,11 +152,31 @@ private struct NewTerminalDropdownItem: View {
         )
         .accessibilityLabel(label)
     }
+
+    @ViewBuilder
+    private var icon: some View {
+        switch glyph {
+        case .provider(let provider):
+            ProviderIcon(provider: provider, size: .body)
+        case .symbol(let name):
+            Image(systemName: name)
+                .font(Theme.Typography.ui(.body))
+                .foregroundStyle(Theme.textMuted)
+        }
+    }
 }
 
 #if DEBUG
 #Preview("NewTerminalButton") {
-    NewTerminalButton(provider: .claude, onNewProvider: {}, onNewBash: {})
+    NewTerminalButton(
+        provider: .claude,
+        onNewProvider: {},
+        items: [
+            NewTerminalMenuItem(label: "New Codex", glyph: .provider(.codex), action: {}),
+            NewTerminalMenuItem(label: "New DeepSeek", glyph: .symbol("sparkles"), action: {}),
+            NewTerminalMenuItem(label: "New Bash", glyph: .symbol("terminal"), action: {}),
+        ]
+    )
         .padding(Theme.Spacing.xxl)
         .background(Theme.bgSurface)
 }

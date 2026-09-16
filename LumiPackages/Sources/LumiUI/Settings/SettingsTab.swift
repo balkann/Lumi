@@ -6,6 +6,7 @@ import SwiftUI
 /// (+ `content`'te bir satır). Panel kabuğu (`SettingsShell`) hiç değişmez.
 enum SettingsTab: String, CaseIterable, Identifiable {
     case general
+    case agent
     case terminal
     case appearance
     case notifications
@@ -18,6 +19,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .general: return "General"
+        case .agent: return "Agent"
         case .terminal: return "Terminal"
         case .appearance: return "Appearance"
         case .notifications: return "Notifications"
@@ -31,6 +33,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .general: return "folder"
+        case .agent: return "cpu"
         case .terminal: return "terminal"
         case .appearance: return "paintpalette"
         case .notifications: return "bell"
@@ -47,6 +50,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     var content: some View {
         switch self {
         case .general: GeneralSettingsTab()
+        case .agent: AgentSettingsTab()
         case .terminal: TerminalSettingsTab()
         case .appearance: AppearanceSettingsTab()
         case .notifications: NotificationsSettingsTab()

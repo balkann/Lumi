@@ -21,6 +21,8 @@ public final class FakeTerminalService: TerminalServicing {
 
     // MARK: Çağrı kaydı
     public private(set) var spawnedMetas: [TerminalMeta] = []
+    /// Spawn argümanları — meta komutu taşımadığı için ayrı kaydedilir.
+    public private(set) var spawnCalls: [(repoPath: String, task: String?, command: String?)] = []
     public private(set) var spawnAttempts = 0
     public private(set) var killedIDs: [TerminalID] = []
     public private(set) var killAllCount = 0
@@ -78,6 +80,7 @@ public final class FakeTerminalService: TerminalServicing {
             task: task
         )
         spawnedMetas.append(meta)
+        spawnCalls.append((repoPath, task, command))
         broadcaster.send(.spawned(meta))
         return meta
     }

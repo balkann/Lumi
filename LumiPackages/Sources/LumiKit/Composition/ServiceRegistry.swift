@@ -24,6 +24,8 @@ public protocol ServiceRegistry: AnyObject {
     var agentHistory: any AgentHistoryServicing { get }
     /// Agent History oturumu dışa/içe aktarımı (karar 52).
     var agentSessionTransfer: any AgentSessionTransferring { get }
+    /// DeepSeek env dosyası kurulumu (karar 54).
+    var deepSeek: any DeepSeekEnvironmentServicing { get }
 
     /// Oturum kontrolü + görünüm ayarı (ISP: `TerminalServicing` bileşimi).
     /// Somut `TerminalSessionManager` bu yüzeyin ARDINDA kalır.

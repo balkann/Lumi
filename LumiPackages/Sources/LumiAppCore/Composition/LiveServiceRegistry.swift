@@ -19,6 +19,7 @@ final class LiveServiceRegistry: ServiceRegistry {
     let workspaces: any WorkspaceServicing
     let agentHistory: any AgentHistoryServicing
     let agentSessionTransfer: any AgentSessionTransferring
+    let deepSeek: any DeepSeekEnvironmentServicing
     let git: any GitServicing
     let plastic: any PlasticServicing
     let commitMessages: any CommitMessageGenerating
@@ -69,6 +70,7 @@ final class LiveServiceRegistry: ServiceRegistry {
         commitMessages = ClaudeCommitMessageService()
         agentHistory = AgentHistoryService()
         agentSessionTransfer = AgentSessionTransferService()
+        deepSeek = DeepSeekEnvironmentService()
         highlighter = HighlightrEngine(style: HighlightrStyle(
             plainTextColor: Theme.NS.textPrimary,
             font: { LumiFonts.mono(size: $0) }

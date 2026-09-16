@@ -66,6 +66,8 @@ public final class ShellContext {
     public let onboarding: OnboardingStore
     /// Sağlayıcı başına kullanım store'u (karar 32).
     public let usage: [AgentProvider: UsageStore]
+    /// DeepSeek env kurulumu (karar 54) — Settings ▸ Agent + New DeepSeek.
+    public let deepSeek: DeepSeekStore
     /// Alt bar store'ları (karar 43).
     public let computerAwake: ComputerAwakeStore
     public let resourceUsage: ResourceUsageStore
@@ -94,6 +96,7 @@ public final class ShellContext {
         toasts: ToastStore,
         onboarding: OnboardingStore,
         usage: [AgentProvider: UsageStore],
+        deepSeek: DeepSeekStore,
         computerAwake: ComputerAwakeStore,
         resourceUsage: ResourceUsageStore,
         viewProvider: any TerminalViewProviding,
@@ -117,6 +120,7 @@ public final class ShellContext {
         self.toasts = toasts
         self.onboarding = onboarding
         self.usage = usage
+        self.deepSeek = deepSeek
         self.computerAwake = computerAwake
         self.resourceUsage = resourceUsage
         self.viewProvider = viewProvider

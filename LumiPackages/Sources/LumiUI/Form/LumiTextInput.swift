@@ -8,12 +8,14 @@ struct LumiTextInput: View {
     var placeholder = ""
     var width: CGFloat?
     var autofocus = false
+    /// Sır alanı (API anahtarı): karakterler maskelenir.
+    var isSecure = false
     var onSubmit: (() -> Void)?
 
     @FocusState private var isFocused: Bool
 
     var body: some View {
-        TextField(placeholder, text: $text)
+        field
             .textFieldStyle(.plain)
             .font(Theme.Typography.bodyMono)
             .foregroundStyle(Theme.textPrimary)
@@ -33,6 +35,15 @@ struct LumiTextInput: View {
                     )
             )
             .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
+    }
+
+    @ViewBuilder
+    private var field: some View {
+        if isSecure {
+            SecureField(placeholder, text: $text)
+        } else {
+            TextField(placeholder, text: $text)
+        }
     }
 }
 

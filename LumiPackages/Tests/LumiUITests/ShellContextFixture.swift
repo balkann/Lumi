@@ -55,6 +55,7 @@ struct ShellContextFixture {
                 onComplete: {}
             ),
             usage: [:],
+            deepSeek: DeepSeekStore(service: FakeDeepSeekEnvironmentService(), toasts: toasts),
             computerAwake: ComputerAwakeStore(
                 terminals: shared.terminals, settings: shared.settings, assertion: FakeSleepAssertion()
             ),
