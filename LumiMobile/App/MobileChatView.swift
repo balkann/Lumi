@@ -53,6 +53,9 @@ struct MobileChatView: View {
                         model.respondPromptSelections(sessionId, itemId: pending.itemId, revision: pending.revision, selections: selections)
                     }
                 )
+                // Her pending prompt için taze @State (seçim/free-text/sending sızmasın);
+                // art arda farklı prompt'larda bayat seçim/takılı buton olmaz.
+                .id(pending.itemId)
             }
             composer
         }
