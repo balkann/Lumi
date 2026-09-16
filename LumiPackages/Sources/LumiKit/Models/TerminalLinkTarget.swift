@@ -29,6 +29,14 @@ public enum TerminalLinkPathKind: Sendable, Equatable {
     case directory
 }
 
+/// Diske sorulmadan ÖNCE çözülen aday: ya bir web adresi ya mutlak bir yol.
+/// İki adımlı olması, dosya sistemi sorgusunun (ağ mount'unda saniyeler
+/// sürebilir) MainActor dışına alınabilmesi içindir (karar 57 sertleştirmesi).
+public enum TerminalLinkCandidate: Sendable, Equatable {
+    case url(URL)
+    case path(String)
+}
+
 /// Ham link metnini hedefe çeviren saf çözümleyici.
 public enum TerminalLinkResolver {
     /// Link metninin sonundaki `:satır[:sütun]` eki (derleyici/test çıktıları).
@@ -37,13 +45,12 @@ public enum TerminalLinkResolver {
     /// Metnin başına/sonuna yapışan noktalama (cümle içindeki path'ler).
     private static let trimmedEdges = CharacterSet(charactersIn: "\"'`<>()[]{},;")
 
-    public static func resolve(
+    /// 1. adım — diske dokunmadan: web adresi mi, hangi mutlak yol mu?
+    public static func candidate(
         link: String,
         basePath: String,
-        homeDirectory: String,
-        knownRoots: [String],
-        pathKind: (String) -> TerminalLinkPathKind
-    ) -> TerminalLinkTarget? {
+        homeDirectory: String
+    ) -> TerminalLinkCandidate? {
         let cleaned = link
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .trimmingCharacters(in: trimmedEdges)
@@ -58,10 +65,41 @@ public enum TerminalLinkResolver {
         guard let path = absolutePath(
             for: stripLineSuffix(cleaned), basePath: basePath, homeDirectory: homeDirectory
         ) else { return nil }
+        return .path(path)
+    }
 
-        let roots = Set(knownRoots.map(standardized))
-        if roots.contains(path) { return .workspace(path: path) }
-        return pathKind(path) == .directory ? .directory(path: path) : .file(path: path)
+    /// 2. adım — diskin cevabı elde: hedefi sınıflandır.
+    public static func classify(
+        _ candidate: TerminalLinkCandidate,
+        knownRoots: [String],
+        kind: TerminalLinkPathKind
+    ) -> TerminalLinkTarget {
+        switch candidate {
+        case .url(let url):
+            return .url(url)
+        case .path(let path):
+            let roots = Set(knownRoots.map(standardized))
+            if roots.contains(path) { return .workspace(path: path) }
+            return kind == .directory ? .directory(path: path) : .file(path: path)
+        }
+    }
+
+    /// İki adımın senkron birleşimi (testler ve diske sormayan çağrılar için).
+    public static func resolve(
+        link: String,
+        basePath: String,
+        homeDirectory: String,
+        knownRoots: [String],
+        pathKind: (String) -> TerminalLinkPathKind
+    ) -> TerminalLinkTarget? {
+        guard let candidate = candidate(
+            link: link, basePath: basePath, homeDirectory: homeDirectory
+        ) else { return nil }
+        let kind: TerminalLinkPathKind = {
+            guard case let .path(path) = candidate else { return .missing }
+            return pathKind(path)
+        }()
+        return classify(candidate, knownRoots: knownRoots, kind: kind)
     }
 
     /// Yolu içeren EN YAKIN (en uzun) bilinen kök — FileViewer repo-göreli çalışır.

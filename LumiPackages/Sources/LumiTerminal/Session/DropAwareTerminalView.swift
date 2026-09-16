@@ -67,6 +67,7 @@ final class DropAwareTerminalView: TerminalView {
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         hideScroller()
+        observeFocusLoss()
         if window == nil {
             scrollRedrawTask?.cancel()
             scrollRedrawTask = nil
@@ -75,6 +76,28 @@ final class DropAwareTerminalView: TerminalView {
             cancelLinkGesture()
         }
     }
+
+    /// Fare basılıyken ⌘-Tab / Mission Control / menü açılması `mouseUp`'ı
+    /// düşürebilir; o hâlde bekletme açık kalıp o terminale giden TÜM fare
+    /// raporlarını yutardı. Odak kaybında jest iptal edilir (karar 57).
+    private func observeFocusLoss() {
+        focusLossObservers.forEach { NotificationCenter.default.removeObserver($0) }
+        focusLossObservers = []
+        // Pencereden koparken kayıtlar bırakılır (registry view'ı superview'dan
+        // aldığında burası nil pencereyle çağrılır) — sızıntı kalmaz.
+        guard let window else { return }
+        let center = NotificationCenter.default
+        let handler: (Notification) -> Void = { [weak self] _ in
+            MainActor.assumeIsolated { self?.cancelLinkGesture() }
+        }
+        focusLossObservers.append(center.addObserver(
+            forName: NSApplication.didResignActiveNotification, object: nil, queue: .main, using: handler
+        ))
+        focusLossObservers.append(center.addObserver(
+            forName: NSWindow.didResignKeyNotification, object: window, queue: .main, using: handler
+        ))
+    }
+
 
     // MARK: - Link jestleri (karar 57)
 
@@ -94,39 +117,42 @@ final class DropAwareTerminalView: TerminalView {
     var isLinkActionsEnabled = true
 
     private var linkGesture = TerminalLinkGestureTracker()
+    private var focusLossObservers: [any NSObjectProtocol] = []
     /// `.actions` jestinde `super.mouseDown` çağrıldığı için SwiftTerm seçim/
     /// rapor akışı normal işler; raporlar oturumda bekletilir.
     private var isDeferringMouseReports = false
 
     override func mouseDown(with event: NSEvent) {
-        linkGesture.cancel()
-        guard let gesture = Self.gesture(for: event),
-              gesture != .actions || isLinkActionsEnabled,
-              let link = link(at: event) else {
-            finishDeferredReports(claimed: false)
+        cancelLinkGesture()
+        guard let gesture = Self.gesture(for: event), isAllowed(gesture) else {
             super.mouseDown(with: event)
             return
         }
-        linkGesture.begin(
-            link: link,
-            gesture: gesture,
-            origin: event.locationInWindow,
-            hadSelection: selectionActive
-        )
         switch gesture {
         case .actions:
-            // Seçim/odak davranışı korunur; PTY'ye giden rapor bekletilir.
-            beginDeferredReports()
+            // Link araması mouseUp'a ERTELENİR: düz tıkın büyük çoğunluğu bir
+            // linkin üstünde değildir ve Ghostty regex'i her tıkta koşarsa
+            // (satır birleştirmeli, scrollback boyu) main thread'e biner.
+            beginGesture(link: nil, gesture: gesture, event: event)
+            // Seçim/odak davranışı korunur; TUI fare raporlamıyor (isAllowed).
             super.mouseDown(with: event)
         case .primary, .alternate:
+            guard let link = link(at: event) else {
+                super.mouseDown(with: event)
+                return
+            }
             // Doğrudan aktivasyon: tık ne TUI'ye gider ne seçimi bozar.
-            break
+            beginGesture(link: link, gesture: gesture, event: event)
         }
     }
 
     override func mouseDragged(with event: NSEvent) {
+        let gesture = linkGesture.activeGesture
         linkGesture.noteDrag(to: event.locationInWindow)
-        guard linkGesture.activeGesture == .primary || linkGesture.activeGesture == .alternate else {
+        // Sürükleme jesti iptal eder; bekletilen raporlar mouseUp'ı BEKLEMEDEN
+        // akar, yoksa fare raporlayan bir TUI sürüklemeyi canlı göremezdi.
+        if linkGesture.isCancelledByDrag { finishDeferredReports(claimed: false) }
+        guard gesture == .primary || gesture == .alternate else {
             super.mouseDragged(with: event)
             return
         }
@@ -143,8 +169,34 @@ final class DropAwareTerminalView: TerminalView {
             finishDeferredReports(claimed: false)
             return
         }
+        // Ertelenen arama: `.actions` jestinde link ancak burada çözülür.
+        guard let link = resolved.link ?? self.link(at: event) else {
+            finishDeferredReports(claimed: false)
+            return
+        }
         finishDeferredReports(claimed: true)
-        onLinkActivation?(resolved.link, resolved.gesture, shellAnchor(for: event))
+        onLinkActivation?(link, resolved.gesture, shellAnchor(for: event))
+    }
+
+    /// `.actions` (düz tık) YALNIZ fare raporlamayan bir terminalde link yoluna
+    /// girer (kullanıcı kararı): Claude/tmux/htop çalışırken düz tık terminale
+    /// aittir — caret koyma, seçim ve sürükleme aynen korunur. Link için ⌘/⇧⌘
+    /// her koşulda çalışır.
+    private func isAllowed(_ gesture: TerminalLinkGesture) -> Bool {
+        guard gesture == .actions else { return true }
+        return isLinkActionsEnabled && getTerminal().mouseMode == .off
+    }
+
+    private func beginGesture(link: String?, gesture: TerminalLinkGesture, event: NSEvent) {
+        linkGesture.begin(
+            link: link,
+            gesture: gesture,
+            origin: event.locationInWindow,
+            hadSelection: selectionActive
+        )
+        // Mod jest ortasında değişirse (TUI fare takibini yeni açtıysa) başıboş
+        // bir rapor kaçmasın diye bekletme `.actions` jestinde yine kurulur.
+        if gesture == .actions { beginDeferredReports() }
     }
 
     private func cancelLinkGesture() {
@@ -182,14 +234,17 @@ final class DropAwareTerminalView: TerminalView {
     /// eşleşme (SwiftTerm'in Ghostty regex'i — URL, mutlak/göreli path, `~/`).
     private func link(at event: NSEvent) -> String? {
         let terminal = getTerminal()
-        let cell = MouseWheelGeometry.gridCell(
+        // Hücre boyutu SwiftTerm'in kendi `cellDimension`'ından türer (`cellSize`);
+        // `bounds/rows` kesirli hücrelerde kenarlarda bir satır kayabiliyordu.
+        let cell = TerminalLinkHitTest.gridCell(
             forViewPoint: convert(event.locationInWindow, from: nil),
+            cellSize: cellSize,
             bounds: bounds,
             cols: terminal.cols,
             rows: terminal.rows,
             isFlipped: isFlipped
         )
-        let position = Position(col: cell.col - 1, row: cell.row - 1)
+        let position = Position(col: cell.col, row: cell.row)
         guard let text = terminal.link(at: .screen(position), mode: .explicitAndImplicit) else { return nil }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed

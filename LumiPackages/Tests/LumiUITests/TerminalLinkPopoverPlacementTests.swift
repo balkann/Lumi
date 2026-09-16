@@ -13,16 +13,18 @@ final class TerminalLinkPopoverPlacementTests: XCTestCase {
         )
     }
 
-    func testDefaultPlacementIsBelowTheClick() {
-        let point = origin(CGPoint(x: 300, y: 200))
+    /// Varsayılan yer tıkın ÜSTÜ (Orca paritesi): terminalde yeni çıktı
+    /// aşağıdan geldiği için alttaki bağlam kapatılmaz.
+    func testDefaultPlacementIsAboveTheClick() {
+        let point = origin(CGPoint(x: 300, y: 400))
         XCTAssertEqual(point.x, 300)
-        XCTAssertEqual(point.y, 200 + TerminalLinkPopoverPlacement.gap)
+        XCTAssertEqual(point.y, 400 - TerminalLinkPopoverPlacement.gap - popover.height)
     }
 
-    /// Alta sığmıyorsa üste taşınır (ekranın dışına taşmaz).
-    func testFlipsAboveWhenItWouldOverflowTheBottom() {
-        let point = origin(CGPoint(x: 300, y: 760))
-        XCTAssertEqual(point.y, 760 - TerminalLinkPopoverPlacement.gap - popover.height)
+    /// Üste sığmıyorsa alta iner.
+    func testFlipsBelowWhenItWouldOverflowTheTop() {
+        let point = origin(CGPoint(x: 300, y: 40))
+        XCTAssertEqual(point.y, 40 + TerminalLinkPopoverPlacement.gap)
     }
 
     func testClampsToTheRightEdge() {

@@ -77,15 +77,29 @@ public enum TerminalMouseReport {
     private static let escape: UInt8 = 0x1B
     private static let bracket: UInt8 = 0x5B // [
 
-    /// X10: `ESC [ M` + 3 bayt. SGR: `ESC [ < a;b;c` + `M`/`m`.
+    /// Dört kodlama da tanınır — tanınmayan bir kodlama bekletilmeyip PTY'ye
+    /// akardı ve tık hem popover'ı açıp hem TUI'ye ulaşırdı (çift etki):
+    /// X10/UTF-8 (`ESC [ M` + 3…12 bayt), SGR (`ESC [ < a;b;c M|m`),
+    /// urxvt (`ESC [ a;b;c M`).
     public static func isReport(_ data: Data) -> Bool {
         let bytes = [UInt8](data)
         guard bytes.count >= 3, bytes[0] == escape, bytes[1] == bracket else { return false }
-        if bytes[2] == UInt8(ascii: "M") { return bytes.count == 6 }
-        guard bytes[2] == UInt8(ascii: "<"), bytes.count >= 7 else { return false }
+        if bytes[2] == UInt8(ascii: "M"), bytes.count > 3 {
+            // X10 üç bayt; UTF-8 (1005) kipinde her koordinat 2 bayta kadar çıkar.
+            return bytes.count >= 6 && bytes.count <= 12
+        }
+        let hasSGRPrefix = bytes[2] == UInt8(ascii: "<")
+        let bodyStart = hasSGRPrefix ? 3 : 2
+        guard bytes.count >= bodyStart + 4 else { return false }
         let last = bytes[bytes.count - 1]
-        guard last == UInt8(ascii: "M") || last == UInt8(ascii: "m") else { return false }
-        let body = bytes[3 ..< (bytes.count - 1)]
+        // urxvt (1015) yalnız `M` ile biter; SGR (1006) basma/bırakmayı M/m ayırır.
+        guard last == UInt8(ascii: "M") || (hasSGRPrefix && last == UInt8(ascii: "m")) else {
+            return false
+        }
+        return hasThreeNumericGroups(bytes[bodyStart ..< (bytes.count - 1)])
+    }
+
+    private static func hasThreeNumericGroups(_ body: ArraySlice<UInt8>) -> Bool {
         var digitsInGroup = 0
         var groups = 1
         for byte in body {
@@ -100,5 +114,23 @@ public enum TerminalMouseReport {
             }
         }
         return groups == 3 && digitsInGroup > 0
+    }
+}
+
+/// Tek tıkla ÇALIŞTIRILABİLECEK dosya türleri (karar 57 sertleştirmesi).
+///
+/// `NSWorkspace.open` bir `.command`/`.scpt`/`.pkg` dosyasını açmaz — ÇALIŞTIRIR.
+/// Terminale basılan metin güvenilmez bir kaynaktır (kötü niyetli bir repo'nun
+/// build çıktısı da olabilir), bu yüzden bu türlerde "varsayılan uygulamada aç"
+/// hiç önerilmez; kullanıcı Finder'da görür ve kendi karar verir.
+public enum TerminalLinkSafety {
+    public static let executableExtensions: Set<String> = [
+        "app", "action", "applescript", "bash", "command", "dmg", "fish", "jar",
+        "mpkg", "pkg", "scpt", "scptd", "sh", "shortcut", "terminal", "workflow", "zsh",
+    ]
+
+    public static func isExecutable(path: String) -> Bool {
+        let ext = (path as NSString).pathExtension.lowercased()
+        return !ext.isEmpty && executableExtensions.contains(ext)
     }
 }

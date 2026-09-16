@@ -57,13 +57,13 @@ final class ShellToolbarCompositionTests: XCTestCase {
     // MARK: - Overlay'ler
 
     /// Karar 57: link eylemi popover'ı yalnız açık bir istek varken çizilir.
-    func testTerminalLinkOverlayIsRegisteredAndGatedOnAnOpenRequest() {
+    func testTerminalLinkOverlayIsRegisteredAndGatedOnAnOpenRequest() async {
         let descriptor = registries.overlays.all.first { $0.id == .terminalLinkActions }
         XCTAssertNotNil(descriptor, "terminalLinkActions overlay'i kayıtlı değil")
         XCTAssertEqual(descriptor?.alignment, .topLeading)
         XCTAssertFalse(descriptor?.isPresented(fixture.context) ?? true)
 
-        fixture.context.terminalLinks.handle(TerminalLinkActivation(
+        await fixture.context.terminalLinks.handle(TerminalLinkActivation(
             terminalID: TerminalID(), link: "/tmp/logs",
             gesture: .actions, anchor: CGPoint(x: 4, y: 4)
         ))

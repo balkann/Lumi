@@ -22,8 +22,7 @@ struct TerminalLinkActionPopover: View {
         VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
             header
             Rectangle().fill(Theme.border).frame(height: Theme.Stroke.hairline)
-            row(request.primary)
-            if let alternate = request.alternate { row(alternate) }
+            ForEach(request.actions) { row($0) }
         }
         .padding(Theme.Spacing.xs)
         .frame(width: Self.width)
@@ -68,10 +67,12 @@ struct TerminalLinkActionPopover: View {
                     .font(Theme.Typography.ui(.body))
                     .lineLimit(1)
                 Spacer(minLength: Theme.Spacing.md)
-                HStack(spacing: Theme.Spacing.xs) {
-                    ForEach(action.shortcutKeys, id: \.self) { Keycap(key: $0) }
+                if !action.shortcutKeys.isEmpty {
+                    HStack(spacing: Theme.Spacing.xs) {
+                        ForEach(action.shortcutKeys, id: \.self) { Keycap(key: $0) }
+                    }
+                    .accessibilityHidden(true)
                 }
-                .accessibilityHidden(true)
             }
             .padding(.horizontal, Theme.Spacing.sm)
             .frame(height: Theme.Row.control)
@@ -96,6 +97,7 @@ struct TerminalLinkActionPopover: View {
     VStack(spacing: Theme.Spacing.xl) {
         TerminalLinkActionPopover(
             request: TerminalLinkRequest(
+                terminalID: TerminalID(),
                 target: .workspace(path: "/Users/dev/wkspaces/Github/Lumi"),
                 anchor: .zero,
                 primary: .init(
@@ -111,6 +113,7 @@ struct TerminalLinkActionPopover: View {
         )
         TerminalLinkActionPopover(
             request: TerminalLinkRequest(
+                terminalID: TerminalID(),
                 target: .url(URL(string: "https://lumi.dev/docs")!),
                 anchor: .zero,
                 primary: .init(

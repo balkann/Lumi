@@ -18,7 +18,12 @@ public enum TerminalLinkIntent: Sendable, Equatable {
 
 /// Popover'daki tek satır.
 public struct TerminalLinkAction: Identifiable, Equatable, Sendable {
-    public enum Slot: String, Sendable { case primary, alternate }
+    public enum Slot: String, Sendable {
+        case primary
+        case alternate
+        /// Kısayolu olmayan üçüncü satır (yalnız tıkla çalışır).
+        case extra
+    }
 
     public let slot: Slot
     public let title: String
@@ -32,20 +37,29 @@ public struct TerminalLinkAction: Identifiable, Equatable, Sendable {
 
     public var id: String { slot.rawValue }
 
-    /// Satırın sağındaki tuş kombinasyonu.
+    /// Satırın sağındaki tuş kombinasyonu; üçüncü satırın kısayolu yoktur.
     public var shortcutKeys: [String] {
-        slot == .primary ? ["⌘", "Click"] : ["⇧", "⌘", "Click"]
+        switch slot {
+        case .primary: return ["⌘", "Click"]
+        case .alternate: return ["⇧", "⌘", "Click"]
+        case .extra: return []
+        }
     }
 }
 
 /// Açık popover'ın durumu.
 public struct TerminalLinkRequest: Identifiable, Equatable, Sendable {
     public let id: UUID
+    /// Popover kapanınca klavye odağının geri verileceği terminal.
+    public let terminalID: TerminalID
     public let target: TerminalLinkTarget
     /// Kabuk koordinat uzayında tık noktası.
     public let anchor: CGPoint
     public let primary: TerminalLinkAction
     public let alternate: TerminalLinkAction?
+    /// Kısayolsuz üçüncü satır (ör. repo içindeki bir PDF'i sistem
+    /// uygulamasında açmak).
+    public let extra: TerminalLinkAction?
 
     public var destination: String { target.displayText }
 
@@ -55,18 +69,34 @@ public struct TerminalLinkRequest: Identifiable, Equatable, Sendable {
         return false
     }
 
+    /// Dosya hedeflerinde ⌘ tık BİLE doğrudan açmaz, popover sorar (kullanıcı
+    /// kararı: "file path'leri direkt Lumi'de açmasın, Finder mı Lumi mi diye
+    /// sorsun"). Workspace / dizin / URL'de ⌘ doğrudan çalışır.
+    public var asksBeforePrimary: Bool {
+        if case .file = target { return true }
+        return false
+    }
+
+    public var actions: [TerminalLinkAction] {
+        [primary, alternate, extra].compactMap { $0 }
+    }
+
     public init(
         id: UUID = UUID(),
+        terminalID: TerminalID,
         target: TerminalLinkTarget,
         anchor: CGPoint,
         primary: TerminalLinkAction,
-        alternate: TerminalLinkAction?
+        alternate: TerminalLinkAction?,
+        extra: TerminalLinkAction? = nil
     ) {
         self.id = id
+        self.terminalID = terminalID
         self.target = target
         self.anchor = anchor
         self.primary = primary
         self.alternate = alternate
+        self.extra = extra
     }
 }
 
@@ -84,7 +114,9 @@ public final class TerminalLinkActionStore {
     @ObservationIgnored private let repos: RepoStore
     @ObservationIgnored private let workspaces: ProjectWorkspaceStore
     @ObservationIgnored private let homeDirectory: String
-    @ObservationIgnored private let pathKind: (String) -> TerminalLinkPathKind
+    @ObservationIgnored private let pathKind: @Sendable (String) -> TerminalLinkPathKind
+    /// Asılı bir ağ mount'unda tık süresiz beklemesin.
+    private static let pathKindTimeout: Duration = .seconds(1)
     /// Kabuk bağlar; bağlanmazsa eylem sessizce düşer (test/preview).
     @ObservationIgnored public var onIntent: ((TerminalLinkIntent) -> Void)?
 
@@ -93,7 +125,7 @@ public final class TerminalLinkActionStore {
         repos: RepoStore,
         workspaces: ProjectWorkspaceStore,
         homeDirectory: String = NSHomeDirectory(),
-        pathKind: @escaping (String) -> TerminalLinkPathKind = TerminalLinkActionStore.diskPathKind
+        pathKind: @escaping @Sendable (String) -> TerminalLinkPathKind = TerminalLinkActionStore.diskPathKind
     ) {
         self.terminals = terminals
         self.repos = repos
@@ -102,7 +134,7 @@ public final class TerminalLinkActionStore {
         self.pathKind = pathKind
     }
 
-    public static func diskPathKind(_ path: String) -> TerminalLinkPathKind {
+    public nonisolated static func diskPathKind(_ path: String) -> TerminalLinkPathKind {
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory) else {
             return .missing
@@ -112,8 +144,10 @@ public final class TerminalLinkActionStore {
 
     // MARK: - Giriş
 
-    public func handle(_ activation: TerminalLinkActivation) {
-        guard let resolved = makeRequest(activation) else {
+    /// Dosya sistemi sorgusu MainActor'dan ÇIKARILIR: ağ mount'unda asılan tek
+    /// bir `fileExists` tüm uygulamayı (terminal feed'i dahil) dondururdu.
+    public func handle(_ activation: TerminalLinkActivation) async {
+        guard let resolved = await makeRequest(activation) else {
             request = nil
             return
         }
@@ -121,7 +155,8 @@ public final class TerminalLinkActionStore {
         case .actions:
             request = resolved
         case .primary:
-            perform(resolved.primary)
+            // Dosyada doğrudan açma YOK: popover "Lumi mi Finder mı" diye sorar.
+            if resolved.asksBeforePrimary { request = resolved } else { perform(resolved.primary) }
         case .alternate:
             // Alternatifi olmayan hedefte (URL, dizin) ⇧⌘ birincil eylemi işletir.
             perform(resolved.alternate ?? resolved.primary)
@@ -144,63 +179,98 @@ public final class TerminalLinkActionStore {
         repos.repos.map(\.path) + workspaces.records.map(\.path)
     }
 
-    func makeRequest(_ activation: TerminalLinkActivation) -> TerminalLinkRequest? {
+    func makeRequest(_ activation: TerminalLinkActivation) async -> TerminalLinkRequest? {
         let basePath = terminals.meta(for: activation.terminalID)?.repoPath ?? ""
         let roots = knownRoots
-        guard let target = TerminalLinkResolver.resolve(
-            link: activation.link,
-            basePath: basePath,
-            homeDirectory: homeDirectory,
-            knownRoots: roots,
-            pathKind: pathKind
+        guard let candidate = TerminalLinkResolver.candidate(
+            link: activation.link, basePath: basePath, homeDirectory: homeDirectory
         ) else { return nil }
 
+        let kind = await pathKind(of: candidate)
+        let target = TerminalLinkResolver.classify(candidate, knownRoots: roots, kind: kind)
         let actions = Self.actions(for: target, knownRoots: roots)
         return TerminalLinkRequest(
+            terminalID: activation.terminalID,
             target: target,
             anchor: activation.anchor,
             primary: actions.primary,
-            alternate: actions.alternate
+            alternate: actions.alternate,
+            extra: actions.extra
         )
+    }
+
+    /// Arka planda sorar ve `pathKindTimeout` içinde dönmezse `.missing` sayar —
+    /// asılı bir mount tıkı süresiz askıda bırakmasın.
+    private func pathKind(of candidate: TerminalLinkCandidate) async -> TerminalLinkPathKind {
+        guard case let .path(path) = candidate else { return .missing }
+        let probe = pathKind
+        return await withTaskGroup(of: TerminalLinkPathKind?.self) { group in
+            group.addTask { probe(path) }
+            group.addTask {
+                try? await Task.sleep(for: Self.pathKindTimeout)
+                return nil
+            }
+            let first = await group.next() ?? nil
+            group.cancelAll()
+            return first ?? .missing
+        }
     }
 
     static func actions(
         for target: TerminalLinkTarget,
         knownRoots: [String]
-    ) -> (primary: TerminalLinkAction, alternate: TerminalLinkAction?) {
+    ) -> (primary: TerminalLinkAction, alternate: TerminalLinkAction?, extra: TerminalLinkAction?) {
         switch target {
         case .url(let url):
-            return (.init(slot: .primary, title: "Open link", intent: .openURL(url)), nil)
+            return (.init(slot: .primary, title: "Open link", intent: .openURL(url)), nil, nil)
         case .workspace(let path):
             return (
                 .init(slot: .primary, title: "Switch workspace", intent: .switchWorkspace(path: path)),
-                .init(slot: .alternate, title: "Open in Finder", intent: .revealInFinder(path: path))
+                .init(slot: .alternate, title: "Open in Finder", intent: .revealInFinder(path: path)),
+                nil
             )
         case .directory(let path):
             return (
                 .init(slot: .primary, title: "Open in Finder", intent: .revealInFinder(path: path)),
+                nil,
                 nil
             )
         case .file(let path):
-            let primary: TerminalLinkAction
+            let finder = TerminalLinkAction(
+                slot: .alternate, title: "Open in Finder", intent: .revealInFinder(path: path)
+            )
+            // Bilinen kökün İÇİ: Lumi'nin kendi görüntüleyicisi repo-göreli çalışır.
             if let root = TerminalLinkResolver.enclosingRoot(of: path, in: knownRoots),
                let relative = TerminalLinkResolver.relativePath(of: path, in: root) {
-                primary = .init(
-                    slot: .primary,
-                    title: "Open file",
+                let lumi = TerminalLinkAction(
+                    slot: .primary, title: "Open in Lumi",
                     intent: .openFile(repoPath: root, filePath: relative)
                 )
-            } else {
-                primary = .init(
-                    slot: .primary,
-                    title: "Open with default app",
-                    intent: .openWithDefaultApp(path: path)
+                // Üçüncü satır: FileViewer'ın gösteremediği türler (PDF, görsel
+                // düzenleyici, ofis dosyası) için sistem uygulaması.
+                let defaultApp = defaultAppAction(slot: .extra, path: path)
+                return (lumi, finder, defaultApp)
+            }
+            // Kök dışı: FileViewer yok. Varsayılan uygulama güvenliyse birincil,
+            // değilse tek seçenek Finder'dır.
+            guard let defaultApp = defaultAppAction(slot: .primary, path: path) else {
+                return (
+                    .init(slot: .primary, title: "Open in Finder", intent: .revealInFinder(path: path)),
+                    nil,
+                    nil
                 )
             }
-            return (
-                primary,
-                .init(slot: .alternate, title: "Open in Finder", intent: .revealInFinder(path: path))
-            )
+            return (defaultApp, finder, nil)
         }
+    }
+
+    /// Çalıştırılabilir türlerde (`.command`, `.scpt`, `.pkg`, `.app`…) "varsayılan
+    /// uygulamada aç" HİÇ önerilmez: `NSWorkspace.open` onları açmaz, çalıştırır ve
+    /// terminale basılan metin güvenilmez bir kaynaktır (karar 57 sertleştirmesi).
+    private static func defaultAppAction(
+        slot: TerminalLinkAction.Slot, path: String
+    ) -> TerminalLinkAction? {
+        guard !TerminalLinkSafety.isExecutable(path: path) else { return nil }
+        return .init(slot: slot, title: "Open with default app", intent: .openWithDefaultApp(path: path))
     }
 }

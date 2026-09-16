@@ -14,8 +14,6 @@ import SwiftUI
 final class TerminalLinkActionsAssembly: FeatureAssembly, ShellContributing {
     let bootstrapPhase = BootstrapPhase.ui
 
-    private(set) var terminalLinks: TerminalLinkActionStore!
-
     func build(services: any ServiceRegistry, shared: SharedStores) {}
 
     /// Repo/workspace store'ları repo assembly'sinde doğduğu için store bu
@@ -27,9 +25,10 @@ final class TerminalLinkActionsAssembly: FeatureAssembly, ShellContributing {
             workspaces: repo.workspaceStore
         )
         shared.terminals.onLinkActivated = { [weak store] activation in
-            store?.handle(activation)
+            // Çözümleme dosya sistemine sorduğu için async'tir (karar 57
+            // sertleştirmesi: MainActor'da senkron `stat` yok).
+            Task { await store?.handle(activation) }
         }
-        terminalLinks = store
         return store
     }
 
