@@ -343,9 +343,14 @@ public final class RemoteService: RemoteServicing {
             return j
         }()
         let changedPrompts = journal.reduce(event)
+        // TANI (Faz 3.1 kart hatası): her hook olayının prompt yoluna etkisi.
+        rlog("hook: kind=\(event.kind) tool=\(event.toolName ?? "-") isLead=\(event.isLead) hasInput=\(event.toolInput != nil) sub=\(chatSubscriptions[id] != nil) changedPrompts=\(changedPrompts.count)")
         guard chatSubscriptions[id] != nil else { return }
         if let status { await emitTurnStatus(id: id, status: status) }
-        for item in changedPrompts { await emitPrompt(id: id, prompt: item) }
+        for item in changedPrompts {
+            rlog("prompt emit: kind=\(item.kind) state=\(item.state) itemId=\(item.itemId.prefix(12)) opts=\(item.options.count)")
+            await emitPrompt(id: id, prompt: item)
+        }
     }
 
     private func emitTurnStatus(id: TerminalID, status: ChatTurnStatus) async {
