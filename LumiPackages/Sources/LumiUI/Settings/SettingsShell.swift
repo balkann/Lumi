@@ -10,7 +10,9 @@ struct SettingsShell: View {
     /// Karar 55 (kullanıcı düzeltmesi): form satırları 700×600'de sıkışıyordu.
     private static let panelWidth: CGFloat = 860
     private static let panelHeight: CGFloat = 720
-    private static let navigationWidth: CGFloat = 180
+    /// En uzun sekme adı ("Notifications") tek satıra sığmalı — 180'de son
+    /// harf alt satıra düşüyordu (karar 55 kullanıcı düzeltmesi).
+    private static let navigationWidth: CGFloat = 200
 
     @Shell private var shell
 
