@@ -43,9 +43,15 @@ struct MobileChatView: View {
                 }
             }
             if let pending = model.prompts[sessionId]?.last(where: { $0.state == .pending }) {
-                MobileChatPromptCard(prompt: pending) { optionId in
-                    model.respondPrompt(sessionId, itemId: pending.itemId, revision: pending.revision, optionId: optionId)
-                }
+                MobileChatPromptCard(
+                    prompt: pending,
+                    onApproval: { optionId in
+                        model.respondPrompt(sessionId, itemId: pending.itemId, revision: pending.revision, optionId: optionId)
+                    },
+                    onQuestion: { selections in
+                        model.respondPromptSelections(sessionId, itemId: pending.itemId, revision: pending.revision, selections: selections)
+                    }
+                )
             }
             composer
         }
