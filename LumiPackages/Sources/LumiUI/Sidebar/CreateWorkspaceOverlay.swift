@@ -201,7 +201,8 @@ public struct CreateWorkspaceOverlay: View {
                         selection: binding(\.baseBranch),
                         placeholder: "Current branch",
                         onOpen: loadBranches,
-                        emptyNote: branchNote
+                        emptyNote: branchNote,
+                        isLoading: shell.workspaces.isLoadingBranches
                     )
                 }
                 field("Branch name") {
@@ -216,6 +217,17 @@ public struct CreateWorkspaceOverlay: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
+        // Liste dropdown açılmadan ÖNCE hazırlanır: mod seçimi zaten kullanıcının
+        // dallara bakacağını söylüyor ve Plastic sorgusu ~1,5 sn sürüyor.
+        .task(id: prefetchKey) {
+            guard shell.workspaces.branchMode != .current else { return }
+            await shell.workspaces.loadBranches(limit: Self.branchListLimit)
+        }
+    }
+
+    /// Proje ya da mod değişince listeyi yeniden hazırlar.
+    private var prefetchKey: String {
+        "\(shell.workspaces.selectedProjectPath ?? "")#\(shell.workspaces.branchMode.rawValue)"
     }
 
     /// Git aynı dalı ikinci bir worktree'de checkout edemez; "current" yalnız
@@ -230,7 +242,8 @@ public struct CreateWorkspaceOverlay: View {
             selection: binding(\.existingBranch),
             placeholder: placeholder,
             onOpen: loadBranches,
-            emptyNote: branchNote
+            emptyNote: branchNote,
+            isLoading: shell.workspaces.isLoadingBranches
         )
     }
 

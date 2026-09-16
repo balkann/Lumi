@@ -22,6 +22,11 @@ struct LumiDropdown<Value: Hashable>: View {
     var onOpen: (() -> Void)?
     /// Liste boşken gösterilen satır: yükleniyor / hata / sonuç yok.
     var emptyNote: String?
+    /// Liste hâlâ yükleniyor: popover, içeriği geldikten sonra BÜYÜMEZ
+    /// (NSPopover boyutunu ilk yerleşimde sabitliyor), o yüzden yüklenirken
+    /// yeri baştan ayrılır — aksi hâlde kullanıcı kapatıp yeniden açmak
+    /// zorunda kalıyordu.
+    var isLoading = false
 
     @State private var isPresented = false
     @Environment(\.isEnabled) private var isEnabled
@@ -67,6 +72,7 @@ struct LumiDropdown<Value: Hashable>: View {
         ScrollView {
             PopoverMenu(items: items, dismiss: { isPresented = false }, width: nil)
         }
+        .frame(height: isLoading ? Self.maxListHeight : nil)
         .frame(maxHeight: Self.maxListHeight)
         .background(Theme.bgElevated)
     }
