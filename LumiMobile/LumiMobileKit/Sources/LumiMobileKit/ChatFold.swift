@@ -1,4 +1,5 @@
 import Foundation
+import LumiWire
 
 /// Katlanmış turn: bir "sahip" mesaj + ona ait tool-only aktivite mesajları.
 public struct FoldedTurn: Identifiable, Sendable, Equatable {

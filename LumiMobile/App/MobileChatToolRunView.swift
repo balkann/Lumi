@@ -1,6 +1,7 @@
 // LumiMobile/App/MobileChatToolRunView.swift
 import SwiftUI
 import LumiMobileKit
+import LumiWire
 
 /// Katlanmış araç aktivitesi: "🔧 3 işlem" satırı; tap → tool-call/result detayları.
 struct MobileChatToolRunView: View {

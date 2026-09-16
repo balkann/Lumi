@@ -1,5 +1,6 @@
 import XCTest
 @testable import LumiMobileKit
+import LumiWire
 
 final class DiagLogTests: XCTestCase {
     private var dir: URL!

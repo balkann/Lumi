@@ -9,8 +9,13 @@ let package = Package(
     products: [
         .library(name: "LumiMobileKit", targets: ["LumiMobileKit"])
     ],
+    dependencies: [
+        .package(path: "../../LumiPackages")
+    ],
     targets: [
-        .target(name: "LumiMobileKit"),
+        .target(name: "LumiMobileKit", dependencies: [
+            .product(name: "LumiWire", package: "LumiPackages")
+        ]),
         .testTarget(name: "LumiMobileKitTests", dependencies: ["LumiMobileKit"]),
     ]
 )

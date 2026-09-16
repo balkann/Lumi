@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import LumiWire
 
 public enum StartSessionState: Sendable, Equatable {
     case idle, sending, succeeded

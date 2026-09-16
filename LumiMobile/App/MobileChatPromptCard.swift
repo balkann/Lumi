@@ -1,5 +1,6 @@
 import SwiftUI
 import LumiMobileKit
+import LumiWire
 
 /// Faz 3 / 3.1: composer üstünde etkileşimli prompt kartı. En son pending item'ı çizer.
 /// approval: title+detail + Allow(mavi)/Deny(/don't-ask). question: tek-seçim tap; multiSelect

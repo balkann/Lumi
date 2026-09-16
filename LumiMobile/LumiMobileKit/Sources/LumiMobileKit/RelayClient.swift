@@ -1,4 +1,5 @@
 import Foundation
+import LumiWire
 
 public enum ConnectionState: Sendable, Equatable {
     case disconnected, connecting, connected

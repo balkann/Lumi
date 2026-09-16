@@ -1,5 +1,6 @@
 import XCTest
 @testable import LumiMobileKit
+import LumiWire
 
 final class FakeRelayClient: RelayClienting, @unchecked Sendable {
     private let lock = NSLock()

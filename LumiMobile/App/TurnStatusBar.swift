@@ -1,5 +1,6 @@
 import SwiftUI
 import LumiMobileKit
+import LumiWire
 import Foundation
 
 /// Faz 2: chat composer'ının üstünde canlı turn-status bandı. working iken görünür.

@@ -1,5 +1,6 @@
 import XCTest
 @testable import LumiMobileKit
+import LumiWire
 
 @MainActor
 final class AppModelPromptTests: XCTestCase {

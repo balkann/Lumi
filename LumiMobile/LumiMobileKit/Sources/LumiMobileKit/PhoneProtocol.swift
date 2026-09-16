@@ -1,4 +1,5 @@
 import Foundation
+import LumiWire
 
 /// Relay'den gelebilecek mesajlar (telefon rolü için, terminal-ayna protokolü).
 public enum ServerMessage: Sendable, Equatable {

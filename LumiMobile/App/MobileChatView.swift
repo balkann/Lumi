@@ -1,6 +1,7 @@
 // LumiMobile/App/MobileChatView.swift
 import SwiftUI
 import LumiMobileKit
+import LumiWire
 import Foundation
 
 /// Native chat görünümü: transcript'ten türeyen mesajları satır-saran balonlar

@@ -1,6 +1,7 @@
 import UIKit
 import UserNotifications
 import LumiMobileKit
+import LumiWire
 
 /// UNUserNotificationCenter sarmalayıcısı (Kit protokolünün prod implementasyonu).
 struct SystemNotificationAuthorizer: NotificationAuthorizing {

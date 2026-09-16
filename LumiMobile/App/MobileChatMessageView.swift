@@ -1,6 +1,7 @@
 // LumiMobile/App/MobileChatMessageView.swift
 import SwiftUI
 import LumiMobileKit
+import LumiWire
 
 /// Bir katlanmış turn: sahip mesajın metin balonu + altına katlanmış araç aktivitesi.
 struct MobileChatMessageView: View {

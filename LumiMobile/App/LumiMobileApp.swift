@@ -1,5 +1,6 @@
 import SwiftUI
 import LumiMobileKit
+import LumiWire
 
 @main
 struct LumiMobileApp: App {

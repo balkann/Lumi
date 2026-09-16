@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "LumiPackages",
-    platforms: [.macOS(.v14)],
+    platforms: [.macOS(.v14), .iOS(.v17)],
     products: [
         .library(name: "LumiWire", targets: ["LumiWire"]),
         .library(name: "LumiKit", targets: ["LumiKit"]),

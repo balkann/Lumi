@@ -1,6 +1,7 @@
 // LumiMobile/LumiMobileKit/Tests/LumiMobileKitTests/ChatFoldTests.swift
 import XCTest
 @testable import LumiMobileKit
+import LumiWire
 
 final class ChatFoldTests: XCTestCase {
     private func msg(_ id: String, _ role: ChatRole, _ blocks: [ChatBlock]) -> ChatMessage {
