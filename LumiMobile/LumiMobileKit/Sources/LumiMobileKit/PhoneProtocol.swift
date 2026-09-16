@@ -120,11 +120,25 @@ public enum PhoneProtocol {
         ])
     }
 
-    /// Faz 3: etkileşimli prompt cevabı (telefon→Mac).
+    /// Faz 3: etkileşimli prompt cevabı — approval (optionId). Telefon→Mac.
     public static func promptRespondFrame(sessionId: String, itemId: String, expectedRevision: Int, optionId: String) -> String {
         frame(type: "prompt_respond", payload: [
             "sessionId": sessionId, "itemId": itemId,
             "expectedRevision": expectedRevision, "optionId": optionId,
+        ])
+    }
+
+    /// Faz 3.1: soru cevabı — soru başına selection (indices + other). Telefon→Mac.
+    public static func promptRespondSelectionsFrame(sessionId: String, itemId: String, expectedRevision: Int,
+                                                    selections: [(indices: [Int], other: String?)]) -> String {
+        let sel = selections.map { s -> [String: Any] in
+            var d: [String: Any] = ["indices": s.indices]
+            if let o = s.other { d["other"] = o }
+            return d
+        }
+        return frame(type: "prompt_respond", payload: [
+            "sessionId": sessionId, "itemId": itemId,
+            "expectedRevision": expectedRevision, "selections": sel,
         ])
     }
 

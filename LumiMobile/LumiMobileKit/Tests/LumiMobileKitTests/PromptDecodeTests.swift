@@ -41,4 +41,19 @@ final class PromptDecodeTests: XCTestCase {
         XCTAssertTrue(p.questions.first?.multiSelect ?? false)
         XCTAssertEqual(p.questions.first?.options.first?.label, "A")
     }
+
+    func testPromptRespondSelectionsFrameEncodes() throws {
+        let frame = PhoneProtocol.promptRespondSelectionsFrame(sessionId: "s1", itemId: "i1", expectedRevision: 2,
+            selections: [(indices: [0, 2], other: "x"), (indices: [], other: nil)])
+        let obj = try JSONSerialization.jsonObject(with: frame.data(using: .utf8)!) as! [String: Any]
+        let payload = obj["payload"] as! [String: Any]
+        XCTAssertEqual(payload["sessionId"] as? String, "s1")
+        XCTAssertEqual(payload["expectedRevision"] as? Int, 2)
+        let sels = payload["selections"] as! [[String: Any]]
+        XCTAssertEqual(sels.count, 2)
+        XCTAssertEqual(sels[0]["indices"] as? [Int], [0, 2])
+        XCTAssertEqual(sels[0]["other"] as? String, "x")
+        XCTAssertEqual(sels[1]["indices"] as? [Int], [])
+        XCTAssertNil(sels[1]["other"])
+    }
 }

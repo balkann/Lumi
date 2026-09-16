@@ -307,6 +307,13 @@ public final class AppModel {
             sessionId: sessionId, itemId: itemId, expectedRevision: revision, optionId: optionId)) }
     }
 
+    /// Faz 3.1: soru cevabı (soru başına indices + free-text). Optimistic dismiss yok.
+    public func respondPromptSelections(_ sessionId: String, itemId: String, revision: Int,
+                                        selections: [(indices: [Int], other: String?)]) {
+        Task { await client.send(frame: PhoneProtocol.promptRespondSelectionsFrame(
+            sessionId: sessionId, itemId: itemId, expectedRevision: revision, selections: selections)) }
+    }
+
     /// Serbest metin gönderiminde (`submitText`) metin ile Enter arasındaki "settle"
     /// penceresi. Varsayılan orca paritesi (`AGENT_PROMPT_SUBMIT_SETTLE_MS` = 500 ms);
     /// test'ler hızlandırmak için sıfırlayabilir.
