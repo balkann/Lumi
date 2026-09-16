@@ -49,10 +49,12 @@ final class MainWindowControllerTests: XCTestCase {
         defer { controller.stop() }
         var state = UIState.defaults
         state.windowBounds = WindowBounds(x: 120, y: 90, width: 1200, height: 800)
+        let target = NSRect(x: 120, y: 90, width: 1200, height: 800)
 
         let window = install(controller, uiState: state)
 
-        XCTAssertEqual(window.frame, NSRect(x: 120, y: 90, width: 1200, height: 800))
+        XCTAssertEqual(MainWindowController.restoredFrame(for: state, screens: Self.screens), target)
+        assertWindowFrame(window, equals: target)
     }
 
     /// Ekran dışına düşen kayıt reddedilir; pencere default boyutta ortalanır.
@@ -64,7 +66,23 @@ final class MainWindowControllerTests: XCTestCase {
 
         let window = install(controller, uiState: state)
 
-        XCTAssertEqual(window.frame.size, MainWindowController.defaultSize)
+        XCTAssertNil(MainWindowController.restoredFrame(for: state, screens: Self.screens))
+        if fitsOnRealScreen(NSRect(origin: .zero, size: MainWindowController.defaultSize)) {
+            XCTAssertEqual(window.frame.size, MainWindowController.defaultSize)
+        }
+    }
+
+    /// AppKit pencere frame'ini fiilî ekrana kırpar; hedef gerçek ekrana sığmıyorsa
+    /// (CI runner'ının küçük sanal ekranı) `NSWindow` üstündeki assert atlanır —
+    /// kararın kendisi `restoredFrame` ile her ortamda doğrulanıyor.
+    private func assertWindowFrame(_ window: NSWindow, equals target: NSRect) {
+        guard fitsOnRealScreen(target) else { return }
+        XCTAssertEqual(window.frame, target)
+    }
+
+    private func fitsOnRealScreen(_ frame: NSRect) -> Bool {
+        guard let visible = NSScreen.main?.visibleFrame else { return false }
+        return visible.width >= frame.width && visible.height >= frame.height
     }
 
     // MARK: - Bounds persistence (500ms debounce)
@@ -85,9 +103,11 @@ final class MainWindowControllerTests: XCTestCase {
         let writes = await config.uiStateUpdateCount - before
         XCTAssertEqual(writes, 1, "üç tetikleme tek yazıma çökmeli")
 
+        // Yazılan bounds pencerenin fiilî frame'idir; AppKit istenen boyutu ekrana
+        // kırpabildiği için beklenen değer sabit yazılmaz (CI runner'ı küçük ekran).
         let saved = await config.uiState().windowBounds
-        XCTAssertEqual(saved?.width, 1100)
-        XCTAssertEqual(saved?.height, 700)
+        XCTAssertEqual(saved?.width, window.frame.width)
+        XCTAssertEqual(saved?.height, window.frame.height)
     }
 
     /// Debounce penceresi dolmadan hiçbir şey yazılmaz.

@@ -86,13 +86,20 @@ final class MainWindowController: NSObject {
         return window
     }
 
+    /// Restore kararı: geçerli bir kayıt varsa hedef frame, yoksa `nil` (→ `center()`,
+    /// default boyut). Saf fonksiyon olarak ayrı durur ki testler kararı gerçek
+    /// `NSWindow`'a bakmadan doğrulayabilsin — AppKit frame'i fiilî ekrana kırptığı
+    /// için pencere üstündeki assert'ler runner'ın çözünürlüğüne bağımlı kalıyordu.
+    static func restoredFrame(for uiState: UIState, screens: [NSRect]) -> NSRect? {
+        guard let saved = uiState.windowBounds,
+              let valid = WindowBoundsValidator.validated(saved, screens: screens)
+        else { return nil }
+        return NSRect(x: valid.x, y: valid.y, width: valid.width, height: valid.height)
+    }
+
     private func restoreBounds(_ window: NSWindow, uiState: UIState, screens: [NSRect]) {
-        if let saved = uiState.windowBounds,
-           let valid = WindowBoundsValidator.validated(saved, screens: screens) {
-            window.setFrame(
-                NSRect(x: valid.x, y: valid.y, width: valid.width, height: valid.height),
-                display: false
-            )
+        if let frame = Self.restoredFrame(for: uiState, screens: screens) {
+            window.setFrame(frame, display: false)
         } else {
             window.center()
         }

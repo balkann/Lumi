@@ -10,6 +10,13 @@ final class TerminalGridFitTests: XCTestCase {
         var cellSize = CGSize(width: 8, height: 16)
     }
 
+    /// Backing scale testte sabitlenir: CI runner'ının 1x sanal ekranında yarım
+    /// piksellik ortalama artığı tam piksele yuvarlanıp assert'leri düşürüyordu.
+    @discardableResult
+    private func fit(_ view: NSView, in host: NSView) -> Bool {
+        TerminalGridFit.fit(view, in: host, scale: 2)
+    }
+
     func testLeftoverIsSplitEvenlyInsteadOfFallingToBottomRight() {
         // Arrange: 405×310 host → 50×19 hücrelik ızgara = 400×304; artık 5×6.
         let host = NSView(frame: NSRect(x: 0, y: 0, width: 405, height: 310))
@@ -17,7 +24,7 @@ final class TerminalGridFitTests: XCTestCase {
         host.addSubview(view)
 
         // Act
-        let didChange = TerminalGridFit.fit(view, in: host)
+        let didChange = fit(view, in: host)
 
         // Assert
         XCTAssertTrue(didChange)
@@ -33,7 +40,7 @@ final class TerminalGridFitTests: XCTestCase {
         let view = GridView()
         host.addSubview(view)
 
-        TerminalGridFit.fit(view, in: host)
+        fit(view, in: host)
 
         XCTAssertEqual(view.frame, host.bounds)
     }
@@ -44,9 +51,9 @@ final class TerminalGridFitTests: XCTestCase {
         let view = GridView()
         host.addSubview(view)
 
-        XCTAssertTrue(TerminalGridFit.fit(view, in: host))
-        XCTAssertFalse(TerminalGridFit.fit(view, in: host))
-        XCTAssertFalse(TerminalGridFit.fit(view, in: host))
+        XCTAssertTrue(fit(view, in: host))
+        XCTAssertFalse(fit(view, in: host))
+        XCTAssertFalse(fit(view, in: host))
     }
 
     func testFontChangeRefitsWithNewCellSize() {
@@ -54,11 +61,11 @@ final class TerminalGridFitTests: XCTestCase {
         let host = NSView(frame: NSRect(x: 0, y: 0, width: 405, height: 310))
         let view = GridView()
         host.addSubview(view)
-        TerminalGridFit.fit(view, in: host)
+        fit(view, in: host)
 
         view.cellSize = CGSize(width: 10, height: 20)
 
-        XCTAssertTrue(TerminalGridFit.fit(view, in: host))
+        XCTAssertTrue(fit(view, in: host))
         XCTAssertEqual(view.frame.size, CGSize(width: 400, height: 300))
         XCTAssertEqual(view.frame.minY, 5, accuracy: 0.001)
     }
@@ -69,7 +76,7 @@ final class TerminalGridFitTests: XCTestCase {
         let view = GridView()
         host.addSubview(view)
 
-        TerminalGridFit.fit(view, in: host)
+        fit(view, in: host)
 
         XCTAssertEqual(view.frame.size, CGSize(width: 8, height: 16))
     }
@@ -79,7 +86,7 @@ final class TerminalGridFitTests: XCTestCase {
         let host = NSView()
         let view = GridView(frame: NSRect(x: 0, y: 0, width: 800, height: 480))
 
-        XCTAssertFalse(TerminalGridFit.fit(view, in: host))
+        XCTAssertFalse(fit(view, in: host))
         XCTAssertEqual(view.frame.size, CGSize(width: 800, height: 480))
     }
 
@@ -89,7 +96,7 @@ final class TerminalGridFitTests: XCTestCase {
         let view = NSView()
         host.addSubview(view)
 
-        XCTAssertTrue(TerminalGridFit.fit(view, in: host))
+        XCTAssertTrue(fit(view, in: host))
         XCTAssertEqual(view.frame, host.bounds)
     }
 }
