@@ -10,6 +10,12 @@ import SwiftUI
 /// route'un görünümünü getirir. Geri dönüş ayrı bir kontrol istemez: Projects
 /// panelinden bir proje/workspace/ajan seçmek repo route'unu geri açar.
 public struct TasksPanelItem: View {
+    /// Öğenin en küçük yüksekliği — eski Sessions bölümünün (başlık + 180pt
+    /// sabit liste) kapladığı alan. İki satır bu alanı doldurmaz; yuvanın
+    /// üst payı korunsun ve altındaki Projects paneli yerinden oynamasın diye
+    /// taban yükseklik sabit tutulur (kullanıcı düzeltmesi).
+    private static let minContentHeight: CGFloat = 208
+
     @Shell private var shell
 
     public init() {}
@@ -20,8 +26,8 @@ public struct TasksPanelItem: View {
                 row(section)
             }
         }
+        .frame(maxWidth: .infinity, minHeight: Self.minContentHeight, alignment: .top)
         .padding(Theme.Spacing.lg)
-        .frame(alignment: .top)
     }
 
     private func row(_ section: TasksPanelSection) -> some View {
