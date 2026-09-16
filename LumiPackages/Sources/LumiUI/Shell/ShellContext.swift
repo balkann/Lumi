@@ -68,6 +68,8 @@ public final class ShellContext {
     public let usage: [AgentProvider: UsageStore]
     /// DeepSeek env kurulumu (karar 54) — Settings ▸ Agent + New DeepSeek.
     public let deepSeek: DeepSeekStore
+    /// Claude hesapları (karar 56) — Settings ▸ Accounts + usage popover'ı.
+    public let claudeAccounts: ClaudeAccountStore
     /// Alt bar store'ları (karar 43).
     public let computerAwake: ComputerAwakeStore
     public let resourceUsage: ResourceUsageStore
@@ -97,6 +99,7 @@ public final class ShellContext {
         onboarding: OnboardingStore,
         usage: [AgentProvider: UsageStore],
         deepSeek: DeepSeekStore,
+        claudeAccounts: ClaudeAccountStore,
         computerAwake: ComputerAwakeStore,
         resourceUsage: ResourceUsageStore,
         viewProvider: any TerminalViewProviding,
@@ -121,6 +124,7 @@ public final class ShellContext {
         self.onboarding = onboarding
         self.usage = usage
         self.deepSeek = deepSeek
+        self.claudeAccounts = claudeAccounts
         self.computerAwake = computerAwake
         self.resourceUsage = resourceUsage
         self.viewProvider = viewProvider

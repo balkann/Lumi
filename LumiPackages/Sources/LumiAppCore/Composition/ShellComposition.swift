@@ -37,6 +37,7 @@ struct ShellComposition {
         workspaceBoot: WorkspaceBootAssembly,
         statusBar: StatusBarFeatureAssembly,
         deepSeek: DeepSeekAssembly,
+        claudeAccounts: ClaudeAccountsAssembly,
         contributors: [any ShellContributing]
     ) -> ShellComposition {
         let registries = makeRegistries(contributors: contributors)
@@ -60,6 +61,7 @@ struct ShellComposition {
             onboarding: workspaceBoot.onboarding,
             usage: usage.usageStores,
             deepSeek: deepSeek.deepSeek,
+            claudeAccounts: claudeAccounts.claudeAccounts,
             computerAwake: statusBar.computerAwake,
             resourceUsage: statusBar.resourceUsage,
             viewProvider: registry.viewProvider,

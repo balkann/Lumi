@@ -53,6 +53,9 @@ public extension ShellContext {
             ),
             usage: [:],
             deepSeek: DeepSeekStore(service: PreviewDeepSeekEnvironmentService(), toasts: shared.toasts),
+            claudeAccounts: ClaudeAccountStore(
+                service: PreviewClaudeAccountService(), toasts: shared.toasts
+            ),
             computerAwake: ComputerAwakeStore(
                 terminals: shared.terminals, settings: shared.settings, assertion: PreviewSleepAssertion()
             ),
@@ -170,6 +173,34 @@ private final class PreviewSleepAssertion: SleepAsserting {
     func setPreventingSleep(_ prevent: Bool, reason: String) -> Bool {
         isPreventingSleep = prevent
         return true
+    }
+}
+
+/// İki hesaplı, ikincisi aktif bir liste — Settings ▸ Accounts önizlemesi
+/// boş görünmesin (karar 56).
+private struct PreviewClaudeAccountService: ClaudeAccountServicing {
+    private static let snapshot = ClaudeAccountsSnapshot(
+        accounts: [
+            ClaudeAccount(
+                id: "personal", email: "dev@example.com", organizationName: "Personal",
+                createdAt: .distantPast, updatedAt: .distantPast, lastAuthenticatedAt: .distantPast
+            ),
+            ClaudeAccount(
+                id: "work", email: "dev@company.com", organizationName: "Company",
+                createdAt: .distantPast, updatedAt: .distantPast, lastAuthenticatedAt: .distantPast
+            ),
+        ],
+        selection: .account("work")
+    )
+
+    func accounts() async -> ClaudeAccountsSnapshot { Self.snapshot }
+    func syncActiveSelection() async {}
+    func addAccount() async throws -> ClaudeAccountsSnapshot { Self.snapshot }
+    func cancelPendingLogin() async {}
+    func reauthenticate(accountID: String) async throws -> ClaudeAccountsSnapshot { Self.snapshot }
+    func removeAccount(accountID: String) async throws -> ClaudeAccountsSnapshot { Self.snapshot }
+    func select(_ selection: ClaudeAccountSelection) async throws -> ClaudeAccountsSnapshot {
+        ClaudeAccountsSnapshot(accounts: Self.snapshot.accounts, selection: selection)
     }
 }
 
@@ -398,6 +429,18 @@ public extension UsageStore {
             service: PreviewUsageService(provider: provider, percent: percent)
         )
         Task { await store.loadInitialIfNeeded() }
+        return store
+    }
+}
+
+public extension ClaudeAccountStore {
+    /// İki hesaplı, ikincisi aktif bir store (karar 56 preview'ları).
+    @MainActor
+    static var preview: ClaudeAccountStore {
+        let store = ClaudeAccountStore(
+            service: PreviewClaudeAccountService(), toasts: ToastStore()
+        )
+        Task { await store.load() }
         return store
     }
 }

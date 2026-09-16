@@ -36,6 +36,14 @@ struct SettingsShell: View {
             }
             .frame(width: Self.panelWidth, height: Self.panelHeight)
         }
+        // Karar 56: popover'daki "Manage Accounts…" paneli doğrudan ilgili
+        // sekmede açar; istek bir kez tüketilir.
+        .onAppear {
+            if let raw = shell.dialogs.consumeRequestedSettingsTab(),
+               let tab = SettingsTab(rawValue: raw) {
+                selectedTab = tab
+            }
+        }
     }
 
     private var header: some View {

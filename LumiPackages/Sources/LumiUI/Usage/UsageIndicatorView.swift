@@ -11,10 +11,20 @@ import SwiftUI
 /// VoiceOver için erişilemezdi.
 public struct UsageIndicatorView: View {
     private let store: UsageStore
+    /// Claude hesap değiştirici (karar 56). Yalnız Claude göstergesine
+    /// verilir; nil ise popover eski hâliyle çizilir.
+    private let accounts: ClaudeAccountStore?
+    private let openAccountSettings: (() -> Void)?
     @State private var isPresented = false
 
-    public init(store: UsageStore) {
+    public init(
+        store: UsageStore,
+        accounts: ClaudeAccountStore? = nil,
+        openAccountSettings: (() -> Void)? = nil
+    ) {
         self.store = store
+        self.accounts = accounts
+        self.openAccountSettings = openAccountSettings
     }
 
     public var body: some View {
@@ -23,7 +33,13 @@ public struct UsageIndicatorView: View {
             .accessibilityLabel(accessibilityLabel)
             .help("\(store.provider.displayName) usage")
             .popover(isPresented: $isPresented, arrowEdge: .bottom) {
-                UsagePopover(store: store)
+                UsagePopover(
+                    store: store,
+                    accounts: accounts,
+                    openAccountSettings: openAccountSettings.map { open in
+                        { isPresented = false; open() }
+                    }
+                )
             }
     }
 
@@ -69,6 +85,8 @@ public struct UsageIndicatorView: View {
 /// Tüm kullanım pencerelerini + refresh'i gösteren popover içeriği.
 private struct UsagePopover: View {
     let store: UsageStore
+    var accounts: ClaudeAccountStore?
+    var openAccountSettings: (() -> Void)?
 
     /// Popover'ın sabit genişliği ve iç kenar payı; ikisi de ölçek dışı ara
     /// değerler (v1 paritesi).
@@ -84,6 +102,7 @@ private struct UsagePopover: View {
             Rectangle().fill(Theme.border).frame(height: Theme.Stroke.hairline)
             content
                 .padding(Metrics.inset)
+            accountSection
             footer
         }
         .frame(width: Metrics.width)
@@ -161,6 +180,20 @@ private struct UsagePopover: View {
                 .font(Theme.Typography.bodyMono)
                 .foregroundStyle(Theme.error)
                 .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// Hesap değiştirici (karar 56) — yalnız hesap store'u verilmiş
+    /// göstergede (Claude) çizilir.
+    @ViewBuilder
+    private var accountSection: some View {
+        if let accounts {
+            VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+                Rectangle().fill(Theme.border).frame(height: Theme.Stroke.hairline)
+                ClaudeAccountSwitcher(store: accounts, openSettings: openAccountSettings)
+                    .padding(.horizontal, Metrics.inset)
+                    .padding(.bottom, Metrics.rowInset)
+            }
         }
     }
 
@@ -254,7 +287,7 @@ struct UsageWindowRow: View {
 }
 
 #Preview("UsagePopover") {
-    UsagePopover(store: .preview(provider: .claude))
+    UsagePopover(store: .preview(provider: .claude), accounts: .preview)
         .background(Theme.bgDeep)
 }
 #endif

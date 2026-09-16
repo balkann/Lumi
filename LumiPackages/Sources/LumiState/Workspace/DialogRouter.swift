@@ -120,6 +120,21 @@ public final class DialogRouter {
         set { setPresented(.repoSelector, newValue) }
     }
 
+    /// Settings açılırken istenen sekme (karar 56: "Manage Accounts…").
+    /// Panel onu bir kez okuyup tüketir — kapanıp yeniden açılınca kullanıcı
+    /// en son baktığı sekmede kalsın.
+    public private(set) var requestedSettingsTab: String?
+
+    public func openSettings(tab: String? = nil) {
+        requestedSettingsTab = tab
+        present(.settings)
+    }
+
+    public func consumeRequestedSettingsTab() -> String? {
+        defer { requestedSettingsTab = nil }
+        return requestedSettingsTab
+    }
+
     public var isSettingsOpen: Bool {
         get { isPresenting(.settings) }
         set { setPresented(.settings, newValue) }
