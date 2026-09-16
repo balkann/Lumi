@@ -41,6 +41,8 @@ public final class RemoteService: RemoteServicing {
     private var promptJournals: [TerminalID: PromptJournal] = [:]
     /// Faz 3.1: soru cevabı keystroke'larını 1000ms aralıkla yazan iptal-edilebilir task'lar.
     private let keystrokeScheduler: any KeystrokeScheduling
+    /// Bileşen B2: dış oturumlar için transcript bul (Task 3).
+    private let transcriptLocator: any TranscriptLocating
     private var promptWriteTasks: [TerminalID: Task<Void, Never>] = [:]
     private var promptSeq = 0
     private var hookTask: Task<Void, Never>?
@@ -66,7 +68,8 @@ public final class RemoteService: RemoteServicing {
         trust: any ClaudeWorkspaceTrusting = NoopClaudeWorkspaceTrust(),
         hookEvents: AsyncStream<AgentHookEvent> = AsyncStream { _ in },
         turnClock: @escaping @Sendable () -> Date = { Date() },
-        keystrokeScheduler: any KeystrokeScheduling = LiveKeystrokeScheduler()
+        keystrokeScheduler: any KeystrokeScheduling = LiveKeystrokeScheduler(),
+        transcriptLocator: any TranscriptLocating = NoopTranscriptLocating()
     ) {
         self.configService = RemoteConfigService(paths: paths)
         self.terminal = terminal
@@ -77,6 +80,7 @@ public final class RemoteService: RemoteServicing {
         self.hookEvents = hookEvents
         self.turnClock = turnClock
         self.keystrokeScheduler = keystrokeScheduler
+        self.transcriptLocator = transcriptLocator
     }
 
     public func events() -> AsyncStream<RemoteEvent> { broadcaster.stream() }
@@ -318,8 +322,24 @@ public final class RemoteService: RemoteServicing {
         chatSubscriptions[id] = nil
     }
 
-    /// claudeSessionID henüz yokken bekleme görevi (Task 3 gerçek gövdeyi yazar).
-    private func awaitTranscript(id: TerminalID, raw: String, meta: TerminalMeta) async { /* Task 3 */ }
+    /// Dış/taze oturum: transcript belirene kadar sınırlı poll (10 × 500ms).
+    /// Bulanursa chatSource.stream üzerinden emitChat akışına geçer.
+    private func awaitTranscript(id: TerminalID, raw: String, meta: TerminalMeta) async {
+        for _ in 0..<10 {
+            if Task.isCancelled { return }
+            if let resolved = transcriptLocator.locate(repoPath: meta.repoPath) {
+                rlog("chat subscribe: locator transcript buldu sid=\(resolved.prefix(8)) repo=\(meta.repoPath)")
+                let stream = chatSource.stream(sessionID: resolved, repoPath: meta.repoPath)
+                for await event in stream {
+                    guard !Task.isCancelled else { break }
+                    await emitChat(sessionId: raw, event: event)
+                }
+                return
+            }
+            try? await Task.sleep(for: .milliseconds(500))
+        }
+        rlog("chat subscribe: transcript bulunamadı, chat-unavailable kalıyor repo=\(meta.repoPath)")
+    }
 
     // MARK: - Turn status (Faz 2)
 

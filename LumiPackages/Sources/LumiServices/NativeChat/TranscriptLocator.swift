@@ -1,18 +1,19 @@
 import Foundation
+import LumiKit
 
 /// repoPath → en yeni Claude transcript sessionID'si. Lumi-dışı (claudeSessionID taşımayan)
 /// oturumları chat moduna bağlamak için. fileList enjekte edilir (test + saflık).
-public struct TranscriptLocator {
+public struct TranscriptLocator: TranscriptLocating {
     /// (encoded repo) → o klasördeki [(jsonl adı = sessionID, değişiklik zamanı)].
-    private let fileList: (String) -> [(sessionID: String, modified: Date)]
+    private let fileList: @Sendable (String) -> [(sessionID: String, modified: Date)]
 
-    public init(fileList: @escaping (String) -> [(sessionID: String, modified: Date)]) {
+    public init(fileList: @escaping @Sendable (String) -> [(sessionID: String, modified: Date)]) {
         self.fileList = fileList
     }
 
     /// Canlı FS ile üretim başlatıcısı.
     public init() {
-        self.fileList = { encoded in
+        self.fileList = { @Sendable encoded in
             let dir = FileManager.default.homeDirectoryForCurrentUser
                 .appendingPathComponent(".claude/projects/\(encoded)")
             let keys: [URLResourceKey] = [.contentModificationDateKey]

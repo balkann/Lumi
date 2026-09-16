@@ -15,7 +15,8 @@ import Foundation
         #expect(locator.locate(repoPath: "/Users/x/repo") == nil)
     }
     @Test func encodesRepoPathForLookup() {
-        var seen: String?
+        // @Sendable closure: mutable capture nonisolated(unsafe) ile işaretlenir.
+        nonisolated(unsafe) var seen: String?
         let locator = TranscriptLocator(fileList: { encoded in seen = encoded; return [] })
         _ = locator.locate(repoPath: "/Users/x/My Repo!")
         #expect(seen == "-Users-x-My-Repo-")
