@@ -87,7 +87,10 @@ final class DropAwareTerminalView: TerminalView {
         // aldığında burası nil pencereyle çağrılır) — sızıntı kalmaz.
         guard let window else { return }
         let center = NotificationCenter.default
-        let handler: (Notification) -> Void = { [weak self] _ in
+        // `@Sendable` şart: kayıt sırasında closure izolasyon sınırını geçiyor.
+        // `self` sınırın ÖTESİNE geçmez — kuyruk `.main` olduğu için gövde
+        // MainActor'da koşar ve view'a orada dokunulur.
+        let handler: @Sendable (Notification) -> Void = { [weak self] _ in
             MainActor.assumeIsolated { self?.cancelLinkGesture() }
         }
         focusLossObservers.append(center.addObserver(

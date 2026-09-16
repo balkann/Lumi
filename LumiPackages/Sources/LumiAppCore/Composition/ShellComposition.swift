@@ -181,7 +181,7 @@ struct ShellComposition {
             revealPath: { path in registry.system.revealInFinder(path: path) },
             openURL: { url in
                 Task { @MainActor in
-                    await shared.toasts.reporting { try registry.system.openExternal(url) }
+                    shared.toasts.reporting { try registry.system.openExternal(url) }
                 }
             },
             openPath: { path in registry.system.openWithDefaultApp(path: path) }
