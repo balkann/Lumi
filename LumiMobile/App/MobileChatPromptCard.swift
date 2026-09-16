@@ -12,6 +12,9 @@ struct MobileChatPromptCard: View {
     @State private var sending = false
     @State private var selected: [Int] = []
     @State private var freeText = ""
+    // Gruplu çok-soru state (Bileşen D)
+    @State private var groupSel: [Int: [Int]] = [:]
+    @State private var groupText: [Int: String] = [:]
 
     var body: some View {
         VStack(spacing: 0) {
@@ -30,8 +33,7 @@ struct MobileChatPromptCard: View {
                 case .approval: approvalButtons
                 case .question:
                     if prompt.questions.count > 1 {
-                        Text("Bu çok-soru grubu telefonda henüz desteklenmiyor (Mac'ten cevaplayın).")
-                            .font(.caption).foregroundStyle(.secondary)
+                        groupedQuestionBody
                     } else {
                         questionBody
                     }
@@ -84,6 +86,62 @@ struct MobileChatPromptCard: View {
             .disabled(sending || selected.isEmpty)
         }
         if prompt.allowOther { freeTextRow }
+    }
+
+    // MARK: grouped question (çok-soru; Bileşen D)
+
+    @ViewBuilder private var groupedQuestionBody: some View {
+        ForEach(Array(prompt.questions.enumerated()), id: \.element.id) { qi, q in
+            VStack(alignment: .leading, spacing: 4) {
+                Text(q.header ?? q.question)
+                    .font(.footnote.bold())
+                    .padding(.top, qi == 0 ? 0 : 4)
+                ForEach(Array(q.options.enumerated()), id: \.element.id) { oi, opt in
+                    let isChecked = groupSel[qi]?.contains(oi) ?? false
+                    optionButton(opt.label, description: opt.description,
+                                 primary: false, checked: q.multiSelect ? isChecked : nil) {
+                        if q.multiSelect {
+                            var sel = groupSel[qi] ?? []
+                            if let at = sel.firstIndex(of: oi) { sel.remove(at: at) } else { sel.append(oi) }
+                            groupSel[qi] = sel
+                        } else {
+                            // Tek-seçim: bir önceki seçimi sil, yenisini yaz.
+                            groupSel[qi] = [oi]
+                        }
+                    }
+                }
+                if q.allowOther {
+                    HStack(spacing: 6) {
+                        TextField("Ya da yaz…", text: Binding(
+                            get: { groupText[qi] ?? "" },
+                            set: { groupText[qi] = $0 }
+                        ), axis: .vertical)
+                            .textFieldStyle(.roundedBorder).lineLimit(1...3)
+                    }
+                }
+            }
+        }
+        // Tek Gönder butonu — tüm soruları sırayla toplar.
+        let groupedReady = !prompt.questions.indices.allSatisfy {
+            (groupSel[$0] ?? []).isEmpty && (groupText[$0]?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+        }
+        Button {
+            guard !sending else { return }
+            sending = true
+            let result = prompt.questions.indices.map { qi -> (indices: [Int], other: String?) in
+                let trimmed = groupText[qi]?.trimmingCharacters(in: .whitespacesAndNewlines)
+                let other: String? = (trimmed?.isEmpty ?? true) ? nil : trimmed
+                return (indices: (groupSel[qi] ?? []).sorted(), other: other)
+            }
+            onQuestion(result)
+        } label: {
+            Text("Gönder")
+                .font(.footnote.bold()).frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+                .background(Color.accentColor.opacity(groupedReady ? 0.22 : 0.08),
+                            in: RoundedRectangle(cornerRadius: 6))
+        }
+        .disabled(sending || !groupedReady)
     }
 
     private var freeTextRow: some View {
