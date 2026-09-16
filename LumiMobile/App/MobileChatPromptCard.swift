@@ -122,8 +122,10 @@ struct MobileChatPromptCard: View {
             }
         }
         // Tek Gönder butonu — tüm soruları sırayla toplar.
-        let groupedReady = !prompt.questions.indices.allSatisfy {
-            (groupSel[$0] ?? []).isEmpty && (groupText[$0]?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+        // groupedReady: her soru cevaplanmış olmalı (seçim VEYA dolu free-text).
+        let groupedReady = prompt.questions.indices.allSatisfy { qi in
+            !(groupSel[qi] ?? []).isEmpty
+                || !(groupText[qi] ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
         Button {
             guard !sending else { return }
