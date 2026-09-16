@@ -98,9 +98,14 @@ public final class PromptJournal {
         if let idx = items.firstIndex(where: { $0.itemId == p.itemId }) {
             var existing = items[idx]
             if existing.kind == p.kind && existing.title == p.title
-                && existing.options == p.options && existing.state == p.state { return [] }
+                && existing.options == p.options && existing.state == p.state
+                && existing.multiSelect == p.multiSelect && existing.allowOther == p.allowOther
+                && existing.questions == p.questions { return [] }
             existing.kind = p.kind; existing.title = p.title; existing.detail = p.detail
-            existing.options = p.options; existing.state = p.state; existing.revision += 1
+            existing.options = p.options; existing.state = p.state
+            existing.multiSelect = p.multiSelect; existing.allowOther = p.allowOther
+            existing.questions = p.questions
+            existing.revision += 1
             items[idx] = existing
             return [existing]
         }
