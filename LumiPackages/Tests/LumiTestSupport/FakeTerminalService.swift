@@ -75,7 +75,8 @@ public final class FakeTerminalService: TerminalServicing {
             name: "Terminal \(spawnedMetas.count + 1)",
             repoPath: repoPath,
             createdAt: Date(),
-            task: task
+            task: task,
+            claudeSessionID: UUID().uuidString
         )
         spawnedMetas.append(meta)
         broadcaster.send(.spawned(meta))
