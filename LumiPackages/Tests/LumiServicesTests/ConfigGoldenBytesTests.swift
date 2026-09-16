@@ -116,6 +116,7 @@ final class ConfigGoldenBytesTests: XCTestCase {
 
     private static let expectedConfigJSON = """
     {
+      "activeClaudeAccountId" : null,
       "additionalPaths" : [
         {
           "id" : "id-1",
@@ -132,6 +133,9 @@ final class ConfigGoldenBytesTests: XCTestCase {
       "agentHooksEnabled" : false,
       "aiProvider" : "codex",
       "autoMinimizeOnSend" : true,
+      "claudeAccounts" : [
+
+      ],
       "computerAwakeMode" : "auto",
       "maxTerminals" : 12,
       "notifications" : {

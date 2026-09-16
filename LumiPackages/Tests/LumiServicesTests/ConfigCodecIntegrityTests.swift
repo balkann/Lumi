@@ -20,8 +20,12 @@ final class ConfigCodecIntegrityTests: XCTestCase {
         "legacyGridColumns": "yalnız okuma — v1 gridColumns migration girdisi",
     ]
 
-    /// Alan adı → JSON anahtarı (yalnız camelCase eşleşmeyenler). Bugün BOŞ.
-    private static let configKeyMapping: [String: String] = [:]
+    /// Alan adı → JSON anahtarı (yalnız camelCase eşleşmeyenler).
+    /// - `claudeAccountSelection`: diskte hesabın id'si (ya da `null`) olarak
+    ///   durur; sum type'ın adı değil seçilen hesabın kimliği yazılır (K56).
+    private static let configKeyMapping: [String: String] = [
+        "claudeAccountSelection": "activeClaudeAccountId",
+    ]
     private static let uiStateKeyMapping: [String: String] = [:]
 
     private func fieldNames(of value: Any) -> [String] {
@@ -177,6 +181,18 @@ final class ConfigCodecIntegrityTests: XCTestCase {
         usageIndicators: UsageIndicators(claude: false, codex: true),
         computerAwakeMode: .auto,
         agentHooksEnabled: false,
+        claudeAccounts: [
+            ClaudeAccount(
+                id: "acc-1",
+                email: "dev@example.com",
+                organizationUUID: "org-1",
+                organizationName: "Example",
+                createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+                updatedAt: Date(timeIntervalSince1970: 1_700_000_100),
+                lastAuthenticatedAt: Date(timeIntervalSince1970: 1_700_000_200)
+            ),
+        ],
+        claudeAccountSelection: .account("acc-1"),
         workspaces: [ProjectWorkspace(projectPath: "/p", path: "/w", name: "Feature", branch: "feature", scm: .git)],
         sidebarProjectPaths: ["/tmp/selected", "/tmp/another"]
     )

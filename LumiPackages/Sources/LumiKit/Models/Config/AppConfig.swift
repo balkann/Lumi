@@ -46,6 +46,14 @@ public struct AppConfig: Sendable, Equatable {
     /// (karar 45). Kapatılınca yönetilen girdiler sağlayıcı ayarlarından silinir
     /// ve durum yalnız OSC/çıktı sezgisiyle türer. Additive (karar 9): yoksa açık.
     public var agentHooksEnabled: Bool
+    /// Lumi'nin yönettiği Claude hesapları (karar 56). Kimlik bilgisi taşımaz —
+    /// yalnız kimlik kartı. Additive (karar 9): yoksa boş.
+    public var claudeAccounts: [ClaudeAccount]
+    /// Hangi Claude hesabının `~/.claude` yüzeyine materialize edildiği
+    /// (karar 56). Additive (karar 9): yoksa `systemDefault`.
+    public var claudeAccountSelection: ClaudeAccountSelection
+    /// Hangi Claude hesabının `~/.claude` yüzeyine materialize edildiği
+    /// (karar 56). Additive (karar 9): yoksa `systemDefault`.
     public var workspaces: [ProjectWorkspace]
 
     /// Terminal font boyutu için geçerli aralık — doğrulamanın TEK tanımı
@@ -75,6 +83,8 @@ public struct AppConfig: Sendable, Equatable {
         usageIndicators: .defaults,
         computerAwakeMode: .default,
         agentHooksEnabled: true,
+        claudeAccounts: [],
+        claudeAccountSelection: .systemDefault,
         workspaces: [],
         sidebarProjectPaths: []
     )
@@ -95,6 +105,8 @@ public struct AppConfig: Sendable, Equatable {
         usageIndicators: UsageIndicators = .defaults,
         computerAwakeMode: ComputerAwakeMode = .default,
         agentHooksEnabled: Bool = true,
+        claudeAccounts: [ClaudeAccount] = [],
+        claudeAccountSelection: ClaudeAccountSelection = .systemDefault,
         workspaces: [ProjectWorkspace] = [],
         sidebarProjectPaths: [String] = []
     ) {
@@ -114,6 +126,8 @@ public struct AppConfig: Sendable, Equatable {
         self.usageIndicators = usageIndicators
         self.computerAwakeMode = computerAwakeMode
         self.agentHooksEnabled = agentHooksEnabled
+        self.claudeAccounts = claudeAccounts
+        self.claudeAccountSelection = claudeAccountSelection
         self.workspaces = workspaces
     }
 }
