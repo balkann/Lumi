@@ -33,8 +33,9 @@ public extension PanelItemID {
     static let projects = PanelItemID("projects")
     static let projectTools = PanelItemID("projectTools")
 
-    /// Aktif repo'nun terminal oturumları listesi.
-    static let sessions = PanelItemID("sessions")
+    /// Sol panelin Tasks/Remote sekmeleri (karar 55 — eski `sessions` öğesinin
+    /// yeri).
+    static let tasks = PanelItemID("tasks")
     /// Aktif repo'nun dosya ağacı ("Project Context").
     static let fileTree = PanelItemID("fileTree")
     /// Git branch + commit zaman çizelgesi.
@@ -90,7 +91,7 @@ public struct PanelLayout: Equatable, Sendable {
     /// Sol = Sessions, sağ = sekmeli Project Tools; sol açık, sağ kapalı.
     public static let defaults = PanelLayout(
         slots: [
-            .left: [.sessions, .projects],
+            .left: [.tasks, .projects],
             .right: [.projectTools],
             .bottom: [],
         ],
@@ -190,23 +191,39 @@ public struct PanelLayout: Equatable, Sendable {
         return copy
     }
 
-    /// Projects/Sessions sırasının ilk sürümden yeni varsayılan sıraya geçişi.
-    /// Projects sol yuvada Sessions'ın önündeyse, Sessions'ın hemen arkasına
+    /// Karar 55 migration: kalıcı yerleşimdeki `sessions` öğesi `tasks` ile
+    /// AYNI SIRADA değiştirilir — kullanıcı öğeyi taşımışsa Tasks da o yuvada
+    /// doğar. Hiç `sessions` kaydı yoksa (ya da `tasks` zaten varsa) yerleşim
+    /// olduğu gibi kalır; kayıtsız öğe zaten `defaultSlot`'una düşer.
+    public func migratingSessionsToTasks() -> PanelLayout {
+        let legacy = PanelItemID("sessions")
+        guard slot(of: .tasks) == nil, let slot = slot(of: legacy),
+              var items = slots[slot], let index = items.firstIndex(of: legacy) else {
+            return self
+        }
+        items[index] = .tasks
+        var copy = self
+        copy.slots[slot] = items
+        return copy
+    }
+
+    /// Projects/Tasks sırasının ilk sürümden yeni varsayılan sıraya geçişi.
+    /// Projects sol yuvada Tasks'ın önündeyse, Tasks'ın hemen arkasına
     /// taşınır. Diğer yuvalar ve yerleşim metadatası değişmez.
-    public func migratingProjectsAfterSessions() -> PanelLayout {
+    public func migratingProjectsAfterTasks() -> PanelLayout {
         guard let left = slots[.left],
               let projectsIndex = left.firstIndex(of: .projects),
-              let sessionsIndex = left.firstIndex(of: .sessions),
-              projectsIndex < sessionsIndex else {
+              let anchorIndex = left.firstIndex(of: .tasks),
+              projectsIndex < anchorIndex else {
             return self
         }
 
         var reordered = left
         reordered.remove(at: projectsIndex)
-        guard let updatedSessionsIndex = reordered.firstIndex(of: .sessions) else {
+        guard let updatedAnchorIndex = reordered.firstIndex(of: .tasks) else {
             return self
         }
-        reordered.insert(.projects, at: updatedSessionsIndex + 1)
+        reordered.insert(.projects, at: updatedAnchorIndex + 1)
 
         var copy = self
         copy.slots[.left] = reordered

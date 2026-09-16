@@ -18,6 +18,9 @@ public extension OverlayID {
     static let toasts = OverlayID("toasts")
     static let closeTabDialog = OverlayID("closeTabDialog")
     static let quitDialog = OverlayID("quitDialog")
+    /// Karar 55: repo tab şeridi kalkınca repo seçici popover olmaktan çıkıp
+    /// kabuk overlay'i oldu (menü ⌘O ve Welcome butonunun tek yüzü).
+    static let repoSelector = OverlayID("repoSelector")
     /// Karar 46/49: Projects paneline ait modal ve onay dialogu.
     static let createWorkspace = OverlayID("createWorkspace")
     static let deleteWorkspaceDialog = OverlayID("deleteWorkspaceDialog")

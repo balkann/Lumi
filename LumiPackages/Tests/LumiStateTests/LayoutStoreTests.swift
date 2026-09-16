@@ -224,8 +224,8 @@ final class LayoutStoreTests: XCTestCase {
 
     // MARK: - Panel yerleşimi (Faz 6.2)
 
-    func testDefaultLayoutPlacesSessionsLeftAndGitRight() {
-        XCTAssertEqual(store.items(in: .left), [.sessions, .projects])
+    func testDefaultLayoutPlacesTasksLeftAndGitRight() {
+        XCTAssertEqual(store.items(in: .left), [.tasks, .projects])
         XCTAssertEqual(store.items(in: .right), [.projectTools])
         XCTAssertEqual(store.width(for: .left), PanelLayout.defaultWidth)
         XCTAssertEqual(store.visibleSlots, [.left], "sağ panel default kapalı")
@@ -233,22 +233,22 @@ final class LayoutStoreTests: XCTestCase {
 
     /// **Ana hedef:** bir öğeyi soldan sağa taşımak TEK mutasyondur.
     func testMovingItemFromLeftToRightIsASingleMutation() async throws {
-        store.move(item: .sessions, to: .right, index: 0)
+        store.move(item: .tasks, to: .right, index: 0)
 
         XCTAssertEqual(store.items(in: .left), [.projects])
-        XCTAssertEqual(store.items(in: .right), [.sessions, .projectTools])
+        XCTAssertEqual(store.items(in: .right), [.tasks, .projectTools])
         try await waitForPersist()
         let persisted = await config.uiState()
-        XCTAssertEqual(persisted.panelLayout?.items(in: .right).first, .sessions)
+        XCTAssertEqual(persisted.panelLayout?.items(in: .right).first, .tasks)
     }
 
     func testMovingWithoutIndexAppends() {
-        store.move(item: .sessions, to: .right)
-        XCTAssertEqual(store.items(in: .right), [.projectTools, .sessions])
+        store.move(item: .tasks, to: .right)
+        XCTAssertEqual(store.items(in: .right), [.projectTools, .tasks])
     }
 
     func testMoveToSamePositionDoesNotPersist() async throws {
-        store.move(item: .sessions, to: .left, index: 0)
+        store.move(item: .tasks, to: .left, index: 0)
         try await Task.sleep(for: .milliseconds(50))
         let writes = await config.uiStateUpdateCount
         XCTAssertEqual(writes, 0, "değişmeyen yerleşim yazım doğurmaz")
@@ -273,7 +273,7 @@ final class LayoutStoreTests: XCTestCase {
             openTabs: []
         )
         XCTAssertEqual(store.visibleSlots, [.right])
-        XCTAssertEqual(store.items(in: .left), [.sessions, .projects], "yerleşim default'tan gelir")
+        XCTAssertEqual(store.items(in: .left), [.tasks, .projects], "yerleşim default'tan gelir")
     }
 
     /// Yeni anahtar VARSA otoritedir (eski bool'lar yok sayılır).
@@ -286,7 +286,7 @@ final class LayoutStoreTests: XCTestCase {
         store.load(state: state, openTabs: [])
 
         XCTAssertEqual(store.visibleSlots, [.right])
-        XCTAssertEqual(store.items(in: .left), [.sessions, .projects])
+        XCTAssertEqual(store.items(in: .left), [.tasks, .projects])
         XCTAssertEqual(store.items(in: .right), [.fileTree, .projectTools])
     }
 
@@ -295,23 +295,23 @@ final class LayoutStoreTests: XCTestCase {
     func testProjectsMigrationPreservesHiddenSidebarAndCustomLayout() async throws {
         var state = UIState.defaults
         state.panelLayout = PanelLayout(
-            slots: [.left: [.sessions], .right: [.projectTools]],
+            slots: [.left: [.tasks], .right: [.projectTools]],
             visibleSlots: [.right], widths: [.left: 310], autoRevealSlots: [.left]
         )
         store.load(state: state, openTabs: [])
-        XCTAssertEqual(store.items(in: .left), [.sessions, .projects])
+        XCTAssertEqual(store.items(in: .left), [.tasks, .projects])
         XCTAssertEqual(store.visibleSlots, [.right])
         XCTAssertEqual(store.width(for: .left), 310)
         XCTAssertTrue(store.panelLayout.isAutoReveal(.left))
         try await waitForPersist()
         let saved = await config.uiState()
-        XCTAssertEqual(saved.panelLayout?.items(in: .left), [.sessions, .projects])
+        XCTAssertEqual(saved.panelLayout?.items(in: .left), [.tasks, .projects])
     }
 
     func testProjectsMigrationReordersLegacyDefaultWithoutChangingMetadata() async throws {
         var state = UIState.defaults
         state.panelLayout = PanelLayout(
-            slots: [.left: [.projects, .sessions], .right: [.projectTools]],
+            slots: [.left: [.projects, .tasks], .right: [.projectTools]],
             visibleSlots: [.right],
             widths: [.left: 315, .right: 405],
             autoRevealSlots: [.left]
@@ -319,21 +319,39 @@ final class LayoutStoreTests: XCTestCase {
 
         store.load(state: state, openTabs: [])
 
-        XCTAssertEqual(store.items(in: .left), [.sessions, .projects])
+        XCTAssertEqual(store.items(in: .left), [.tasks, .projects])
         XCTAssertEqual(store.visibleSlots, [.right])
         XCTAssertEqual(store.width(for: .left), 315)
         XCTAssertEqual(store.width(for: .right), 405)
         XCTAssertTrue(store.panelLayout.isAutoReveal(.left))
         try await waitForPersist()
         let saved = await config.uiState()
-        XCTAssertEqual(saved.panelLayout?.items(in: .left), [.sessions, .projects])
+        XCTAssertEqual(saved.panelLayout?.items(in: .left), [.tasks, .projects])
+    }
+
+    /// Karar 55: diskteki `sessions` öğesi Tasks'a dönüşür ve yeni hâl persist
+    /// edilir (bir sonraki açılışta migration tekrar koşmaz).
+    func testSessionsItemMigratesToTasksAndPersists() async throws {
+        var state = UIState.defaults
+        state.panelLayout = PanelLayout(
+            slots: [.left: [PanelItemID("sessions"), .projects], .right: [.projectTools]],
+            visibleSlots: [.left], widths: [.left: 310]
+        )
+
+        store.load(state: state, openTabs: [])
+
+        XCTAssertEqual(store.items(in: .left), [.tasks, .projects])
+        XCTAssertEqual(store.width(for: .left), 310)
+        try await waitForPersist()
+        let saved = await config.uiState()
+        XCTAssertEqual(saved.panelLayout?.items(in: .left), [.tasks, .projects])
     }
 
     func testProjectsMigrationRespectsAnExistingUserMove() {
         var state = UIState.defaults
         state.panelLayout = PanelLayout.defaults.moving(.projects, to: .right, index: 1)
         store.load(state: state, openTabs: [])
-        XCTAssertEqual(store.items(in: .left), [.sessions])
+        XCTAssertEqual(store.items(in: .left), [.tasks])
         XCTAssertEqual(store.items(in: .right), [.projectTools, .projects])
     }
 

@@ -43,12 +43,13 @@ struct AppComposition {
         let workspaceBoot = WorkspaceBootAssembly()
         let statusBar = StatusBarFeatureAssembly()
         let deepSeek = DeepSeekAssembly()
+        let tasks = TasksFeatureAssembly()
         let container = AppContainer(
             services: registry,
             shared: shared,
             assemblies: [
                 agentHooks, terminal, notifications, sessionSchedule, usage, repo, workspaceBoot,
-                statusBar, deepSeek,
+                statusBar, deepSeek, tasks,
             ]
         )
         let shell = ShellComposition.make(
@@ -61,7 +62,7 @@ struct AppComposition {
             workspaceBoot: workspaceBoot,
             statusBar: statusBar,
             deepSeek: deepSeek,
-            contributors: [terminal, repo, usage, statusBar]
+            contributors: [tasks, terminal, repo, usage, statusBar]
         )
         return AppComposition(
             registry: registry,

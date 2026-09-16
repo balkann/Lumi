@@ -215,8 +215,14 @@ private final class ProbeSession: @unchecked Sendable {
 
     // MARK: - Sonlandırma
 
-    /// Idempotent. `terminate()` sonrası `waitUntilExit()` beklenir: aksi halde
-    /// çocuk süreç reap edilmeyip zombi olarak kalıyordu.
+    /// SIGTERM'i yutan bir app-server'da beklemenin üst sınırı; sonrasında
+    /// SIGKILL gelir (karar 55).
+    private static let terminationGrace: TimeInterval = 2
+
+    /// Idempotent. `terminate()` sonrası süreç beklenir: aksi halde çocuk süreç
+    /// reap edilmeyip zombi olarak kalıyordu. Ama bekleme SINIRLIDIR: koşulsuz
+    /// `waitUntilExit()` SIGTERM'e yanıt vermeyen bir süreçte çağıran thread'i
+    /// süresiz blokluyordu (göstergenin saatlerce dönmesinin ikinci nedeni).
     func shutdown() {
         lock.lock()
         let alreadyDone = isShutDown
@@ -230,6 +236,11 @@ private final class ProbeSession: @unchecked Sendable {
         try? stdinPipe.fileHandleForWriting.close()
         guard launched else { return }
         if process.isRunning { process.terminate() }
+        let deadline = Date().addingTimeInterval(Self.terminationGrace)
+        while process.isRunning, Date() < deadline {
+            usleep(UInt32(Self.pollInterval.components.attoseconds / 1_000_000_000_000))
+        }
+        if process.isRunning { kill(process.processIdentifier, SIGKILL) }
         process.waitUntilExit()
     }
 }

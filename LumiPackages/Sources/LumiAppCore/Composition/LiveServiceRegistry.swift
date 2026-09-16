@@ -82,7 +82,10 @@ final class LiveServiceRegistry: ServiceRegistry {
         // takılıp boşa dönmez; manuel yenileme cache'i açıkça geçersizler.
         usageServices = [
             .claude: Self.cached(ClaudeUsageService()),
-            .codex: Self.cached(CodexUsageService()),
+            // Karar 55: Codex probe'u (süreç spawn'ı + RPC) asılabiliyordu;
+            // 30 sn üst sınırı cache'in ALTINDA durur ki zaman aşımı
+            // cache'lenmesin, bir sonraki yenileme yeniden denesin.
+            .codex: Self.cached(TimeoutUsageService(wrapping: CodexUsageService())),
         ]
         activityMonitor = SystemActivityMonitor()
         processSampler = PSProcessSampler()

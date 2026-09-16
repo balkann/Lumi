@@ -61,7 +61,6 @@ public extension ToolbarItemID {
     }
 
     static let logo = ToolbarItemID("logo")
-    static let repoTabs = ToolbarItemID("repoTabs")
     static let gridSettings = ToolbarItemID("gridSettings")
     static let newTerminal = ToolbarItemID("newTerminal")
     static let focusMode = ToolbarItemID("focusMode")

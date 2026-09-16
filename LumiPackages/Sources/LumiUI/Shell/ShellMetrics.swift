@@ -18,6 +18,19 @@ public enum TopBarMetrics {
     public static let trailingPadding: CGFloat = 10
     /// Sol grup ile üretim bölgesi arasındaki en küçük boşluk.
     public static let regionGap: CGFloat = 8
+
+    /// Karar 55: bar, panellerle hizalı üç parçadır — sol parça sol panel,
+    /// sağ parça sağ panel genişliğinde, orta parça kalan alan. Bölge
+    /// genişlikleri bar'ın KENDİ dolgularını düşer ki sınır tam panel kenarına
+    /// otursun. Yuva gizliyse `nil` döner: hizalanacak bir panel yokken bölge
+    /// doğal genişliğinde kalır ve orta alan boşa daralmaz.
+    public static func leadingRegionWidth(leftPanelWidth: CGFloat?) -> CGFloat? {
+        leftPanelWidth.map { max(0, $0 - contentLeading) }
+    }
+
+    public static func trailingRegionWidth(rightPanelWidth: CGFloat?) -> CGFloat? {
+        rightPanelWidth.map { max(0, $0 - trailingPadding) }
+    }
 }
 
 /// Panel yuvalarının genişlik default'u burada **tekrarlanmaz**: tek kaynak

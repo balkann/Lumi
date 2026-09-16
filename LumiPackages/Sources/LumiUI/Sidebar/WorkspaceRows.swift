@@ -44,30 +44,52 @@ struct CheckoutRow: View {
     // MARK: - Satır
 
     private var row: some View {
-        Button { shell.navigation.openTab(checkout.path) } label: {
+        HoverReader { isHovering in
             HStack(spacing: Theme.Spacing.sm) {
-                icon
-                Text(checkout.title)
-                    .font(Theme.Typography.labelMono)
-                    .foregroundStyle(isActive ? Theme.accentPrimary : Theme.textSecondary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                trailing
-                Spacer(minLength: 0)
-                summary
+                Button { shell.navigation.openTab(checkout.path) } label: {
+                    HStack(spacing: Theme.Spacing.sm) {
+                        icon
+                        Text(checkout.title)
+                            .font(Theme.Typography.labelMono)
+                            .foregroundStyle(isActive ? Theme.accentPrimary : Theme.textSecondary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                        trailing
+                        Spacer(minLength: 0)
+                        summary
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(isMissing)
+                .accessibilityLabel("Open \(checkout.title)")
+                // Karar 55: top bar tab şeridi kalktı; sekme kapatma satırın
+                // kendisinde yaşar (yalnız açık bir sekmede, hover/aktifken).
+                if isOpenTab {
+                    closeTabButton
+                        .opacity(isHovering || isActive ? 1 : 0)
+                }
             }
             .padding(.leading, Theme.Spacing.xl)
             .padding(.trailing, Theme.Spacing.sm)
             .padding(.vertical, Theme.Spacing.xs)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
         .background(isActive ? Theme.bgElevated : .clear)
         .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
-        .disabled(isMissing)
         .help(checkout.path)
-        .accessibilityLabel("Open \(checkout.title)")
         .contextMenu { contextMenu }
+    }
+
+    private var closeTabButton: some View {
+        IconButton(
+            systemName: "xmark",
+            label: "Close \(checkout.title) tab",
+            size: .micro,
+            side: Theme.Spacing.xl,
+            role: .destructive
+        ) {
+            shell.requestCloseTab(checkout.path, repoName: checkout.title)
+        }
     }
 
     @ViewBuilder
@@ -163,10 +185,16 @@ struct CheckoutRow: View {
         case .original(let repo):
             Button("Create Workspace…") { shell.dialogs.present(.createWorkspace(projectPath: repo.path)) }
                 .disabled(shell.workspaces.isCreating)
+            if isOpenTab {
+                Button("Close Tab") { shell.requestCloseTab(repo.path, repoName: repo.name) }
+            }
             Button("Reveal in Finder") { shell.actions.revealPath(repo.path) }
             Button("Copy Path") { Pasteboard.copy(repo.path) }
         case .workspace(let workspace):
             Button("Open") { shell.navigation.openTab(workspace.path) }.disabled(isMissing)
+            if isOpenTab {
+                Button("Close Tab") { shell.requestCloseTab(workspace.path, repoName: workspace.name) }
+            }
             Button("Reveal in Finder") { shell.actions.revealPath(workspace.path) }.disabled(isMissing)
             Button("Copy Path") { Pasteboard.copy(workspace.path) }
             Divider()
@@ -182,6 +210,9 @@ struct CheckoutRow: View {
     // MARK: - Türevler
 
     private var isActive: Bool { shell.navigation.activeRepoPath == checkout.path }
+
+    /// Checkout açık bir sekme mi (kapatma yalnız o zaman anlamlı).
+    private var isOpenTab: Bool { shell.navigation.openTabs.contains(checkout.path) }
 
     private var isMissing: Bool {
         if case .workspace(let workspace) = checkout { return shell.workspaces.isMissing(workspace) }

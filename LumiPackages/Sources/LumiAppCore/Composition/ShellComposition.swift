@@ -123,6 +123,11 @@ struct ShellComposition {
             makeView: { AnyView(FileViewerOverlay()) }
         ))
         registries.overlays.register(OverlayDescriptor(
+            id: .repoSelector,
+            isPresented: { $0.dialogs.isRepoSelectorOpen },
+            makeView: { AnyView(RepoSelectorOverlay()) }
+        ))
+        registries.overlays.register(OverlayDescriptor(
             id: .settings,
             isPresented: { $0.dialogs.isSettingsOpen },
             makeView: { AnyView(SettingsOverlay()) }

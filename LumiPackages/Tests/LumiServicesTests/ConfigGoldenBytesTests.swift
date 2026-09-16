@@ -189,7 +189,7 @@ final class ConfigGoldenBytesTests: XCTestCase {
 
           ],
           "left" : [
-            "sessions",
+            "tasks",
             "projects"
           ],
           "right" : [
