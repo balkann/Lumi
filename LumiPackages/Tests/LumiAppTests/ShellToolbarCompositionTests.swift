@@ -75,9 +75,10 @@ final class ShellToolbarCompositionTests: XCTestCase {
         ], "sıra AgentProvider.allCases sırasıdır (eski enabledProviders)")
     }
 
-    /// Gezinme grubu: hamburger → logo (karar 55: tab şeridi kaldırıldı).
+    /// Gezinme grubu: logo → hamburger (karar 55: tab şeridi kaldırıldı,
+    /// toggle ürün adının ardına alındı).
     func testLeadingRegionOrder() {
-        XCTAssertEqual(ids(.leading), [.panelToggle(.left), .logo])
+        XCTAssertEqual(ids(.leading), [.logo, .panelToggle(.left)])
     }
 
     /// Üretim grubu: grid ayarı → New <Provider> (karar 55: ayraç kaldırıldı).
@@ -147,7 +148,7 @@ final class ShellToolbarCompositionTests: XCTestCase {
     /// gezinme ve global kontroller durur).
     func testShellItemsSurviveANonRepoRoute() {
         fixture.context.navigation.setRoute(.content(ContentRouteID("placeholder")))
-        XCTAssertEqual(ids(.leading), [.panelToggle(.left), .logo])
+        XCTAssertEqual(ids(.leading), [.logo, .panelToggle(.left)])
         XCTAssertTrue(ids(.trailing).contains(.focusMode))
     }
 }

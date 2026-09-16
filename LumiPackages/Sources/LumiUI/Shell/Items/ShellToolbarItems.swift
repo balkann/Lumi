@@ -14,8 +14,10 @@ public enum ShellToolbarItems {
     /// Bölge içi sıralar. Aralıklı numaralar: bir feature araya öğe
     /// sokabilsin diye (yeni öğe = yeni sayı, mevcutlar kaymaz).
     public enum Order {
-        public static let panelToggleLeading = 0
-        public static let logo = 10
+        public static let logo = 0
+        /// Karar 55: sol panel toggle'ı logo + ürün adının ARDINDA durur
+        /// (traffic light → logo → toggle).
+        public static let panelToggleLeading = 10
 
         public static let gridSettings = 0
         public static let newTerminal = 10
