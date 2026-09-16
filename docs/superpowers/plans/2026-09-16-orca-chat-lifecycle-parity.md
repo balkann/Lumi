@@ -489,72 +489,58 @@ git commit -m "refactor(wire): iOS LumiMobileKit LumiWire'a bağlandı, kopyalar
 
 ---
 
-### Task 7: Bileşen C3 — encode/decode simetrisi tek yerde + round-trip testi
+### Task 7: Bileşen C3 — Mac-encode → LumiWire-decode round-trip regression guard
 
-Wire encode (Mac `RemoteProtocol.*Payload`) ve decode (iOS) mantığı `LumiWire`'daki tiplere taşınır: her tip `wirePayload()` + `decode(_:)`. Round-trip testi iki tarafı da kilitler.
+**Sadeleştirildi (YAGNI):** iOS chat/prompt frame'lerini **asla encode etmiyor** (yalnız decode); encode mantığı Mac `RemoteProtocol`'de tek yerde → drift riski yok. Bu yüzden encode'u LumiWire'a **TAŞIMIYORUZ** (sıfır fayda, ek risk). Kalıcı fix'in kilidi: Mac encode çıktısının shared LumiWire `decode`'una birebir round-trip ettiğini kanıtlayan regression testi. Bu, bir tarafın alanı değiştirip diğerini unutmasını (tam da eski drift) testte yakalar. `ChatMessage`/`ChatTurnStatus` `toDict()`+`decode` zaten LumiWire'da simetrik (Task 5 LumiWireTests kapsar); eksik olan: encode'u `RemoteProtocol`'de olan **`ChatPrompt`** yolu.
 
 **Files:**
-- Modify: `LumiPackages/Sources/LumiWire/ChatPrompt.swift` (+`ChatMessage.swift`) — `wirePayload()`/`decode(_:)` public
-- Modify: `LumiPackages/Sources/LumiRemote/RemoteProtocol.swift` — `promptPayload`/`chatPayload` artık `wirePayload()` çağırır
-- Modify: iOS decode çağrıları LumiWire `decode`'una yönelir (kopya decode zaten LumiWire'da)
-- Test: `LumiPackages/Tests/LumiWireTests/WireRoundTripTests.swift` (yeni)
+- Test: `LumiPackages/Tests/LumiRemoteTests/WireRoundTripTests.swift` (yeni — Mac hem `RemoteProtocol` hem `LumiWire` görür)
+- (Kaynak değişikliği YOK — bu bir regression guard task'i. Ancak testi yazarken `RemoteProtocol.*Payload`'un `sessionId` dışındaki tüm alanları `ChatPrompt.decode`'un okuduğu anahtarlarla eşleştiğini doğrula; bir asimetri çıkarsa MİNİMAL düzelt ve raporla.)
 
 **Interfaces:**
-- Produces: `ChatPrompt.wirePayload() -> [String: Any]`, `static ChatPrompt.decode(_ d: [String: Any]) -> ChatPrompt?` (mevcut iOS `decode` public'e alınır); `ChatMessage` için aynısı.
-- Consumes: Task 5/6 çıktısı.
+- Consumes: `RemoteProtocol.promptPayload(sessionId:prompt:) -> [String: Any]` (GERÇEK imzayı dosyadan teyit et), `ChatPrompt.decode(_:) -> ChatPrompt?` (LumiWire, Task 5). Ayrıca varsa `chatStatusPayload`/`chatPayload` + `ChatTurnStatus.decode`/`ChatMessage.decode`.
+- Produces: (yeni API yok — yalnız regression testi; asimetri bulunursa minimal fix.)
 
-- [ ] **Step 1: Round-trip failing test yaz**
+- [ ] **Step 1: Round-trip testi yaz**
 
-`LumiPackages/Tests/LumiWireTests/WireRoundTripTests.swift`:
+`LumiPackages/Tests/LumiRemoteTests/WireRoundTripTests.swift` (imzalar dosyadan teyit edilecek; şablon):
 ```swift
 import Testing
-@testable import LumiWire
+import LumiWire
+@testable import LumiRemote
 
 @Suite struct WireRoundTripTests {
-    @Test func chatPromptRoundTrips() {
+    @Test func promptPayloadRoundTripsThroughLumiWireDecode() {
         let p = ChatPrompt(itemId: "i1", revision: 2, kind: .question, title: "Pick",
             detail: nil, options: [ChatPromptOption(id: "opt-0", label: "A", description: "d")],
             state: .pending, selectedOptionId: nil, multiSelect: true, allowOther: true,
             questions: [ChatPromptQuestion(id: "q0", question: "Q?", header: "H",
                 multiSelect: false, allowOther: false,
                 options: [ChatPromptOption(id: "opt-0", label: "X", description: nil)])])
-        let decoded = ChatPrompt.decode(p.wirePayload())
-        #expect(decoded == p)
+        // Mac encode → shared decode == kimlik (sessionId decode tarafından yok sayılır)
+        let payload = RemoteProtocol.promptPayload(sessionId: "s", prompt: p)
+        #expect(ChatPrompt.decode(payload) == p)
     }
 }
 ```
+Aynı desende, `RemoteProtocol`'de encode'u olan diğer wire tipleri için de birer round-trip ekle (`chatStatusPayload`→`ChatTurnStatus.decode`; tek `ChatMessage` için `chatPayload`'un ürettiği `messages[0]` dict'i → `ChatMessage.decode`). Gerçek imzalar `RemoteProtocol.swift`'ten alınır.
 
-- [ ] **Step 2: Testi koştur, kırıldığını gör**
+- [ ] **Step 2: Testi koştur**
 
 Run: `cd LumiPackages && swift test --filter WireRoundTripTests 2>&1 | tail -20`
-Expected: FAIL — `wirePayload()` yok.
+Expected: PASS (encode/decode zaten simetrikse). **FAIL çıkarsa** = gerçek bir asimetri yakalandı (bir anahtar adı/eksik alan) → `RemoteProtocol` encode veya `LumiWire` decode'da MİNİMAL düzeltmeyle eşitle, sonra PASS. Hangi asimetriyi bulduğunu raporla.
 
-- [ ] **Step 3: `wirePayload()`'ı LumiWire'a ekle**
+- [ ] **Step 3: Regresyon — Mac + iOS suite yeşil**
 
-`ChatPrompt` (ve alt tipleri) için `RemoteProtocol.promptPayload`'daki serileştirmeyi `wirePayload()` metoduna taşı (anahtarlar birebir: `itemId`, `revision`, `kind`, `title`, `detail`, `options`, `state`, `selectedOptionId`, `multiSelect`, `allowOther`, `questions`). `decode` zaten var (iOS'tan taşındı) — `internal`/`static` erişimi `public` yap.
-
-- [ ] **Step 4: RemoteProtocol'ü wirePayload'a yönelt**
-
-`RemoteProtocol.promptPayload(sessionId:prompt:)` gövdesi:
-```swift
-static func promptPayload(sessionId: String, prompt: ChatPrompt) -> [String: Any] {
-    var p = prompt.wirePayload(); p["sessionId"] = sessionId; return p
-}
-```
-`chatPayload`/`chatAppendPayload` için `ChatMessage.wirePayload()` ile aynısını yap.
-
-- [ ] **Step 5: Testler yeşil (round-trip + Mac + iOS)**
-
-Run: `cd LumiPackages && swift test 2>&1 | tail -20`
+Run: `cd LumiPackages && swift test --filter "LumiRemoteTests|LumiWireTests" 2>&1 | tail -20`
 Run: `cd LumiMobile/LumiMobileKit && swift test 2>&1 | tail -20`
-Expected: İkisi de PASS (prompt/chat wire testleri kırılmadı).
+Expected: İkisi de PASS.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
-git add LumiPackages/Sources/LumiWire LumiPackages/Sources/LumiRemote/RemoteProtocol.swift \
-  LumiPackages/Tests/LumiWireTests LumiMobile
-git commit -m "refactor(wire): encode/decode simetrisi LumiWire'da + round-trip testi (Bileşen C3)"
+git add LumiPackages/Tests/LumiRemoteTests/WireRoundTripTests.swift LumiPackages LumiMobile 2>/dev/null
+git commit -m "test(wire): Mac-encode → LumiWire-decode round-trip regression guard (Bileşen C3)"
 ```
 
 ---
