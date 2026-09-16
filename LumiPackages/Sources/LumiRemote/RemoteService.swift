@@ -247,17 +247,14 @@ public final class RemoteService: RemoteServicing {
 
         if RemoteProtocol.decodeSubscribeMode(payload) == "chat" {
             let meta = terminal.terminals.first(where: { $0.id == id })
-            guard let meta, let claudeSessionID = meta.claudeSessionID else {
-                rlog("chat subscribe DÜŞTÜ→terminal: metaVar=\(meta != nil) claudeSessionID=\(meta?.claudeSessionID ?? "nil") repo=\(meta?.repoPath ?? "-")")
-                // Aşağıdaki terminal moduna düş.
-                seqCounters[id] = 0
-                let (data, cols, rows) = terminal.serializeScrollback(id)
-                await connection.send(type: "scrollback",
-                    payload: RemoteProtocol.scrollbackPayload(sessionId: raw, seq: 0, cols: cols, rows: rows, data: data))
-                let stream = terminal.subscribeOutput(id)
-                subscriptions[id] = Task { [weak self] in
-                    for await batch in stream { guard !Task.isCancelled else { break }; await self?.emitData(id: id, sessionId: raw, batch: batch) }
-                }
+            guard let meta else { return }
+            guard let claudeSessionID = meta.claudeSessionID else {
+                rlog("chat subscribe: claudeSessionID yok, PTY'ye DÜŞMÜYOR — chat-unavailable: repo=\(meta.repoPath)")
+                // Ham-PTY'ye düşme. Boş chat + working:false durumu; Task 3 transcript keşfi bağlar.
+                await connection.send(type: "chat",
+                    payload: RemoteProtocol.chatPayload(sessionId: raw, messages: []))
+                await emitTurnStatus(id: id, status: .idle)
+                chatSubscriptions[id] = Task { [weak self] in await self?.awaitTranscript(id: id, raw: raw, meta: meta) }
                 return
             }
             let encoded = meta.repoPath.replacingOccurrences(of: "[^a-zA-Z0-9]", with: "-", options: .regularExpression)
@@ -320,6 +317,9 @@ public final class RemoteService: RemoteServicing {
         chatSubscriptions[id]?.cancel()
         chatSubscriptions[id] = nil
     }
+
+    /// claudeSessionID henüz yokken bekleme görevi (Task 3 gerçek gövdeyi yazar).
+    private func awaitTranscript(id: TerminalID, raw: String, meta: TerminalMeta) async { /* Task 3 */ }
 
     // MARK: - Turn status (Faz 2)
 

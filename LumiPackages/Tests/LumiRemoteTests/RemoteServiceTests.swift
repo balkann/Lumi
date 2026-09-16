@@ -347,7 +347,7 @@ final class FakeTerminalServicing: TerminalServicing {
         svc.stop()
     }
 
-    @Test func chatModeWithoutSessionIDFallsBackToTerminal() async throws {
+    @Test func chatModeWithoutSessionIDSendsChatUnavailable() async throws {
         let conn = FakeRelayConnection()
         let term = FakeTerminalServicing()
         term.scrollback = ("X".data(using: .utf8)!, 80, 24)
@@ -356,8 +356,9 @@ final class FakeTerminalServicing: TerminalServicing {
                                 connection: conn, chatSource: FakeChatTranscriptSource(events: []))
         await svc.start()
         await conn.injectInbound(type: "subscribe", payload: ["sessionId": sid, "mode": "chat"])
-        try await conn.waitForSent(types: ["scrollback"])   // fell back to terminal mode
-        #expect(await conn.count(type: "chat") == 0)
+        // Yeni davranış: PTY'ye düşmez; boş chat + idle durumu yayınlar.
+        try await conn.waitForSent(types: ["chat", "chat_status"])
+        #expect(await conn.sentTypes().contains("scrollback") == false)
         svc.stop()
     }
 }
