@@ -7,6 +7,10 @@ import XCTest
 /// Kritik sözleşme: bu bölüm ASLA kimlik bilgisi (token) taşımaz.
 final class ClaudeAccountCodecTests: XCTestCase {
     private let created = Date(timeIntervalSince1970: 1_700_000_000)
+    /// Id'ler UUID olmak zorunda: dosya yoluna ve Keychain hesap adına
+    /// giriyorlar (karar 56 sertleştirmesi).
+    private static let first = "22222222-2222-4222-8222-222222222222"
+    private static let second = "33333333-3333-4333-8333-333333333333"
 
     func testMissingKeysDecodeToEmptyListAndSystemDefault() {
         let config = ConfigCodec.decodeConfig(from: ["projectsRoot": "/tmp"])
@@ -17,18 +21,18 @@ final class ClaudeAccountCodecTests: XCTestCase {
     func testAccountRoundTripsWithOptionalOrganizationFields() throws {
         let accounts = [
             ClaudeAccount(
-                id: "a", email: "dev@example.com", organizationUUID: "org", organizationName: "Example",
+                id: ClaudeAccountCodecTests.first, email: "dev@example.com", organizationUUID: "org", organizationName: "Example",
                 createdAt: created, updatedAt: created.addingTimeInterval(10),
                 lastAuthenticatedAt: created.addingTimeInterval(20)
             ),
             ClaudeAccount(
-                id: "b", email: "solo@example.com",
+                id: ClaudeAccountCodecTests.second, email: "solo@example.com",
                 createdAt: created, updatedAt: created, lastAuthenticatedAt: created
             ),
         ]
         var config = AppConfig.defaults
         config.claudeAccounts = accounts
-        config.claudeAccountSelection = .account("b")
+        config.claudeAccountSelection = .account(ClaudeAccountCodecTests.second)
 
         let overlay = ConfigCodec.configOverlay(config)
         let data = try JSONSerialization.data(withJSONObject: overlay)
@@ -36,7 +40,7 @@ final class ClaudeAccountCodecTests: XCTestCase {
         let decoded = ConfigCodec.decodeConfig(from: dict)
 
         XCTAssertEqual(decoded.claudeAccounts, accounts)
-        XCTAssertEqual(decoded.claudeAccountSelection, .account("b"))
+        XCTAssertEqual(decoded.claudeAccountSelection, .account(ClaudeAccountCodecTests.second))
     }
 
     /// Token sızıntısına karşı yapısal kapı: overlay'in hiçbir yerinde
@@ -44,7 +48,7 @@ final class ClaudeAccountCodecTests: XCTestCase {
     func testOverlayCarriesNoCredentialFields() throws {
         var config = AppConfig.defaults
         config.claudeAccounts = [
-            ClaudeAccount(id: "a", email: "dev@example.com", createdAt: created, updatedAt: created, lastAuthenticatedAt: created),
+            ClaudeAccount(id: ClaudeAccountCodecTests.first, email: "dev@example.com", createdAt: created, updatedAt: created, lastAuthenticatedAt: created),
         ]
         let data = try JSONSerialization.data(withJSONObject: ConfigCodec.configOverlay(config))
         let json = String(decoding: data, as: UTF8.self).lowercased()
@@ -55,7 +59,7 @@ final class ClaudeAccountCodecTests: XCTestCase {
 
     func testSelectionPointingAtAMissingAccountFallsBackToSystemDefault() {
         let decoded = ConfigCodec.decodeConfig(from: [
-            "claudeAccounts": [["id": "a", "email": "dev@example.com"]],
+            "claudeAccounts": [["id": ClaudeAccountCodecTests.first, "email": "dev@example.com"]],
             "activeClaudeAccountId": "ghost",
         ])
         XCTAssertEqual(decoded.claudeAccountSelection, .systemDefault)
@@ -64,22 +68,22 @@ final class ClaudeAccountCodecTests: XCTestCase {
     func testMalformedEntriesAreDroppedAndIdsStayUnique() {
         let decoded = ConfigCodec.decodeConfig(from: [
             "claudeAccounts": [
-                ["id": "a", "email": "dev@example.com"],
-                ["id": "a", "email": "duplicate@example.com"],
+                ["id": ClaudeAccountCodecTests.first, "email": "dev@example.com"],
+                ["id": ClaudeAccountCodecTests.first, "email": "duplicate@example.com"],
                 ["id": "", "email": "blank@example.com"],
-                ["id": "b"],
+                ["id": ClaudeAccountCodecTests.second],
                 ["email": "no-id@example.com"],
                 "not-an-object",
             ],
         ])
-        XCTAssertEqual(decoded.claudeAccounts.map(\.id), ["a"])
+        XCTAssertEqual(decoded.claudeAccounts.map(\.id), [ClaudeAccountCodecTests.first])
         XCTAssertEqual(decoded.claudeAccounts.first?.email, "dev@example.com")
     }
 
     func testMissingTimestampsFallBackToCreatedAt() {
         let decoded = ConfigCodec.decodeConfig(from: [
             "claudeAccounts": [
-                ["id": "a", "email": "dev@example.com", "createdAt": created.timeIntervalSince1970],
+                ["id": ClaudeAccountCodecTests.first, "email": "dev@example.com", "createdAt": created.timeIntervalSince1970],
             ],
         ])
         let account = decoded.claudeAccounts.first
@@ -89,11 +93,24 @@ final class ClaudeAccountCodecTests: XCTestCase {
 
     func testDuplicateIdentityMatchIsCaseInsensitiveOnEmailAndExactOnOrganization() {
         let account = ClaudeAccount(
-            id: "a", email: "Dev@Example.com", organizationUUID: "org",
+            id: ClaudeAccountCodecTests.first, email: "Dev@Example.com", organizationUUID: "org",
             createdAt: created, updatedAt: created, lastAuthenticatedAt: created
         )
         XCTAssertTrue(account.isSameIdentity(email: "dev@example.com", organizationUUID: "org"))
         XCTAssertFalse(account.isSameIdentity(email: "dev@example.com", organizationUUID: nil))
         XCTAssertFalse(account.isSameIdentity(email: "other@example.com", organizationUUID: "org"))
+    }
+
+    /// UUID olmayan id'ler okunurken elenir: `../` taşıyan bir id yönetilen
+    /// kökün dışına yazma/silme yapabilirdi.
+    func testNonUUIDIdentifiersAreDropped() {
+        let decoded = ConfigCodec.decodeConfig(from: [
+            "claudeAccounts": [
+                ["id": "../../escape", "email": "evil@example.com"],
+                ["id": "plain-string", "email": "nope@example.com"],
+                ["id": ClaudeAccountCodecTests.first, "email": "dev@example.com"],
+            ],
+        ])
+        XCTAssertEqual(decoded.claudeAccounts.map(\.id), [ClaudeAccountCodecTests.first])
     }
 }

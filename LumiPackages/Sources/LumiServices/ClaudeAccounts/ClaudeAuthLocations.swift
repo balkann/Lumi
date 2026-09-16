@@ -56,8 +56,13 @@ public enum ClaudeAuthLocations {
     }
 
     /// Bir hesabın yönetilen auth dizini: `~/.lumi/claude-accounts/<id>/auth`.
-    public static func managedAuthDirectory(accountID: String, root: URL) -> URL {
-        root.appendingPathComponent(accountID).appendingPathComponent("auth")
+    ///
+    /// `nil` = id bir UUID değil. Yol bileşeni olarak kullanılan her id burada
+    /// süzülür; codec zaten UUID dışını eliyor, bu ikinci kapı yazma/silme
+    /// tarafının kökün dışına çıkmasını yapısal olarak imkânsız kılar.
+    public static func managedAuthDirectory(accountID: String, root: URL) -> URL? {
+        guard UUID(uuidString: accountID) != nil else { return nil }
+        return root.appendingPathComponent(accountID).appendingPathComponent("auth")
     }
 }
 

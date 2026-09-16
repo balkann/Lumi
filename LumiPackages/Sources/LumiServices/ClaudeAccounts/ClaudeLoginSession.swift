@@ -14,6 +14,19 @@ struct ClaudeLoginSession: Sendable {
     static let statusTimeout: TimeInterval = 20
     static let binaryName = "claude"
 
+    /// Kullanıcı tarayıcıda oturumu REDDETTİĞİNDE CLI'ın bastığı desenler
+    /// (Orca paritesi). Yakalanınca süreç hemen sonlandırılır — yoksa
+    /// `Add Account` 180 sn boyunca dönerdi.
+    static func isDenial(_ output: String) -> Bool {
+        let text = output.lowercased()
+        if text.contains("access_denied") { return true }
+        for verb in ["authorization", "authorization request", "sign-in", "sign in", "login"]
+        where text.contains("\(verb) was denied") || text.contains("\(verb) denied") {
+            return true
+        }
+        return false
+    }
+
     struct Result: Sendable, Equatable {
         let identity: ClaudeIdentity
         let snapshot: ClaudeAuthSurface.Snapshot
@@ -49,6 +62,14 @@ struct ClaudeLoginSession: Sendable {
         let previousLegacy = await keychain.password(
             service: ClaudeAuthLocations.legacyKeychainService, account: user
         )
+        // Kullanıcının mevcut kaydı OKUNAMIYORSA login'e girilmez: sonunda
+        // onu geri yazamayız ve kullanıcı kendi oturumunu kaybederdi.
+        if case let .failed(detail) = previousLegacy {
+            throw LumiError.claudeAccountFailed(
+                operation: "login",
+                detail: "the macOS Keychain could not be read (\(detail)) — unlock it and try again"
+            )
+        }
         defer { try? FileManager.default.removeItem(at: configDir) }
 
         var childEnvironment = environment
@@ -58,18 +79,28 @@ struct ClaudeLoginSession: Sendable {
             binary,
             arguments: ["auth", "login", "--claudeai"],
             environment: childEnvironment,
+            options: ProcessLaunchOptions(
+                keepsStandardInputOpen: true,
+                shouldTerminateOnOutput: { Self.isDenial($0) },
+                terminatesChildProcesses: true
+            ),
             timeout: Self.loginTimeout
         )
         guard let login else {
             await restoreLegacyKeychain(previousLegacy, temporaryConfigDir: configDir.path)
+            if Task.isCancelled {
+                throw LumiError.claudeAccountFailed(operation: "login", detail: "sign-in was cancelled")
+            }
             throw LumiError.claudeAccountFailed(
                 operation: "login", detail: "sign-in timed out or was cancelled"
             )
         }
         guard login.exitCode == 0 else {
             await restoreLegacyKeychain(previousLegacy, temporaryConfigDir: configDir.path)
+            let combined = login.stdout + login.stderr
             throw LumiError.claudeAccountFailed(
-                operation: "login", detail: Self.detail(of: login)
+                operation: "login",
+                detail: Self.isDenial(combined) ? "sign-in was denied" : Self.detail(of: login)
             )
         }
 
@@ -108,17 +139,17 @@ struct ClaudeLoginSession: Sendable {
     /// düz servise yazar, ama oradaki değer değişmediyse o kullanıcının kendi
     /// eski oturumudur, yeni hesap değil.
     private func capture(
-        configDir: URL, previousLegacy: String?
+        configDir: URL, previousLegacy: KeychainReadResult
     ) async -> ClaudeAuthSurface.Snapshot {
         var credentials = await keychain.password(
             service: ClaudeAuthLocations.scopedKeychainService(configDir: configDir.path),
             account: user
-        )
-        if credentials == nil {
-            let legacy = await keychain.password(
-                service: ClaudeAuthLocations.legacyKeychainService, account: user
-            )
-            if let legacy, legacy != previousLegacy { credentials = legacy }
+        ).value
+        if credentials == nil,
+           case let .found(legacy) = await keychain.password(
+               service: ClaudeAuthLocations.legacyKeychainService, account: user
+           ), legacy != previousLegacy.value {
+            credentials = legacy
         }
         if credentials == nil {
             let file = configDir.appendingPathComponent(ClaudeAuthLocations.credentialsFileName)
@@ -144,7 +175,9 @@ struct ClaudeLoginSession: Sendable {
 
     /// Login'in yan etkilerini temizler: geçici dizine ait kayıt silinir,
     /// kullanıcının düz servisteki kaydı eski hâline döner.
-    private func restoreLegacyKeychain(_ previous: String?, temporaryConfigDir: String) async {
+    private func restoreLegacyKeychain(
+        _ previous: KeychainReadResult, temporaryConfigDir: String
+    ) async {
         try? await keychain.deletePassword(
             service: ClaudeAuthLocations.scopedKeychainService(configDir: temporaryConfigDir),
             account: user
@@ -152,12 +185,14 @@ struct ClaudeLoginSession: Sendable {
         let current = await keychain.password(
             service: ClaudeAuthLocations.legacyKeychainService, account: user
         )
-        guard current != previous else { return }
-        if let previous {
+        // Şu anki değer okunamıyorsa dokunulmaz: körlemesine yazmak, araya
+        // girmiş taze bir oturumu ezebilir.
+        guard !current.isFailure, current.value != previous.value else { return }
+        if let previousValue = previous.value {
             try? await keychain.setPassword(
-                previous, service: ClaudeAuthLocations.legacyKeychainService, account: user
+                previousValue, service: ClaudeAuthLocations.legacyKeychainService, account: user
             )
-        } else {
+        } else if case .missing = previous {
             try? await keychain.deletePassword(
                 service: ClaudeAuthLocations.legacyKeychainService, account: user
             )

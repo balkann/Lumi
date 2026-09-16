@@ -30,12 +30,29 @@ struct AccountsSettingsTab: SettingsTabContent {
                     + ClaudeAccountText.restartNotice
             )
             .padding(.bottom, Theme.Spacing.xxl)
+            environmentWarning
             addRow
                 .padding(.bottom, Theme.Spacing.lg)
             accountList
             Spacer(minLength: 0)
         }
         .task { await store.load() }
+    }
+
+    /// Ortamdaki bir auth değişkeni switch'i etkisiz kılıyorsa sebebini
+    /// söyle (karar 56): CLI o değişkeni gördüğünde Keychain'e hiç bakmaz.
+    @ViewBuilder
+    private var environmentWarning: some View {
+        let keys = ClaudeAuthEnvironment.conflicts()
+        if !keys.isEmpty {
+            InfoCard(
+                "\(keys.joined(separator: ", ")) is set in Lumi's environment. The Claude CLI "
+                    + "prefers it over the account you pick here, so switching has no effect "
+                    + "until you unset it. The same applies to values exported from your shell "
+                    + "profile, which Lumi cannot see."
+            )
+            .padding(.bottom, Theme.Spacing.lg)
+        }
     }
 
     // MARK: - Ekleme
@@ -93,7 +110,13 @@ struct AccountsSettingsTab: SettingsTabContent {
                         Task { await store.reauthenticate(account) }
                     }
                     IconButton(systemName: "trash", label: "Remove", role: .destructive) {
-                        Task { await store.removeAccount(account) }
+                        // Geri alınamaz: onay dialogundan geçer (karar 56).
+                        shell.dialogs.present(.removeClaudeAccount(
+                            RemoveClaudeAccountDialogState(
+                                account: account,
+                                isActive: store.isActive(.account(account.id))
+                            )
+                        ))
                     }
                 }
                 .disabled(store.isBusy)

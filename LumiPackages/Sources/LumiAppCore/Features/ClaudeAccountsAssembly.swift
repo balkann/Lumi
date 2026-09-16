@@ -1,15 +1,18 @@
 import Foundation
 import LumiKit
 import LumiState
+import LumiUI
+import SwiftUI
 
 /// Claude hesapları (karar 56): listeyi store'a yükler ve açılışta seçili
 /// hesabı aktif yüzeye yeniden materialize eder (başka bir araç üzerine
 /// yazmış olabilir).
 ///
-/// Kabuk katkısı YOK: Settings sekmesi `SettingsTab` kaydından, hesap
-/// değiştirici de Claude kullanım popover'ının içinden gelir.
+/// Kabuk katkısı yalnız silme onayı overlay'idir: Settings sekmesi
+/// `SettingsTab` kaydından, hesap değiştirici de Claude kullanım popover'ının
+/// içinden gelir.
 @MainActor
-final class ClaudeAccountsAssembly: FeatureAssembly {
+final class ClaudeAccountsAssembly: FeatureAssembly, ShellContributing {
     let bootstrapPhase = BootstrapPhase.ui
 
     private(set) var claudeAccounts: ClaudeAccountStore!
@@ -30,6 +33,14 @@ final class ClaudeAccountsAssembly: FeatureAssembly {
             toasts: shared.toasts,
             onAccountSwitched: refreshClaudeUsage
         )
+    }
+
+    func registerShellItems(into registries: ShellRegistries) {
+        registries.overlays.register(OverlayDescriptor(
+            id: .removeClaudeAccountDialog,
+            isPresented: { $0.dialogs.removeClaudeAccountDialog != nil },
+            makeView: { AnyView(RemoveClaudeAccountDialogOverlay()) }
+        ))
     }
 
     func start() async {

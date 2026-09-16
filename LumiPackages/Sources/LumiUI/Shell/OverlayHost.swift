@@ -26,6 +26,8 @@ public extension OverlayID {
     static let deleteWorkspaceDialog = OverlayID("deleteWorkspaceDialog")
     /// Karar 53: Agent History oturum silme onayı.
     static let deleteAgentSessionDialog = OverlayID("deleteAgentSessionDialog")
+    /// Karar 56: Claude hesabı silme onayı (geri alınamaz).
+    static let removeClaudeAccountDialog = OverlayID("removeClaudeAccountDialog")
 }
 
 /// Kabuğun üstüne binen bir katmanın tanımı (K33, Faz 6.5).

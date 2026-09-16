@@ -9,6 +9,8 @@ public actor FakeKeychain: KeychainAccessing {
     public private(set) var deletes: [String] = []
     private var storage: [String: String] = [:]
     private var failingServices: Set<String> = []
+    /// Okumanın HATA verdiği servisler (kilitli keychain / reddedilen erişim).
+    private var unreadableServices: Set<String> = []
 
     public init(storage: [String: String] = [:]) {
         self.storage = storage
@@ -32,8 +34,28 @@ public actor FakeKeychain: KeychainAccessing {
         failingServices.insert(service)
     }
 
-    public func password(service: String, account: String) async -> String? {
-        storage[Self.key(service: service, account: account)]
+    public func allowWrites(service: String) {
+        failingServices.remove(service)
+    }
+
+    public func allowReads(service: String) {
+        unreadableServices.remove(service)
+    }
+
+    /// Bu servisten okuma `failed` döner — "kayıt yok" ile karışmasın diye
+    /// ayrı bir kapı (karar 56 sertleştirmesi).
+    public func failReads(service: String) {
+        unreadableServices.insert(service)
+    }
+
+    public func password(service: String, account: String) async -> KeychainReadResult {
+        if unreadableServices.contains(service) {
+            return .failed(detail: "fake keychain is locked")
+        }
+        guard let value = storage[Self.key(service: service, account: account)] else {
+            return .missing
+        }
+        return .found(value)
     }
 
     public func setPassword(_ value: String, service: String, account: String) async throws {

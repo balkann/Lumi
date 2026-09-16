@@ -36,23 +36,48 @@ struct ClaudeAuthSurface: Sendable {
 
     // MARK: - Okuma
 
-    func read() async -> Snapshot {
-        Snapshot(credentialsJSON: await readCredentials(), oauthAccountJSON: readOauthAccount())
+    /// Yüzey okumasının sonucu. `unreadable` hiçbir karara temel olamaz:
+    /// keychain kilitliyken "yüzey boş" sanmak, geri yüklemede kullanıcının
+    /// oturumunu silmeye kadar gider (karar 56 sertleştirmesi).
+    enum Read: Sendable, Equatable {
+        case available(Snapshot)
+        case unreadable(detail: String)
+    }
+
+    func read() async -> Read {
+        switch await readCredentials() {
+        case let .found(credentials):
+            return .available(Snapshot(credentialsJSON: credentials, oauthAccountJSON: readOauthAccount()))
+        case .missing:
+            return .available(Snapshot(credentialsJSON: nil, oauthAccountJSON: readOauthAccount()))
+        case let .failed(detail):
+            return .unreadable(detail: detail)
+        }
     }
 
     /// Kapsanmış servis → düz servis → dosya sırası: CLI hangisine yazdıysa
-    /// en güncel olan odur.
-    func readCredentials() async -> String? {
-        if let scoped = await keychain.password(service: scopedService, account: user) {
-            return scoped
+    /// en güncel olan odur. Bir kanal OKUNAMAZSA sıradakine düşülmez — eksik
+    /// bir yüzey resmi, yokluktan daha tehlikelidir.
+    func readCredentials() async -> KeychainReadResult {
+        switch await keychain.password(service: scopedService, account: user) {
+        case let .found(value): return .found(value)
+        case let .failed(detail): return .failed(detail: detail)
+        case .missing: break
         }
-        if let legacy = await keychain.password(
-            service: ClaudeAuthLocations.legacyKeychainService, account: user
-        ) {
-            return legacy
+        if scopedService != ClaudeAuthLocations.legacyKeychainService {
+            switch await keychain.password(
+                service: ClaudeAuthLocations.legacyKeychainService, account: user
+            ) {
+            case let .found(value): return .found(value)
+            case let .failed(detail): return .failed(detail: detail)
+            case .missing: break
+            }
         }
-        guard let data = FileManager.default.contents(atPath: paths.credentialsFile) else { return nil }
-        return String(decoding: data, as: UTF8.self)
+        guard let data = FileManager.default.contents(atPath: paths.credentialsFile) else {
+            return .missing
+        }
+        let text = String(decoding: data, as: UTF8.self)
+        return text.isEmpty ? .missing : .found(text)
     }
 
     /// `.claude.json` ▸ `oauthAccount` — ham JSON metni olarak (hangi hesabın
@@ -99,8 +124,28 @@ struct ClaudeAuthSurface: Sendable {
     /// `oauthAccount` anahtarını yerinde günceller; `nil` anahtarı siler.
     /// Dosyanın geri kalanı (proje geçmişi vb.) korunur — yalnız anahtar
     /// sırası JSON yeniden yazımında normalize olur.
+    ///
+    /// İçerik zaten istenen hâldeyse dosyaya HİÇ dokunulmaz: `.claude.json`
+    /// onlarca MB olabiliyor ve her gereksiz yeniden yazım, CLI'ın aynı anda
+    /// yazdığı kaydı kaybetme penceresi açıyor.
+    ///
+    /// Dosya yoksa ya da ayrıştırılamıyorsa HATA fırlatılır: sessizce geçmek,
+    /// "hesap değişti" denip CLI'ın eski kimliği göstermeye devam etmesi
+    /// demekti.
     func writeOauthAccount(_ json: String?) throws {
-        guard var object = readConfigObject() else { return }
+        guard FileManager.default.fileExists(atPath: paths.configFile) else {
+            throw LumiError.claudeAccountFailed(
+                operation: "switch",
+                detail: "\(paths.configFile) not found — run `claude` once to create it"
+            )
+        }
+        guard var object = readConfigObject() else {
+            throw LumiError.claudeAccountFailed(
+                operation: "switch", detail: "\(paths.configFile) is not readable JSON"
+            )
+        }
+        let current = object["oauthAccount"].flatMap(Self.encode)
+        guard current != json else { return }
         if let json, let value = Self.decode(json) {
             object["oauthAccount"] = value
         } else {
@@ -109,7 +154,14 @@ struct ClaudeAuthSurface: Sendable {
         let data = try JSONSerialization.data(
             withJSONObject: object, options: [.prettyPrinted, .sortedKeys]
         )
-        try data.write(to: URL(fileURLWithPath: paths.configFile), options: .atomic)
+        let url = URL(fileURLWithPath: paths.configFile)
+        // İzinler atomik yazımda (yeni inode + rename) taşınmaz; dosya
+        // kullanıcının oturum kimliğini taşıdığı için 0600'e sabitlenir.
+        let permissions = (try? FileManager.default.attributesOfItem(atPath: url.path))?[.posixPermissions]
+        try data.write(to: url, options: .atomic)
+        try? FileManager.default.setAttributes(
+            [.posixPermissions: permissions ?? 0o600], ofItemAtPath: url.path
+        )
     }
 
     // MARK: - Yardımcılar

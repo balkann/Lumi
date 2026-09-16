@@ -5,10 +5,11 @@ import LumiKit
 /// sonuç döndürür ve çağrının ORTAMINI kaydeder — `claude auth login`'in
 /// yalıtılmış `CLAUDE_CONFIG_DIR` altında koştuğu ancak böyle kanıtlanır.
 public actor FakeEnvironmentProcessRunner: EnvironmentProcessRunning {
-    public struct Invocation: Sendable, Equatable {
+    public struct Invocation: Sendable {
         public let executable: String
         public let arguments: [String]
         public let environment: [String: String]
+        public let options: ProcessLaunchOptions
         public let timeout: TimeInterval
 
         public var commandLine: String { ([executable] + arguments).joined(separator: " ") }
@@ -38,11 +39,12 @@ public actor FakeEnvironmentProcessRunner: EnvironmentProcessRunning {
         _ executable: String,
         arguments: [String],
         environment: [String: String],
+        options: ProcessLaunchOptions,
         timeout: TimeInterval
     ) async -> ProcessOutput? {
         let invocation = Invocation(
             executable: executable, arguments: arguments,
-            environment: environment, timeout: timeout
+            environment: environment, options: options, timeout: timeout
         )
         invocations.append(invocation)
         let command = arguments.prefix(2).joined(separator: " ")

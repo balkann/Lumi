@@ -7,8 +7,12 @@ import LumiKit
 /// `security` ile okuyor ve kullanıcı erişim iznini o binary'ye vermiş
 /// durumda; iki farklı yoldan okumak ikinci bir izin diyaloğu çıkarırdı.
 ///
-/// Yazarken parola `-X` ile HEX olarak geçilir: `-w` düz metni `ps` çıktısında
-/// bir an görünür kılardı.
+/// Yazarken parola `-X` ile HEX olarak geçilir. Bu ŞİFRELEME DEĞİLDİR: hex,
+/// token'ın `ps` çıktısında düz metin olarak okunmasını engeller, aynı
+/// kullanıcı altında koşan ve argümanları okuyup çözebilen bir sürece karşı
+/// koruma sağlamaz. `security`'nin stdin'den parola alan bir kipi olmadığı
+/// için argüman yolu şimdilik kaçınılmaz; alternatifi Security framework'üne
+/// geçmektir (ayrı bir erişim izni diyaloğu doğurur).
 public struct SecurityKeychain: KeychainAccessing {
     /// Keychain kilitliyse `security` kullanıcı etkileşimi bekler — UI'ı
     /// süresiz bekletmemek için kısa bir üst sınır.
@@ -20,15 +24,24 @@ public struct SecurityKeychain: KeychainAccessing {
         self.runner = runner
     }
 
-    public func password(service: String, account: String) async -> String? {
+    /// Çıkış kodu 0 → bulundu, 44 (`errSecItemNotFound`) → yok, geri kalan
+    /// her şey (kilitli keychain, reddedilen erişim, timeout) → HATA.
+    public func password(service: String, account: String) async -> KeychainReadResult {
         let result = await runner.run(
             Self.binary,
             arguments: ["find-generic-password", "-s", service, "-a", account, "-w"],
             timeout: Self.timeout
         )
-        guard let result, result.exitCode == 0 else { return nil }
+        guard let result else { return .failed(detail: "security timed out") }
+        guard result.exitCode == 0 else {
+            return result.exitCode == Self.notFoundExitCode
+                ? .missing
+                : .failed(detail: Self.detail(result) ?? "exit \(result.exitCode)")
+        }
         let value = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
-        return value.isEmpty ? nil : value
+        // Exit 0 ama boş çıktı: kayıt var, parolası boş. Bunu "yok" saymak
+        // yanlış olurdu; kimlik bilgisi olarak da geçersizdir.
+        return value.isEmpty ? .missing : .found(value)
     }
 
     public func setPassword(_ value: String, service: String, account: String) async throws {

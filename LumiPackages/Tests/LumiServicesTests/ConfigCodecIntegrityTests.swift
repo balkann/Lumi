@@ -157,6 +157,10 @@ final class ConfigCodecIntegrityTests: XCTestCase {
         return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
     }
 
+    /// Hesap id'leri UUID olmak ZORUNDA (karar 56 sertleştirmesi: id dosya
+    /// yoluna giriyor), o yüzden fixture sabit bir UUID kullanır.
+    private static let accountID = "11111111-1111-4111-8111-111111111111"
+
     private static let nonDefaultConfig = AppConfig(
         projectsRoot: "/tmp/projects",
         additionalPaths: [
@@ -183,7 +187,7 @@ final class ConfigCodecIntegrityTests: XCTestCase {
         agentHooksEnabled: false,
         claudeAccounts: [
             ClaudeAccount(
-                id: "acc-1",
+                id: ConfigCodecIntegrityTests.accountID,
                 email: "dev@example.com",
                 organizationUUID: "org-1",
                 organizationName: "Example",
@@ -192,7 +196,7 @@ final class ConfigCodecIntegrityTests: XCTestCase {
                 lastAuthenticatedAt: Date(timeIntervalSince1970: 1_700_000_200)
             ),
         ],
-        claudeAccountSelection: .account("acc-1"),
+        claudeAccountSelection: .account(ConfigCodecIntegrityTests.accountID),
         workspaces: [ProjectWorkspace(projectPath: "/p", path: "/w", name: "Feature", branch: "feature", scm: .git)],
         sidebarProjectPaths: ["/tmp/selected", "/tmp/another"]
     )

@@ -12,7 +12,10 @@ enum ClaudeAccountCodec {
         var seen = Set<String>()
         return values.compactMap { raw in
             guard let raw = raw as? [String: Any],
-                  let id = (raw["id"] as? String)?.trimmed, !id.isEmpty,
+                  // Yalnız UUID: id dosya yoluna (`claude-accounts/<id>/auth`)
+                  // ve Keychain hesap adına giriyor — serbest bir string
+                  // `../` ile kökün dışına çıkabilirdi (karar 56 sertleştirmesi).
+                  let id = (raw["id"] as? String)?.trimmed, UUID(uuidString: id) != nil,
                   let email = (raw["email"] as? String)?.trimmed, !email.isEmpty,
                   seen.insert(id).inserted else { return nil }
             let created = date(raw["createdAt"]) ?? Date(timeIntervalSince1970: 0)

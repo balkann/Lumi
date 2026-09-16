@@ -46,6 +46,26 @@ struct ClaudeIdentity: Sendable, Equatable {
         return !(token ?? "").isEmpty
     }
 
+    /// Kimlik bilgisi blob'unun İÇİNDEKİ kimlik (`claudeAiOauth`). Geri
+    /// okumada "bu token gerçekten bu hesabın mı" sorusunun birincil kanıtı;
+    /// blob kimlik taşımıyorsa `nil` alanlar döner ve çağıran `oauthAccount`
+    /// karşılaştırmasına düşer.
+    static func credentialIdentity(_ credentialsJSON: String?) -> ClaudeIdentity {
+        let oauth = object(from: credentialsJSON)?["claudeAiOauth"] as? [String: Any]
+        return ClaudeIdentity(
+            email: string(oauth, "email") ?? string(oauth, "emailAddress"),
+            organizationUUID: string(oauth, "organizationUuid") ?? string(oauth, "organizationId"),
+            organizationName: string(oauth, "organizationName")
+        )
+    }
+
+    /// `claudeAiOauth.expiresAt` (epoch ms). Geri okumada ESKİ bir blob'un
+    /// yenisinin üstüne yazılmasını engellemek için kullanılır.
+    static func expiresAt(_ credentialsJSON: String?) -> Double? {
+        let oauth = object(from: credentialsJSON)?["claudeAiOauth"] as? [String: Any]
+        return (oauth?["expiresAt"] as? NSNumber)?.doubleValue
+    }
+
     private static func object(from json: String?) -> [String: Any]? {
         guard let json, let data = json.data(using: .utf8) else { return nil }
         return try? JSONSerialization.jsonObject(with: data) as? [String: Any]

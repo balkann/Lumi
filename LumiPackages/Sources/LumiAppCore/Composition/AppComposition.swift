@@ -68,7 +68,7 @@ struct AppComposition {
             statusBar: statusBar,
             deepSeek: deepSeek,
             claudeAccounts: claudeAccounts,
-            contributors: [tasks, terminal, repo, usage, statusBar]
+            contributors: [tasks, terminal, repo, usage, statusBar, claudeAccounts]
         )
         return AppComposition(
             registry: registry,
