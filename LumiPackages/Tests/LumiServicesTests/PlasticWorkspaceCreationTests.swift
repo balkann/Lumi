@@ -88,6 +88,30 @@ final class PlasticWorkspaceCreationTests: XCTestCase {
         XCTAssertEqual(mutations[1].args[1], "br:/main/other@game@team@cloud")
     }
 
+    func testTypedBranchNameIsAppendedToTheBaseBranch() async throws {
+        let runner = PlasticCreationRunner(source: root.appendingPathComponent("source").path)
+        let service = WorkspaceService(runner: runner, locator: FakeBinaryLocator(paths: ["cm": "/fake/cm"]), workspaceRoot: root.appendingPathComponent("workspaces"))
+        let project = Repo(name: "Game", path: root.appendingPathComponent("source").path, isGitRepo: false, source: .standalone)
+        let result = try await service.create(WorkspaceCreateRequest(
+            project: project, name: "Review", branchName: "my-feature", branchMode: .new, baseBranch: "/main/other"))
+        XCTAssertEqual(result.workspace.branch, "/main/other/my-feature")
+    }
+
+    /// Plastic'te ara dallar kendiliğinden oluşmaz; hiyerarşi taban daldan gelir.
+    func testSlashInPlasticBranchNameIsRejectedBeforeAnyCommand() async throws {
+        let runner = PlasticCreationRunner(source: root.appendingPathComponent("source").path)
+        let service = WorkspaceService(runner: runner, locator: FakeBinaryLocator(paths: ["cm": "/fake/cm"]), workspaceRoot: root.appendingPathComponent("workspaces"))
+        let project = Repo(name: "Game", path: root.appendingPathComponent("source").path, isGitRepo: false, source: .standalone)
+        do {
+            _ = try await service.create(WorkspaceCreateRequest(
+                project: project, name: "Review", branchName: "xxx/yyy/zzz", branchMode: .new))
+            XCTFail("Çok parçalı dal adı reddedilmeli")
+        } catch {
+            let mutations = await runner.mutations
+            XCTAssertTrue(mutations.isEmpty)
+        }
+    }
+
     func testListsPlasticBranchesAndServesRepeatCallsFromCache() async throws {
         let runner = PlasticCreationRunner(source: root.appendingPathComponent("source").path)
         let service = WorkspaceService(runner: runner, locator: FakeBinaryLocator(paths: ["cm": "/fake/cm"]), workspaceRoot: root.appendingPathComponent("workspaces"))

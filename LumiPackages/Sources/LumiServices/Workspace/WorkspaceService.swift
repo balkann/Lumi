@@ -122,7 +122,12 @@ public actor WorkspaceService: WorkspaceServicing {
             guard !override.isEmpty else { throw WorkspaceFailure("Select the branch to check out.") }
             branch = override
         case .new:
-            branch = override.isEmpty ? inspected.suggestedBranch(name: name, base: base.isEmpty ? nil : base) : override
+            // Plastic'te hiyerarşi taban daldan gelir; yazılan ad tek parçadır.
+            let leaf = override.isEmpty ? WorkspaceName.slug(name) : override
+            guard inspected.scm != .plastic || !leaf.contains("/") else {
+                throw WorkspaceFailure("A Plastic branch name cannot contain \"/\"; the hierarchy comes from the base branch.")
+            }
+            branch = inspected.fullBranch(leaf: leaf, base: base.isEmpty ? nil : base)
         }
         let destination = URL(fileURLWithPath: inspected.destinationDirectory).appendingPathComponent(folder)
         try validateDestination(destination, source: inspected.projectPath, known: request.knownProjectPaths)

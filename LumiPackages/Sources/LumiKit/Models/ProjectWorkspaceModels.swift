@@ -67,13 +67,21 @@ public struct WorkspaceSource: Sendable, Equatable {
         self.libraryCopyWarning = libraryCopyWarning
     }
 
-    /// Yeni dal adı önerisi. `base` verilirse yeni dal o dalın altında önerilir
-    /// (Plastic'te dal adı hiyerarşiyi taşır).
+    /// Yeni dal adı önerisi. `base` verilirse yeni dal o dalın altında önerilir.
     public func suggestedBranch(name: String, base: String? = nil) -> String {
-        let slug = WorkspaceName.slug(name)
-        guard scm == .plastic else { return slug }
+        fullBranch(leaf: WorkspaceName.slug(name), base: base)
+    }
+
+    /// Yaprak addan tam dal adı (karar 58). Plastic'te dal adı hiyerarşiyi
+    /// TAŞIR: `/main/sand-blocks/feature` dalı `/main/sand-blocks`'un çocuğudur
+    /// ve ara seviyeler kendiliğinden oluşmaz — bu yüzden hiyerarşi kullanıcının
+    /// yazdığı addan değil, seçilen taban daldan gelir. Git'te taban dal yalnız
+    /// başlangıç noktasıdır, dal adı olduğu gibi kullanılır.
+    public func fullBranch(leaf: String, base: String? = nil) -> String {
+        let name = leaf.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard scm == .plastic else { return name }
         let parent = (base?.isEmpty == false ? base! : branch)
-        return "\(parent.isEmpty ? "/main" : parent)/\(slug)"
+        return "\(parent.isEmpty ? "/main" : parent)/\(name)"
     }
 }
 

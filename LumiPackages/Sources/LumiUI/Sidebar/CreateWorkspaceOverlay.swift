@@ -194,15 +194,7 @@ public struct CreateWorkspaceOverlay: View {
                 LumiTextInput(text: binding(\.existingBranch), placeholder: "or type a branch path")
                 hint("Not in the list? The list shows the \(Self.branchListLimit) most recently updated branches.")
             case .new:
-                field("Branch name") {
-                    LumiTextInput(
-                        text: binding(\.branchName),
-                        placeholder: source.suggestedBranch(
-                            name: shell.workspaces.name,
-                            base: shell.workspaces.baseBranch.isEmpty ? nil : shell.workspaces.baseBranch
-                        )
-                    )
-                }
+                // Taban önce: yeni dalın adı Plastic'te onun altında oluşur.
                 field("Base branch") {
                     LumiDropdown(
                         options: baseBranchOptions(source),
@@ -211,6 +203,12 @@ public struct CreateWorkspaceOverlay: View {
                         onOpen: loadBranches,
                         emptyNote: branchNote
                     )
+                }
+                field("Branch name") {
+                    LumiTextInput(text: branchLeafBinding(source), placeholder: WorkspaceName.slug(shell.workspaces.name))
+                }
+                if source.scm == .plastic {
+                    hint("Creates \(newBranchPath(source)) — the hierarchy comes from the base branch, so \"/\" is not allowed here.")
                 }
             }
             if let error = shell.workspaces.branchListError {
@@ -243,6 +241,23 @@ public struct CreateWorkspaceOverlay: View {
         return [current] + shell.workspaces.branches
             .filter { $0.name != source.branch }
             .map { .init(value: $0.name, label: $0.name) }
+    }
+
+    /// Plastic'te dal adı tek parçadır; yazılan "/" karakterleri düşürülür.
+    private func branchLeafBinding(_ source: WorkspaceSource) -> Binding<String> {
+        let stored = binding(\.branchName)
+        guard source.scm == .plastic else { return stored }
+        return Binding(
+            get: { stored.wrappedValue },
+            set: { stored.wrappedValue = $0.replacingOccurrences(of: "/", with: "") }
+        )
+    }
+
+    private func newBranchPath(_ source: WorkspaceSource) -> String {
+        let typed = shell.workspaces.branchName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let leaf = typed.isEmpty ? WorkspaceName.slug(shell.workspaces.name) : typed
+        let base = shell.workspaces.baseBranch
+        return source.fullBranch(leaf: leaf.isEmpty ? "…" : leaf, base: base.isEmpty ? nil : base)
     }
 
     private var branchNote: String {
