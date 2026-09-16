@@ -5,6 +5,7 @@ let package = Package(
     name: "LumiPackages",
     platforms: [.macOS(.v14)],
     products: [
+        .library(name: "LumiWire", targets: ["LumiWire"]),
         .library(name: "LumiKit", targets: ["LumiKit"]),
         .library(name: "LumiTerminal", targets: ["LumiTerminal"]),
         .library(name: "LumiServices", targets: ["LumiServices"]),
@@ -25,7 +26,9 @@ let package = Package(
         .package(url: "https://github.com/raspu/Highlightr.git", from: "2.1.0"),
     ],
     targets: [
-        .target(name: "LumiKit"),
+        .target(name: "LumiWire"),
+        .testTarget(name: "LumiWireTests", dependencies: ["LumiWire"]),
+        .target(name: "LumiKit", dependencies: ["LumiWire"]),
         .target(
             name: "LumiTerminal",
             dependencies: [

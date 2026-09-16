@@ -15,6 +15,10 @@ public struct ChatPromptOption: Sendable, Equatable {
     public func toDict() -> [String: Any] {
         ["id": id, "label": label, "description": description.map { $0 as Any } ?? NSNull()]
     }
+    public static func decode(_ d: [String: Any]) -> ChatPromptOption? {
+        guard let id = d["id"] as? String, let label = d["label"] as? String else { return nil }
+        return ChatPromptOption(id: id, label: label, description: d["description"] as? String)
+    }
 }
 
 /// Faz 3.1: gruplu çok-soru için tek bir soru (orca `AskQuestion`).
@@ -37,6 +41,13 @@ public struct ChatPromptQuestion: Sendable, Equatable {
             "multiSelect": multiSelect, "allowOther": allowOther,
             "options": options.map { $0.toDict() },
         ]
+    }
+    public static func decode(_ d: [String: Any]) -> ChatPromptQuestion? {
+        guard let id = d["id"] as? String, let question = d["question"] as? String else { return nil }
+        let options = (d["options"] as? [[String: Any]])?.compactMap(ChatPromptOption.decode) ?? []
+        return ChatPromptQuestion(id: id, question: question, header: d["header"] as? String,
+                                  multiSelect: d["multiSelect"] as? Bool ?? false,
+                                  allowOther: d["allowOther"] as? Bool ?? false, options: options)
     }
 }
 
@@ -74,5 +85,19 @@ public struct ChatPrompt: Sendable, Equatable {
             "multiSelect": multiSelect, "allowOther": allowOther,
             "questions": questions.map { $0.toDict() },
         ]
+    }
+
+    public static func decode(_ d: [String: Any]) -> ChatPrompt? {
+        guard let itemId = d["itemId"] as? String, let revision = d["revision"] as? Int,
+              let kind = (d["kind"] as? String).flatMap(ChatPromptKind.init(rawValue:)),
+              let title = d["title"] as? String,
+              let state = (d["state"] as? String).flatMap(ChatPromptState.init(rawValue:)) else { return nil }
+        let options = (d["options"] as? [[String: Any]])?.compactMap(ChatPromptOption.decode) ?? []
+        let questions = (d["questions"] as? [[String: Any]])?.compactMap(ChatPromptQuestion.decode) ?? []
+        return ChatPrompt(itemId: itemId, revision: revision, kind: kind, title: title,
+                          detail: d["detail"] as? String, options: options, state: state,
+                          selectedOptionId: d["selectedOptionId"] as? String,
+                          multiSelect: d["multiSelect"] as? Bool ?? false,
+                          allowOther: d["allowOther"] as? Bool ?? false, questions: questions)
     }
 }

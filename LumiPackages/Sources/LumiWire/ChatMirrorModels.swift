@@ -21,7 +21,7 @@ public struct ChatSubagentEntry: Sendable, Equatable {
         self.tokens = tokens; self.startedAt = startedAt; self.settledAt = settledAt
     }
 
-    func toDict() -> [String: Any] {
+    public func toDict() -> [String: Any] {
         var d: [String: Any] = ["id": id, "label": label, "state": state]
         if let tokens { d["tokens"] = tokens }
         if let startedAt { d["startedAt"] = startedAt }
@@ -36,8 +36,9 @@ public enum ChatBlock: Sendable, Equatable {
     case toolResult(output: String, isError: Bool)
     case imageRef(path: String?, url: String?, alt: String?)
     case subagentGroup(groupId: String, agents: [ChatSubagentEntry])
+    case unknown
 
-    func toDict() -> [String: Any] {
+    public func toDict() -> [String: Any] {
         switch self {
         case let .text(text, presentation):
             var d: [String: Any] = ["type": "text", "text": text]
@@ -57,6 +58,37 @@ public enum ChatBlock: Sendable, Equatable {
             return d
         case let .subagentGroup(groupId, agents):
             return ["type": "subagent-group", "groupId": groupId, "agents": agents.map { $0.toDict() }]
+        case .unknown:
+            return ["type": "unknown"]
+        }
+    }
+
+    public static func decode(_ dict: [String: Any]) -> ChatBlock {
+        switch dict["type"] as? String {
+        case "text":
+            return .text(dict["text"] as? String ?? "", presentation: dict["presentation"] as? String)
+        case "tool-call":
+            return .toolCall(name: dict["name"] as? String ?? "tool",
+                             inputPreview: dict["inputPreview"] as? String ?? "",
+                             state: dict["state"] as? String)
+        case "tool-result":
+            return .toolResult(output: dict["output"] as? String ?? "",
+                               isError: dict["isError"] as? Bool ?? false)
+        case "image-ref":
+            return .imageRef(path: dict["path"] as? String, url: dict["url"] as? String,
+                             alt: dict["alt"] as? String)
+        case "subagent-group":
+            let agents = (dict["agents"] as? [[String: Any]])?.map { d -> ChatSubagentEntry in
+                ChatSubagentEntry(id: d["id"] as? String ?? "",
+                                  label: d["label"] as? String ?? "",
+                                  state: d["state"] as? String ?? "",
+                                  tokens: d["tokens"] as? Int,
+                                  startedAt: d["startedAt"] as? Int,
+                                  settledAt: d["settledAt"] as? Int)
+            } ?? []
+            return .subagentGroup(groupId: dict["groupId"] as? String ?? "", agents: agents)
+        default:
+            return .unknown
         }
     }
 }
@@ -84,6 +116,14 @@ public struct ChatMessage: Sendable, Equatable, Identifiable {
             "turnId": turnId.map { $0 as Any } ?? NSNull(),
             "blocks": blocks.map { $0.toDict() },
         ]
+    }
+
+    public static func decode(_ dict: [String: Any]) -> ChatMessage? {
+        guard let id = dict["id"] as? String,
+              let role = ChatRole(rawValue: dict["role"] as? String ?? "") else { return nil }
+        let blocks = (dict["blocks"] as? [[String: Any]])?.map(ChatBlock.decode) ?? []
+        return ChatMessage(id: id, role: role, blocks: blocks,
+                           timestampMs: dict["timestamp"] as? Int, turnId: dict["turnId"] as? String)
     }
 }
 

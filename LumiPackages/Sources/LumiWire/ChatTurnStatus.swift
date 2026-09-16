@@ -23,4 +23,12 @@ public struct ChatTurnStatus: Sendable, Equatable {
             "tool": tool.map { $0 as Any } ?? NSNull(),
         ]
     }
+
+    public static func decode(_ dict: [String: Any]) -> ChatTurnStatus {
+        ChatTurnStatus(
+            working: dict["working"] as? Bool ?? false,
+            startedAtMs: dict["startedAtMs"] as? Int,
+            tool: dict["tool"] as? String
+        )
+    }
 }
