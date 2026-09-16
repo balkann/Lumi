@@ -108,6 +108,9 @@ private actor PreviewWorkspaceService: WorkspaceServicing {
         WorkspaceSource(projectPath: project.path, scm: .git, branch: "main", revision: "abc123",
                         destinationDirectory: "/Users/preview/lumi/workspaces/\(project.name)")
     }
+    func branches(project: Repo, limit: Int) async throws -> [WorkspaceBranch] {
+        [WorkspaceBranch(name: "main"), WorkspaceBranch(name: "feature/preview")]
+    }
     func create(_ request: WorkspaceCreateRequest) async throws -> WorkspaceCreateResult {
         throw WorkspaceFailure("Creation is unavailable in previews.")
     }

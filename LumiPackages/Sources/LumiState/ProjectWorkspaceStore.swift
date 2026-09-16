@@ -9,7 +9,15 @@ public final class ProjectWorkspaceStore {
     public var branchName = ""
     public var agent: WorkspaceAgent = .claude
     public var copyLibrary = false
-    public var createNewBranch = true
+    /// Karar 58: dal seçimi üç modlu — mevcut / var olan / yeni.
+    public var branchMode: WorkspaceBranchMode = .new
+    /// `.existing` modunda seçilen (veya elle yazılan) dal.
+    public var existingBranch = ""
+    /// `.new` modunda yeni dalın çıkacağı dal; boş → projenin mevcut dalı.
+    public var baseBranch = ""
+    public private(set) var branches: [WorkspaceBranch] = []
+    public private(set) var isLoadingBranches = false
+    public private(set) var branchListError: String?
     public private(set) var hasBackgroundOperation = false
     public private(set) var selectedProjectPath: String?
     public private(set) var source: WorkspaceSource?
@@ -34,6 +42,7 @@ public final class ProjectWorkspaceStore {
     @ObservationIgnored private let repos: RepoStore
     @ObservationIgnored private let toasts: ToastStore
     @ObservationIgnored private var inspectionGeneration = 0
+    @ObservationIgnored private var branchGeneration = 0
     @ObservationIgnored private var catalogGeneration = 0
 
     public init(service: any WorkspaceServicing, config: any ConfigServicing, repos: RepoStore, toasts: ToastStore) {
@@ -115,12 +124,35 @@ public final class ProjectWorkspaceStore {
             let inspected = try await service.inspect(project: repo)
             guard generation == inspectionGeneration, selectedProjectPath == repo.path else { return }
             source = inspected
-            createNewBranch = inspected.scm != .plastic
+            // Plastic'te varsayılan mevcut dalda kalmak; Git aynı dalı ikinci
+            // worktree'de checkout edemediği için yeni dal açar.
+            branchMode = inspected.scm == .plastic ? .current : .new
         } catch {
             guard generation == inspectionGeneration else { return }
             errorMessage = error.localizedDescription
         }
         if generation == inspectionGeneration { isInspecting = false }
+    }
+
+    /// Dal listesini tembel yükler (karar 58): Plastic'te sorgu sunucuya gidiyor
+    /// (~1,5 sn), dialog her açıldığında değil kullanıcı listeye baktığında
+    /// koşsun. Servis kısa süreli önbellekliyor, tekrar çağırmak ucuzdur.
+    public func loadBranches(limit: Int = 20) async {
+        guard !isLoadingBranches, branches.isEmpty,
+              let path = selectedProjectPath, let project = repos.repo(at: path) else { return }
+        branchGeneration += 1
+        let generation = branchGeneration
+        isLoadingBranches = true
+        branchListError = nil
+        do {
+            let listed = try await service.branches(project: project, limit: limit)
+            guard generation == branchGeneration else { return }
+            branches = listed
+        } catch {
+            guard generation == branchGeneration else { return }
+            branchListError = error.localizedDescription
+        }
+        if generation == branchGeneration { isLoadingBranches = false }
     }
 
     public var destinationPath: String {
@@ -133,8 +165,9 @@ public final class ProjectWorkspaceStore {
     public var canCreate: Bool {
         guard let source else { return false }
         let slug = WorkspaceName.slug(name)
+        let branchReady = branchMode != .existing || !existingBranch.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         return !isInspecting && !isCreating && lastCreated == nil && source.scm != .none
-            && !slug.isEmpty && slug.utf8.count <= 120
+            && !slug.isEmpty && slug.utf8.count <= 120 && branchReady
     }
 
     public var phaseText: String {
@@ -173,9 +206,12 @@ public final class ProjectWorkspaceStore {
         errorMessage = nil
         libraryWarning = nil
         saveWarning = nil
-        let override = branchName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let typed = (branchMode == .existing ? existingBranch : branchName)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let base = baseBranch.trimmingCharacters(in: .whitespacesAndNewlines)
         return WorkspaceCreateRequest(project: project, name: name.trimmingCharacters(in: .whitespacesAndNewlines),
-            branchName: override.isEmpty ? nil : override, createNewBranch: createNewBranch, copyLibrary: copyLibrary,
+            branchName: typed.isEmpty ? nil : typed, branchMode: branchMode,
+            baseBranch: branchMode == .new && !base.isEmpty ? base : nil, copyLibrary: copyLibrary,
             knownProjectPaths: repos.repos.map(\.path))
     }
 
@@ -238,7 +274,13 @@ public final class ProjectWorkspaceStore {
         name = ""
         branchName = ""
         copyLibrary = false
-        createNewBranch = true
+        branchMode = .new
+        existingBranch = ""
+        baseBranch = ""
+        branchGeneration += 1
+        branches = []
+        isLoadingBranches = false
+        branchListError = nil
         hasBackgroundOperation = false
         errorMessage = nil
         libraryWarning = nil

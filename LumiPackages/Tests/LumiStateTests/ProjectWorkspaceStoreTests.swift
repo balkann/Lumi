@@ -74,15 +74,64 @@ final class ProjectWorkspaceStoreTests: XCTestCase {
         await service.setDefaultInspection(.success(WorkspaceSource(projectPath: project.path, scm: .plastic,
             branch: "/main/release", destinationDirectory: "/w", isUnityProject: true)))
         await store.selectProject(project)
-        XCTAssertFalse(store.createNewBranch)
+        XCTAssertEqual(store.branchMode, .current)
         store.name = "Review"
         _ = await store.create(projects: [project])
         let calls = await service.createCalls
-        XCTAssertEqual(calls.first?.request.createNewBranch, false)
+        XCTAssertEqual(calls.first?.request.branchMode, .current)
         store.clearForm()
         await service.setDefaultInspection(.success(WorkspaceSource(projectPath: project.path, scm: .git, destinationDirectory: "/w")))
         await store.selectProject(project)
-        XCTAssertTrue(store.createNewBranch)
+        XCTAssertEqual(store.branchMode, .new)
+    }
+
+    func testExistingBranchModeBlocksCreationUntilABranchIsChosen() async {
+        await service.setDefaultInspection(.success(WorkspaceSource(projectPath: project.path, scm: .plastic,
+            branch: "/main", destinationDirectory: "/w")))
+        await store.selectProject(project)
+        store.name = "Review"
+        store.branchMode = .existing
+        XCTAssertFalse(store.canCreate)
+        store.existingBranch = "/main/feature"
+        XCTAssertTrue(store.canCreate)
+        _ = await store.create(projects: [project])
+        let request = await service.createCalls.first?.request
+        XCTAssertEqual(request?.branchMode, .existing)
+        XCTAssertEqual(request?.branchName, "/main/feature")
+        XCTAssertNil(request?.baseBranch)
+    }
+
+    func testBaseBranchIsSentOnlyForNewBranches() async {
+        await service.setDefaultInspection(.success(WorkspaceSource(projectPath: project.path, scm: .plastic,
+            branch: "/main", destinationDirectory: "/w")))
+        await store.selectProject(project)
+        store.name = "Review"
+        store.branchMode = .new
+        store.baseBranch = "/main/other"
+        _ = await store.create(projects: [project])
+        let created = await service.createCalls
+        XCTAssertEqual(created.first?.request.baseBranch, "/main/other")
+    }
+
+    func testBranchListIsFetchedOnceAndClearedWithTheForm() async {
+        await service.setBranches(.success([WorkspaceBranch(name: "/main"), WorkspaceBranch(name: "/main/other")]))
+        await store.selectProject(project)
+        await store.loadBranches(limit: 5)
+        await store.loadBranches(limit: 5)
+        XCTAssertEqual(store.branches.map(\.name), ["/main", "/main/other"])
+        let branchCalls = await service.branchCalls
+        XCTAssertEqual(branchCalls.count, 1)
+        store.clearForm()
+        XCTAssertTrue(store.branches.isEmpty)
+    }
+
+    func testBranchListFailureIsReportedWithoutBlockingCreation() async {
+        await service.setBranches(.failure(WorkspaceFailure("cm unavailable")))
+        await store.selectProject(project)
+        store.name = "Review"
+        await store.loadBranches(limit: 5)
+        XCTAssertEqual(store.branchListError, "cm unavailable")
+        XCTAssertTrue(store.canCreate)
     }
 
     func testBackgroundCreationLocksSynchronouslyAndFinishesWithoutModalLifetime() async throws {

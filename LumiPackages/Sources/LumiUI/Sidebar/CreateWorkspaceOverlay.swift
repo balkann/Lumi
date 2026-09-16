@@ -74,25 +74,19 @@ public struct CreateWorkspaceOverlay: View {
     }
 
     private func projectPicker(_ project: Repo) -> some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-            Text("Project")
-                .font(Theme.Typography.labelMono)
-                .foregroundStyle(Theme.textSecondary)
-            Picker("Project", selection: Binding(
-                get: { selectedProject?.path ?? project.path },
-                set: { path in
-                    guard let next = projectCandidates.first(where: { $0.path == path }) else { return }
-                    selectedProject = next
-                    Task { await shell.workspaces.selectProject(next) }
-                }
-            )) {
-                ForEach(projectCandidates) { candidate in
-                    Text(candidate.name).tag(candidate.path)
-                }
-            }
-            .pickerStyle(.menu)
-            .labelsHidden()
-            .foregroundStyle(Theme.textPrimary)
+        field("Project") {
+            LumiDropdown(
+                options: projectCandidates.map { .init(value: $0.path, label: $0.name) },
+                selection: Binding(
+                    get: { selectedProject?.path ?? project.path },
+                    set: { path in
+                        guard let next = projectCandidates.first(where: { $0.path == path }) else { return }
+                        selectedProject = next
+                        Task { await shell.workspaces.selectProject(next) }
+                    }
+                ),
+                placeholder: project.name
+            )
             .disabled(shell.workspaces.isCreating || shell.workspaces.lastCreated != nil)
         }
     }
@@ -108,12 +102,10 @@ public struct CreateWorkspaceOverlay: View {
                     .disabled(shell.workspaces.lastCreated != nil)
             }
             field("Agent") {
-                Picker("Agent", selection: binding(\.agent)) {
-                    ForEach(WorkspaceAgent.allCases, id: \.self) { Text($0.title).tag($0) }
-                }
-                .pickerStyle(.menu)
-            .labelsHidden()
-                .foregroundStyle(Theme.textPrimary)
+                LumiDropdown(
+                    options: WorkspaceAgent.allCases.map { .init(value: $0, label: $0.title) },
+                    selection: binding(\.agent)
+                )
             }
             if shell.workspaces.isInspecting {
                 Label("Inspecting project…", systemImage: "hourglass")
@@ -125,16 +117,8 @@ public struct CreateWorkspaceOverlay: View {
             if shell.workspaces.source?.isUnityProject == true {
                 unitySection.disabled(shell.workspaces.lastCreated != nil)
             }
-            if shell.workspaces.source?.scm == .plastic {
-                field("Branch") {
-                    Picker("Branch", selection: binding(\.createNewBranch)) {
-                        Text("Continue on current branch").tag(false)
-                        Text("Create a new branch").tag(true)
-                    }
-                    .pickerStyle(.menu)
-                    .labelsHidden()
-                    .disabled(shell.workspaces.lastCreated != nil)
-                }
+            if let source = shell.workspaces.source, source.scm != .none {
+                branchSection(source).disabled(shell.workspaces.lastCreated != nil)
             }
             advanced.disabled(shell.workspaces.lastCreated != nil)
             if let message = shell.workspaces.errorMessage {
@@ -143,13 +127,13 @@ public struct CreateWorkspaceOverlay: View {
             if let message = shell.workspaces.warningMessage {
                 Text(message).font(Theme.Typography.labelMono).foregroundStyle(Theme.warning)
             }
-            HStack {
+            HStack(spacing: Theme.Spacing.md) {
                 Spacer(minLength: 0)
-                Button("Cancel", action: dismiss).buttonStyle(.bordered)
-                Button(shell.workspaces.phaseText) { shell.startWorkspaceCreation() }
-                    .buttonStyle(.borderedProminent)
-                    .tint(Theme.accentVivid)
-                    .disabled(!shell.workspaces.canCreate || shell.workspaces.isCreating)
+                LumiActionButton(title: "Cancel", action: dismiss)
+                LumiActionButton(title: shell.workspaces.phaseText, kind: .primary) {
+                    shell.startWorkspaceCreation()
+                }
+                .disabled(!shell.workspaces.canCreate || shell.workspaces.isCreating)
             }
         }
         .disabled(shell.workspaces.isCreating)
@@ -184,7 +168,100 @@ public struct CreateWorkspaceOverlay: View {
             if let reason = shell.workspaces.source?.libraryCopyBlockedReason {
                 Text(reason).font(Theme.Typography.labelMono).foregroundStyle(Theme.textMuted)
             }
+            // Açık Unity artık engel değil (karar 58); yalnız uyarılır.
+            if let warning = shell.workspaces.source?.libraryCopyWarning, shell.workspaces.copyLibrary {
+                Text(warning).font(Theme.Typography.labelMono).foregroundStyle(Theme.warning)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
+    }
+
+    // MARK: - Dal seçimi (karar 58)
+
+    private func branchSection(_ source: WorkspaceSource) -> some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.md) {
+            field("Branch") {
+                LumiDropdown(
+                    options: branchModes(source).map { .init(value: $0, label: $0.title) },
+                    selection: binding(\.branchMode)
+                )
+            }
+            switch shell.workspaces.branchMode {
+            case .current:
+                hint("Checks out \(source.branch.isEmpty ? "the current branch" : source.branch) in a separate workspace.")
+            case .existing:
+                branchList(placeholder: "Select a branch")
+                LumiTextInput(text: binding(\.existingBranch), placeholder: "or type a branch path")
+                hint("Not in the list? The list shows the \(Self.branchListLimit) most recently updated branches.")
+            case .new:
+                field("Branch name") {
+                    LumiTextInput(
+                        text: binding(\.branchName),
+                        placeholder: source.suggestedBranch(
+                            name: shell.workspaces.name,
+                            base: shell.workspaces.baseBranch.isEmpty ? nil : shell.workspaces.baseBranch
+                        )
+                    )
+                }
+                field("Base branch") {
+                    LumiDropdown(
+                        options: baseBranchOptions(source),
+                        selection: binding(\.baseBranch),
+                        placeholder: "Current branch",
+                        onOpen: loadBranches,
+                        emptyNote: branchNote
+                    )
+                }
+            }
+            if let error = shell.workspaces.branchListError {
+                Text(error).font(Theme.Typography.labelMono).foregroundStyle(Theme.warning)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    /// Git aynı dalı ikinci bir worktree'de checkout edemez; "current" yalnız
+    /// Plastic'te anlamlıdır.
+    private func branchModes(_ source: WorkspaceSource) -> [WorkspaceBranchMode] {
+        source.scm == .plastic ? [.current, .existing, .new] : [.existing, .new]
+    }
+
+    private func branchList(placeholder: String) -> some View {
+        LumiDropdown(
+            options: shell.workspaces.branches.map { .init(value: $0.name, label: $0.name) },
+            selection: binding(\.existingBranch),
+            placeholder: placeholder,
+            onOpen: loadBranches,
+            emptyNote: branchNote
+        )
+    }
+
+    private func baseBranchOptions(_ source: WorkspaceSource) -> [LumiDropdown<String>.Option] {
+        let current = LumiDropdown<String>.Option(
+            value: "", label: source.branch.isEmpty ? "Current branch" : source.branch, detail: "current"
+        )
+        return [current] + shell.workspaces.branches
+            .filter { $0.name != source.branch }
+            .map { .init(value: $0.name, label: $0.name) }
+    }
+
+    private var branchNote: String {
+        if shell.workspaces.isLoadingBranches { return "Loading branches…" }
+        if let error = shell.workspaces.branchListError { return error }
+        return "No branches found"
+    }
+
+    private func loadBranches() {
+        Task { await shell.workspaces.loadBranches(limit: Self.branchListLimit) }
+    }
+
+    private static let branchListLimit = 20
+
+    private func hint(_ text: String) -> some View {
+        Text(text)
+            .font(Theme.Typography.labelMono)
+            .foregroundStyle(Theme.textMuted)
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     private var advanced: some View {
@@ -194,24 +271,14 @@ public struct CreateWorkspaceOverlay: View {
                 .fixedSize(horizontal: false, vertical: true)
             DisclosureGroup("Advanced", isExpanded: $isAdvancedExpanded) {
                 VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                    if shell.workspaces.createNewBranch {
-                        Text("Branch name")
-                            .font(Theme.Typography.labelMono).foregroundStyle(Theme.textSecondary)
-                        LumiTextInput(
-                            text: binding(\.branchName),
-                            placeholder: shell.workspaces.source?.suggestedBranch(name: shell.workspaces.name) ?? "Branch name"
-                        )
-                    }
                     if let source = shell.workspaces.source, !source.revision.isEmpty {
                         Text("Base: \(source.revision)")
                             .font(Theme.Typography.labelMono).foregroundStyle(Theme.textMuted)
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    Text(shell.workspaces.createNewBranch
-                        ? "Starts from the current commit or changeset. Uncommitted changes are not copied."
-                        : "Checks out the current branch in a separate workspace. Uncommitted changes are not copied.")
-                        .font(Theme.Typography.labelMono).foregroundStyle(Theme.textMuted)
-                        .fixedSize(horizontal: false, vertical: true)
+                    hint(shell.workspaces.branchMode == .new
+                        ? "Starts from the selected base branch's latest commit or changeset. Uncommitted changes are not copied."
+                        : "Checks out the selected branch in a separate workspace. Uncommitted changes are not copied.")
                 }
             }
         }

@@ -10,6 +10,11 @@ public actor WorkspaceService: WorkspaceServicing {
     private var creating = false
     private var waiters: [CheckedContinuation<Void, Never>] = []
     private var ownedDestinations = Set<String>()
+    /// Dal listesi önbelleği (karar 58): `cm find` sunucuya gidiyor (~1.5 sn),
+    /// aynı dialog içinde her açılışta yeniden sorulmasın.
+    private var branchCache: [String: (fetchedAt: Date, branches: [WorkspaceBranch])] = [:]
+    public static let branchCacheTTL: TimeInterval = 60
+    public static let defaultBranchLimit = 20
 
     public init(
         runner: any ProcessRunning = SystemProcessRunner(),
@@ -50,6 +55,48 @@ public actor WorkspaceService: WorkspaceServicing {
                       revision: metadata.revision, repository: metadata.repository)
     }
 
+    /// Karar 58. Git'te `for-each-ref` (yerel, anlık), Plastic'te `cm find`
+    /// (sunucu, ~1.5 sn). Sonuç `branchCacheTTL` boyunca saklanır.
+    public func branches(project: Repo, limit: Int = WorkspaceService.defaultBranchLimit) async throws -> [WorkspaceBranch] {
+        let count = max(1, min(limit, 200))
+        let source = try await inspect(project: project)
+        let key = "\(source.projectPath)#\(count)"
+        if let cached = branchCache[key], Date().timeIntervalSince(cached.fetchedAt) < Self.branchCacheTTL {
+            return cached.branches
+        }
+        let names: [String]
+        switch source.scm {
+        case .git:
+            let output = try await command("/usr/bin/git", [
+                "for-each-ref", "--sort=-committerdate", "--count=\(count)",
+                "--format=%(refname:short)", "refs/heads",
+            ], at: source.projectPath)
+            names = output.split(separator: "\n").map(String.init)
+        case .plastic:
+            guard let cm = await locator.locate("cm") else {
+                throw WorkspaceFailure("Plastic SCM cm CLI is unavailable, so branches cannot be listed.")
+            }
+            let output = try await command(cm, [
+                "find", "branches order by date desc limit \(count)",
+                "--format={name}", "--nototal",
+            ], at: source.projectPath, timeout: Self.branchQueryTimeout)
+            names = output.split(separator: "\n").map(String.init)
+        case .none:
+            names = []
+        }
+        var seen = Set<String>()
+        let branches = names
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty && seen.insert($0).inserted }
+            .map(WorkspaceBranch.init(name:))
+        branchCache[key] = (Date(), branches)
+        return branches
+    }
+
+    /// `cm find` .NET çalışma zamanını ayağa kaldırıp sunucuya gidiyor; ölçüm
+    /// ~1.6 sn, ağ yavaşken payı olsun diye 30 sn.
+    public static let branchQueryTimeout: TimeInterval = 30
+
     public func create(_ request: WorkspaceCreateRequest) async throws -> WorkspaceCreateResult {
         await acquire()
         defer { release() }
@@ -62,11 +109,20 @@ public actor WorkspaceService: WorkspaceServicing {
             throw WorkspaceFailure("Enter a workspace name containing letters or numbers (up to 120 bytes).")
         }
         let override = request.branchName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let base = request.baseBranch?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let branch: String
-        if inspected.scm == .plastic, !request.createNewBranch {
+        switch request.branchMode {
+        case .current:
+            // Git bir dalı iki worktree'de aynı anda checkout edemez.
+            guard inspected.scm == .plastic else {
+                throw WorkspaceFailure("Git cannot check out the current branch in a second worktree; choose an existing or a new branch.")
+            }
             branch = inspected.branch
-        } else {
-            branch = override.isEmpty ? inspected.suggestedBranch(name: name) : override
+        case .existing:
+            guard !override.isEmpty else { throw WorkspaceFailure("Select the branch to check out.") }
+            branch = override
+        case .new:
+            branch = override.isEmpty ? inspected.suggestedBranch(name: name, base: base.isEmpty ? nil : base) : override
         }
         let destination = URL(fileURLWithPath: inspected.destinationDirectory).appendingPathComponent(folder)
         try validateDestination(destination, source: inspected.projectPath, known: request.knownProjectPaths)
@@ -75,24 +131,34 @@ public actor WorkspaceService: WorkspaceServicing {
             if let reason = inspected.libraryCopyBlockedReason { throw WorkspaceFailure(reason) }
         }
         if inspected.scm == .git {
-            guard !branch.hasPrefix("-") else { throw WorkspaceFailure("Branch names cannot start with a dash.") }
+            guard !branch.hasPrefix("-"), !base.hasPrefix("-") else { throw WorkspaceFailure("Branch names cannot start with a dash.") }
             _ = try await command("/usr/bin/git", ["check-ref-format", "--branch", branch], at: inspected.projectPath)
         } else {
             try Self.validatePlasticBranch(branch)
+            if request.branchMode == .new, !base.isEmpty { try Self.validatePlasticBranch(base) }
         }
         try prepareProjectDirectory(URL(fileURLWithPath: inspected.destinationDirectory), project: request.project)
         // Recheck after creating parents: a user-supplied symlink must never redirect the checkout.
         try validateDestination(destination, source: inspected.projectPath, known: request.knownProjectPaths)
         switch inspected.scm {
         case .git:
-            _ = try await command("/usr/bin/git", ["worktree", "add", "--no-track", "-b", branch, destination.path, inspected.revision], at: inspected.projectPath, creatingAt: destination.path)
+            if request.branchMode == .existing {
+                _ = try await command("/usr/bin/git", ["worktree", "add", destination.path, branch], at: inspected.projectPath, creatingAt: destination.path)
+            } else {
+                // Yeni dal, seçilen taban dalın ucundan (seçilmediyse mevcut HEAD).
+                let start = base.isEmpty ? inspected.revision
+                    : try await command("/usr/bin/git", ["rev-parse", "--verify", "\(base)^{commit}"], at: inspected.projectPath)
+                _ = try await command("/usr/bin/git", ["worktree", "add", "--no-track", "-b", branch, destination.path, start], at: inspected.projectPath, creatingAt: destination.path)
+            }
         case .plastic:
             guard let cm = await locator.locate("cm"), let repository = inspected.repositorySpec else {
                 throw WorkspaceFailure("Plastic CLI or repository is unavailable.")
             }
             let spec = "br:\(branch)@\(repository)"
-            if request.createNewBranch {
-                _ = try await command(cm, ["branch", "create", spec, "--changeset=cs:\(inspected.revision)@\(repository)", "-c=Created by Lumi"], at: inspected.projectPath)
+            if request.branchMode == .new {
+                let changeset = base.isEmpty || base == inspected.branch ? inspected.revision
+                    : try await headChangeset(of: base, cm: cm, at: inspected.projectPath)
+                _ = try await command(cm, ["branch", "create", spec, "--changeset=cs:\(changeset)@\(repository)", "-c=Created by Lumi"], at: inspected.projectPath)
             }
             do {
                 let workspaceName = "lumi-\(folder)-\(UUID().uuidString.prefix(8).lowercased())"
@@ -110,8 +176,12 @@ public actor WorkspaceService: WorkspaceServicing {
         ownedDestinations.insert(Self.canonical(destination.path))
         var warning: String?
         if request.copyLibrary {
-            do { try await copyLibrary(sourcePath: inspected.projectPath, workspacePath: destination.path) }
-            catch { warning = "Workspace created, but Library was not copied: \(error.localizedDescription)" }
+            do {
+                let skipped = try await copyLibraryReportingSkips(sourcePath: inspected.projectPath, workspacePath: destination.path)
+                if skipped > 0 {
+                    warning = "Library copied while Unity was writing to it; \(skipped) file(s) were skipped and Unity will regenerate them on first import."
+                }
+            } catch { warning = "Workspace created, but Library was not copied: \(error.localizedDescription)" }
         }
         return WorkspaceCreateResult(workspace: ProjectWorkspace(projectPath: request.project.path,
             path: destination.path, name: name, branch: branch, scm: inspected.scm), warning: warning)
@@ -159,11 +229,18 @@ public actor WorkspaceService: WorkspaceServicing {
     }
 
     public func copyLibrary(sourcePath: String, workspacePath: String) async throws {
+        _ = try await copyLibraryReportingSkips(sourcePath: sourcePath, workspacePath: workspacePath)
+    }
+
+    /// Atlanan dosya sayısını döndürür: Unity açıkken kopyalamaya izin verilir
+    /// (karar 58), o sırada yazılan tek tük dosya okunamazsa kopya sürer.
+    @discardableResult
+    private func copyLibraryReportingSkips(sourcePath: String, workspacePath: String) async throws -> Int {
         let destination = Self.canonical(workspacePath)
         guard ownedDestinations.contains(destination), Self.contains(destination, in: workspaceRoot.path) else {
             throw WorkspaceFailure("Library can only be copied into a workspace created by this operation.")
         }
-        try await libraryCopier.copy(sourcePath: sourcePath, workspacePath: workspacePath)
+        return try await libraryCopier.copy(sourcePath: sourcePath, workspacePath: workspacePath)
     }
 
     private func source(project: Repo, root: String, scm: WorkspaceSCM, branch: String = "", revision: String = "", repository: String? = nil) -> WorkspaceSource {
@@ -171,7 +248,8 @@ public actor WorkspaceService: WorkspaceServicing {
         return WorkspaceSource(projectPath: root, scm: scm, branch: branch, revision: revision,
             repositorySpec: repository, destinationDirectory: destinationDirectory(for: project).path,
             isUnityProject: unity, hasLibrary: Self.isDirectory(root + "/Library"),
-            libraryCopyBlockedReason: unity ? libraryCopier.blockedReason(sourcePath: root) : nil)
+            libraryCopyBlockedReason: unity ? libraryCopier.blockedReason(sourcePath: root) : nil,
+            libraryCopyWarning: unity ? libraryCopier.activeEditorWarning(sourcePath: root) : nil)
     }
 
     private func command(_ binary: String, _ arguments: [String], at path: String, creatingAt destination: String? = nil,
@@ -221,9 +299,25 @@ public actor WorkspaceService: WorkspaceServicing {
         }
     }
 
+    /// Taban dalın ucundaki changeset (karar 58). Dal adı `find` sorgusuna
+    /// gömüldüğü için önce `validatePlasticBranch`ten geçmiş olmalıdır.
+    private func headChangeset(of branch: String, cm: String, at path: String) async throws -> String {
+        let output = try await command(cm, [
+            "find", "changesets where branch = 'br:\(branch)' order by changesetid desc limit 1",
+            "--format={changesetid}", "--nototal",
+        ], at: path, timeout: Self.branchQueryTimeout)
+        let changeset = output.split(separator: "\n").map(String.init).last?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !changeset.isEmpty, changeset.allSatisfy(\.isNumber) else {
+            throw WorkspaceFailure("Branch \(branch) has no changeset to start from.")
+        }
+        return changeset
+    }
+
     private static func validatePlasticBranch(_ branch: String) throws {
         guard branch.hasPrefix("/"), branch != "/", !branch.hasSuffix("/"), !branch.contains("//"),
               !branch.contains(".."), !branch.contains("@"), !branch.contains(":"), !branch.contains("\""),
+              !branch.contains("'"),
               !branch.contains("\\"), !branch.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else {
             throw WorkspaceFailure("Enter a Plastic branch path such as /main/my-feature.")
         }

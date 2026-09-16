@@ -12,11 +12,15 @@ struct PopoverMenu: View {
         case toggle(String, isOn: Bool, isEnabled: Bool = true, action: () -> Void)
         case section(String)
         case divider
+        /// Tıklanamayan bilgi satırı (yükleniyor / hata / sonuç yok).
+        case note(String)
     }
 
     let items: [Item]
     /// Bir eylem seçilince popover'ı kapatmak için.
     var dismiss: () -> Void = {}
+    /// `nil` → içerik kadar genişler (uzun dal adlarının kırpılmaması için).
+    var width: CGFloat? = PopoverMenu.width
 
     static let width: CGFloat = 220
 
@@ -26,7 +30,8 @@ struct PopoverMenu: View {
             ForEach(Array(items.enumerated()), id: \.offset) { _, item in row(item) }
         }
         .padding(Theme.Spacing.sm)
-        .frame(width: Self.width)
+        .frame(width: width)
+        .frame(minWidth: width == nil ? Self.width : nil, alignment: .leading)
         .background(Theme.bgElevated)
     }
 
@@ -51,6 +56,12 @@ struct PopoverMenu: View {
                 .padding(.horizontal, Theme.Spacing.md)
                 .padding(.top, Theme.Spacing.sm)
                 .padding(.bottom, Theme.Spacing.xxs)
+        case .note(let text):
+            Text(text)
+                .font(Theme.Typography.labelMono)
+                .foregroundStyle(Theme.textMuted)
+                .padding(.horizontal, Theme.Spacing.md)
+                .padding(.vertical, Theme.Spacing.sm)
         case .divider:
             Rectangle()
                 .fill(Theme.border)
