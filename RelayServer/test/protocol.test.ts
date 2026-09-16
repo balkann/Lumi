@@ -6,12 +6,20 @@ test('geçerli zarf parse edilir', () => {
   expect(env).toEqual({ v: 1, type: 'ping', payload: {} })
 })
 
-test('bozuk JSON, yanlış sürüm, bilinmeyen tip ve eksik payload null döner', () => {
+test('bozuk JSON, yanlış sürüm ve eksik payload null döner', () => {
   expect(parseEnvelope('not json')).toBeNull()
   expect(parseEnvelope('{"v":2,"type":"ping","payload":{}}')).toBeNull()
-  expect(parseEnvelope('{"v":1,"type":"hack","payload":{}}')).toBeNull()
   expect(parseEnvelope('{"v":1,"type":"ping"}')).toBeNull()
   expect(parseEnvelope('"düz string"')).toBeNull()
+})
+
+// İleri-uyum: relay eski kalsa bile yeni frame tipi BAĞLANTIYI ÖLDÜRMEZ.
+// (Bayat-deploy faciası: eski relay chat_status/prompt'u tanımayıp mac'i 4002 ile
+// düşürüyordu → telefon kartları hiç alamıyordu.) Şekil-geçerli bilinmeyen tip
+// parse edilir; bridge onu no-op yok sayar.
+test('bilinmeyen ama şekil-geçerli tip parse edilir (bağlantı kapanmaz)', () => {
+  expect(parseEnvelope('{"v":1,"type":"future_feature","payload":{"x":1}}'))
+    .toEqual({ v: 1, type: 'future_feature', payload: { x: 1 } })
 })
 
 test('envelope() sürümlü JSON üretir', () => {
@@ -34,10 +42,10 @@ describe('terminal-stream protocol', () => {
       expect(parseEnvelope(raw)?.type).toBe(type)
     }
   })
-  it('rejects removed chat types', () => {
+  it('tanınmayan tipler de parse edilir (bridge no-op yok sayar, kapatmaz)', () => {
     for (const type of ['snapshot', 'event']) {
       const raw = JSON.stringify({ v: 1, type, payload: {} })
-      expect(parseEnvelope(raw)).toBeNull()
+      expect(parseEnvelope(raw)?.type).toBe(type)
     }
   })
 })

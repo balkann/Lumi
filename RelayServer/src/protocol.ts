@@ -13,12 +13,6 @@ export interface HelloPayload {
   token: string
 }
 
-const KNOWN_TYPES = new Set([
-  'hello', 'welcome', 'sessions', 'repos', 'subscribe', 'unsubscribe',
-  'scrollback', 'data', 'chat', 'chat_append', 'chat_status', 'prompt', 'prompt_respond', 'input', 'command', 'command_result',
-  'register_push', 'unregister_push', 'ping', 'pong',
-])
-
 const MIN_TOKEN_LENGTH = 16
 
 export function parseEnvelope(raw: string): Envelope | null {
@@ -31,7 +25,10 @@ export function parseEnvelope(raw: string): Envelope | null {
   if (typeof data !== 'object' || data === null || Array.isArray(data)) return null
   const env = data as Record<string, unknown>
   if (env.v !== PROTOCOL_VERSION) return null
-  if (typeof env.type !== 'string' || !KNOWN_TYPES.has(env.type)) return null
+  // İleri-uyum: tip listesi DOĞRULANMAZ — tanınmayan tip bridge'de no-op yok
+  // sayılır. (Tip beyaz-listesi, bayat-deploy'da yeni frame'lerin bağlantıyı
+  // 4002 ile öldürmesine yol açıyordu; şekil denetimi yeterli güvenlik sınırı.)
+  if (typeof env.type !== 'string' || env.type.length === 0 || env.type.length > 64) return null
   if (typeof env.payload !== 'object' || env.payload === null || Array.isArray(env.payload)) return null
   return { v: PROTOCOL_VERSION, type: env.type, payload: env.payload as Record<string, unknown> }
 }
