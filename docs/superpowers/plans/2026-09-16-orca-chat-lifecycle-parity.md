@@ -367,12 +367,14 @@ git commit -m "test(remote): start_session claudeSessionID bağını kilitle (Bi
 Saf-Foundation `LumiWire` target'ı oluştur; wire tiplerini LumiKit'ten taşı; LumiKit `@_exported import LumiWire` ile geriye uyumlu kalsın. Mac derlenir + testler yeşil.
 
 **Files:**
-- Create: `LumiPackages/Sources/LumiWire/` altına taşınan dosyalar: `ChatPrompt.swift`, `ChatTurnStatus.swift`, `AskAnswerKeys.swift`, `PromptJournal.swift`, `ChatMessage.swift` (ChatMessage/ChatBlock/ChatRole nerede tanımlıysa oradan), `DiagLog.swift`
+- Create: `LumiPackages/Sources/LumiWire/` altına taşınan dosyalar — **YALNIZ iOS'ta da kopyası olan / iki tarafın da (de)serialize ettiği saf wire tipleri**: `ChatPrompt.swift`, `ChatTurnStatus.swift`, `ChatMirrorModels.swift` (ChatMessage/ChatBlock/ChatRole), `DiagLog.swift`
 - Modify: `LumiPackages/Package.swift` (LumiWire target + product; LumiKit deps += LumiWire)
-- Modify: `LumiPackages/Sources/LumiKit/` — taşınan tiplerin eski konumlarına `@_exported import LumiWire` bırak (veya tek merkezi `LumiKit/Exports.swift`)
+- Modify: `LumiPackages/Sources/LumiKit/` — `@_exported import LumiWire` (tek merkezi `LumiKit/Exports.swift`)
+
+**KAPSAM DIŞI (LumiKit'te KALIR):** `PromptJournal.swift` (Mac-only reducer, `AgentHookEvent`'e bağımlı — iOS'ta kopyası yok), `AskAnswerKeys.swift`/`buildAskAnswerKeys`/`AskQuestionInput` (Mac-only keystroke aktörü — iOS'ta kopyası yok), `TranscriptLocating`, `AgentHookModels.swift`. Bunları taşımak drift çözmez, gereksiz bağımlılık sürükler.
 
 **Interfaces:**
-- Produces: `LumiWire` product; `ChatPrompt`, `ChatPromptOption`, `ChatPromptQuestion`, `ChatPromptKind`, `ChatPromptState`, `ChatTurnStatus`, `ChatMessage`, `ChatBlock`, `ChatRole`, `PromptJournal`, `buildAskAnswerKeys`, `AskQuestionInput`, `DiagLog` artık `LumiWire`'da (public).
+- Produces: `LumiWire` product; `ChatPrompt`, `ChatPromptOption`, `ChatPromptQuestion`, `ChatPromptKind`, `ChatPromptState`, `ChatTurnStatus`, `ChatMessage`, `ChatBlock`, `ChatRole`, `DiagLog` artık `LumiWire`'da (public). `PromptJournal`/`buildAskAnswerKeys` LumiKit'te kalır ama `@_exported import LumiWire` sayesinde LumiWire tiplerini görür.
 - Consumes: (yok — taban katman.)
 
 - [ ] **Step 1: Package.swift'e LumiWire ekle**
@@ -387,12 +389,15 @@ Saf-Foundation `LumiWire` target'ı oluştur; wire tiplerini LumiKit'ten taşı;
 cd /Users/balkan/orca/workspaces/Lumi/lumi
 mkdir -p LumiPackages/Sources/LumiWire
 git mv LumiPackages/Sources/LumiKit/Models/ChatPrompt.swift LumiPackages/Sources/LumiWire/
-git mv LumiPackages/Sources/LumiKit/Models/ChatTurnStatus.swift LumiPackages/Sources/LumiWire/ 2>/dev/null || true
-git mv LumiPackages/Sources/LumiKit/NativeChat/PromptJournal.swift LumiPackages/Sources/LumiWire/
-git mv LumiPackages/Sources/LumiKit/NativeChat/AskAnswerKeys.swift LumiPackages/Sources/LumiWire/
+git mv LumiPackages/Sources/LumiKit/Models/ChatTurnStatus.swift LumiPackages/Sources/LumiWire/
+git mv LumiPackages/Sources/LumiKit/Models/ChatMirrorModels.swift LumiPackages/Sources/LumiWire/
 git mv LumiPackages/Sources/LumiKit/Support/DiagLog.swift LumiPackages/Sources/LumiWire/
 ```
-`ChatMessage`/`ChatBlock`/`ChatRole` ve `ChatTurnStatus` tam yolunu build hatasından bul (`swift build 2>&1 | grep "cannot find"`), aynı şekilde `git mv` ile LumiWire'a taşı. Hepsi `import Foundation` (AppKit yok) olmalı; değilse taşıma.
+Bu dört dosya `import Foundation` (AppKit yok — teyit edildi). Taşımadan sonra `swift build 2>&1 | grep "cannot find"` ile başka bir wire tipi eksik çıkarsa (ör. ChatMirrorModels içindeki bir yardımcı başka pür tipe bağlıysa) onu da LumiWire'a taşı; AppKit'e bağlı bir parça çıkarsa LumiKit'te bırak. **`PromptJournal.swift`/`AskAnswerKeys.swift` TAŞINMAZ** — LumiKit'te kalır (yukarıdaki kapsam-dışı notu).
+
+- [ ] **Step 2.5: iOS `decode` metotlarını LumiWire tiplerine birleştir (Task 6'nın iOS build'i için ŞART)**
+
+Taşınan Mac tipleri (`ChatPrompt`, `ChatMessage`, `ChatBlock`, `ChatTurnStatus`) `decode(_:)` içermez — `decode` bugün iOS kopyalarında (`LumiMobile/.../ChatPrompt.swift`, `ChatMirrorModels.swift`, `ChatTurnStatus.swift`). iOS kopyalarındaki `static func decode(_ d: [String: Any]) -> Self?` metotlarını **oku ve LumiWire'daki karşılık gelen tiplere `public static func decode` olarak ekle** (alanlar birebir aynı; Task 6 iOS'u bunları çağıracak). Mac ChatPrompt ile iOS ChatPrompt alan-kümesi aynıdır (itemId, revision, kind, title, detail, options, state, selectedOptionId, multiSelect, allowOther, questions); yalnız decode metotları eklenir. `wirePayload()` (encode) Task 7'de eklenecek — bu adımda sadece decode.
 
 - [ ] **Step 3: Geriye uyumluluk — LumiKit re-export**
 
@@ -454,9 +459,10 @@ iOS paketinin kendi kopya wire dosyaları silinir; `LumiWire`'a path-bağımlı 
 cd /Users/balkan/orca/workspaces/Lumi/lumi
 git rm LumiMobile/LumiMobileKit/Sources/LumiMobileKit/ChatPrompt.swift \
   LumiMobile/LumiMobileKit/Sources/LumiMobileKit/ChatTurnStatus.swift \
-  LumiMobile/LumiMobileKit/Sources/LumiMobileKit/DiagLog.swift
+  LumiMobile/LumiMobileKit/Sources/LumiMobileKit/DiagLog.swift \
+  LumiMobile/LumiMobileKit/Sources/LumiMobileKit/ChatMirrorModels.swift
 ```
-`ChatMessage` iOS'ta ayrı kopya ise ve LumiWire'daki ile alan-uyumluysa onu da sil; değilse Task 7'de simetriyi kur, bu adımda bırak.
+Bu 4 dosya Task 5'te LumiWire'a taşınan 4 dosyanın iOS kopyalarıdır (birebir simetrik). LumiWire tipleriyle alan-uyumsuzluk çıkarsa (ör. iOS `decode`'unun beklediği bir alan LumiWire'da farklı adla) Task 7'de encode/decode simetrisini kurarken eşitle; bu adımda import'ları düzelt.
 
 - [ ] **Step 3: import'ları düzelt**
 
