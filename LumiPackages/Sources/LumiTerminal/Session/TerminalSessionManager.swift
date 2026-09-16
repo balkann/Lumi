@@ -245,6 +245,12 @@ extension TerminalSessionManager: TerminalSessionDelegate {
         broadcaster.send(.bell(session.id))
     }
 
+    /// Karar 57: link tıklaması diğer terminal sinyalleriyle aynı kanaldan akar.
+    func session(_ session: TerminalSession, didActivateLink activation: TerminalLinkActivation) {
+        guard isRegistered(session) else { return }
+        broadcaster.send(.linkActivated(activation))
+    }
+
     func session(_ session: TerminalSession, didExitWithCode code: Int32) {
         // Exit-cleanup sırası: önce kayıttan düş — stale push imkânsızlaşır —
         // sonra exit yayınla

@@ -70,7 +70,130 @@ final class DropAwareTerminalView: TerminalView {
         if window == nil {
             scrollRedrawTask?.cancel()
             scrollRedrawTask = nil
+            // Pencereden kopan view'da mouseUp gelmeyebilir; bekleyen link
+            // jesti ve fare raporu bekletmesi açıkta kalmasın (karar 57).
+            cancelLinkGesture()
         }
+    }
+
+    // MARK: - Link jestleri (karar 57)
+
+    /// Link/path tıklaması karara bağlandı: (ham link, jest, kabuk koordinatında
+    /// tık noktası). Yalnız jest geçerliyse (sürüklenmediyse, seçim yokken)
+    /// çağrılır.
+    var onLinkActivation: ((String, TerminalLinkGesture, CGPoint) -> Void)?
+    /// Düz tık bir link üstünde başladı: bu tıkın fare raporları PTY'ye
+    /// GİTMEDEN bekletilmeli (`true` → bekletme başladı).
+    var onLinkGestureBegan: (() -> Void)?
+    /// Jest bitti. `claimed == true` ise bekleyen fare raporları düşürülür
+    /// (Claude tıkı hiç görmez), değilse olduğu gibi akar.
+    var onLinkGestureEnded: ((_ claimed: Bool) -> Void)?
+
+    private var linkGesture = TerminalLinkGestureTracker()
+    /// `.actions` jestinde `super.mouseDown` çağrıldığı için SwiftTerm seçim/
+    /// rapor akışı normal işler; raporlar oturumda bekletilir.
+    private var isDeferringMouseReports = false
+
+    override func mouseDown(with event: NSEvent) {
+        linkGesture.cancel()
+        guard let gesture = Self.gesture(for: event), let link = link(at: event) else {
+            finishDeferredReports(claimed: false)
+            super.mouseDown(with: event)
+            return
+        }
+        linkGesture.begin(
+            link: link,
+            gesture: gesture,
+            origin: event.locationInWindow,
+            hadSelection: selectionActive
+        )
+        switch gesture {
+        case .actions:
+            // Seçim/odak davranışı korunur; PTY'ye giden rapor bekletilir.
+            beginDeferredReports()
+            super.mouseDown(with: event)
+        case .primary, .alternate:
+            // Doğrudan aktivasyon: tık ne TUI'ye gider ne seçimi bozar.
+            break
+        }
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        linkGesture.noteDrag(to: event.locationInWindow)
+        guard linkGesture.activeGesture == .primary || linkGesture.activeGesture == .alternate else {
+            super.mouseDragged(with: event)
+            return
+        }
+        // Doğrudan aktivasyon jestinde mouseDown yutulmuştu; sürükleme de yutulur.
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        let gesture = linkGesture.activeGesture
+        if gesture == nil || gesture == .actions {
+            super.mouseUp(with: event)
+        }
+        linkGesture.noteDrag(to: event.locationInWindow)
+        guard let resolved = linkGesture.finish(hasSelection: selectionActive) else {
+            finishDeferredReports(claimed: false)
+            return
+        }
+        finishDeferredReports(claimed: true)
+        onLinkActivation?(resolved.link, resolved.gesture, shellAnchor(for: event))
+    }
+
+    private func cancelLinkGesture() {
+        linkGesture.cancel()
+        finishDeferredReports(claimed: false)
+    }
+
+    private func beginDeferredReports() {
+        guard !isDeferringMouseReports else { return }
+        isDeferringMouseReports = true
+        onLinkGestureBegan?()
+    }
+
+    private func finishDeferredReports(claimed: Bool) {
+        guard isDeferringMouseReports else { return }
+        isDeferringMouseReports = false
+        onLinkGestureEnded?(claimed)
+    }
+
+    static func gesture(for event: NSEvent) -> TerminalLinkGesture? {
+        let flags = event.modifierFlags
+        return TerminalLinkGesture.resolve(
+            isLeftButton: event.type == .leftMouseDown || event.type == .leftMouseUp,
+            clickCount: event.clickCount,
+            modifiers: .init(
+                command: flags.contains(.command),
+                shift: flags.contains(.shift),
+                option: flags.contains(.option),
+                control: flags.contains(.control)
+            )
+        )
+    }
+
+    /// Emülatörün tık hücresinde eşlediği link: OSC 8 payload'ı ya da örtük
+    /// eşleşme (SwiftTerm'in Ghostty regex'i — URL, mutlak/göreli path, `~/`).
+    private func link(at event: NSEvent) -> String? {
+        let terminal = getTerminal()
+        let cell = MouseWheelGeometry.gridCell(
+            forViewPoint: convert(event.locationInWindow, from: nil),
+            bounds: bounds,
+            cols: terminal.cols,
+            rows: terminal.rows,
+            isFlipped: isFlipped
+        )
+        let position = Position(col: cell.col - 1, row: cell.row - 1)
+        guard let text = terminal.link(at: .screen(position), mode: .explicitAndImplicit) else { return nil }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private func shellAnchor(for event: NSEvent) -> CGPoint {
+        TerminalLinkAnchor.shellPoint(
+            windowPoint: event.locationInWindow,
+            contentHeight: window?.contentView?.bounds.height ?? bounds.height
+        )
     }
 
     // MARK: - Mouse: hover-caret bastırma + wheel scroll (v1 / xterm.js paritesi)

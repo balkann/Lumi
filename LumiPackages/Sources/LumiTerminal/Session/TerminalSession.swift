@@ -13,6 +13,8 @@ protocol TerminalSessionDelegate: AnyObject {
     func session(_ session: TerminalSession, didExitWithCode code: Int32)
     func session(_ session: TerminalSession, didFailWriteWithErrno code: Int32)
     func sessionDidBell(_ session: TerminalSession)
+    /// Karar 57: terminalde bir link/path tıklandı.
+    func session(_ session: TerminalSession, didActivateLink activation: TerminalLinkActivation)
 }
 
 /// Bir PTY oturumu + kalıcı SwiftTerm emülatörü (design/01 §1 — Seçenek A).
@@ -94,6 +96,20 @@ final class TerminalSession {
         (view as? FileDropAccepting)?.onFileDrop = { [weak self] paths in
             // Quote'lanmış path, newline'sız yazılır (Electron paritesi + karar 11)
             self?.write(ShellQuoting.joinedPaths(paths))
+        }
+        (view as? DropAwareTerminalView).map { linkView in
+            // Karar 57: link jestleri oturuma akar — düz tıkın fare raporu
+            // popover'a dönüşürse PTY'ye hiç gitmez.
+            linkView.onLinkGestureBegan = { [weak self] in self?.beginDeferringMouseReports() }
+            linkView.onLinkGestureEnded = { [weak self] claimed in
+                self?.endDeferringMouseReports(claimed: claimed)
+            }
+            linkView.onLinkActivation = { [weak self] link, gesture, anchor in
+                guard let self else { return }
+                self.delegate?.session(self, didActivateLink: TerminalLinkActivation(
+                    terminalID: id, link: link, gesture: gesture, anchor: anchor
+                ))
+            }
         }
 
         wirePipeline()
@@ -231,11 +247,44 @@ final class TerminalSession {
     /// oto-yanıtları, programatik write — hepsi filtre + serial io queue'dan geçer.
     func write(_ data: Data) {
         guard !isTerminated else { return }
+        if deferMouseReportIfNeeded(data) { return }
         ioQueue.async { [pipeline, pty] in
             let filtered = pipeline.processInput(data)
             guard !filtered.isEmpty else { return }
             pty.write(filtered)
         }
+    }
+
+    // MARK: - Link jesti sırasında fare raporlarını bekletme (karar 57)
+
+    /// Bekleyen fare raporları; `nil` = bekletme kapalı. Düz tık bir linkin
+    /// üstünde başladığında açılır: tık popover'a dönüşürse raporlar düşürülür
+    /// (Claude caret'i oynamaz), dönüşmezse olduğu gibi akar.
+    private var deferredMouseReports: [Data]?
+    /// Emniyet tavanı: beklenmedik bir olay seli bekletmeyi kilitlemesin.
+    private static let maxDeferredMouseReports = 64
+
+    private func beginDeferringMouseReports() {
+        deferredMouseReports = []
+    }
+
+    private func endDeferringMouseReports(claimed: Bool) {
+        let pending = deferredMouseReports
+        deferredMouseReports = nil
+        guard !claimed, let pending else { return }
+        pending.forEach { write($0) }
+    }
+
+    /// `true` → rapor bekletildi, bu çağrıda PTY'ye yazılmaz.
+    private func deferMouseReportIfNeeded(_ data: Data) -> Bool {
+        guard var pending = deferredMouseReports, TerminalMouseReport.isReport(data) else { return false }
+        guard pending.count < Self.maxDeferredMouseReports else {
+            endDeferringMouseReports(claimed: false)
+            return false
+        }
+        pending.append(data)
+        deferredMouseReports = pending
+        return true
     }
 
     func requestResize(cols: Int, rows: Int) {
