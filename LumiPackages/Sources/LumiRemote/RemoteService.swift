@@ -413,11 +413,13 @@ public final class RemoteService: RemoteServicing {
         let scheduler = keystrokeScheduler
         promptWriteTasks[id] = Task { [weak self] in
             for (i, group) in groups.enumerated() {
+                if Task.isCancelled { return }   // her gruptan önce (ilk grup dahil) iptal kontrolü
                 if i > 0 { try? await scheduler.sleep(.milliseconds(1000)) }
                 if Task.isCancelled { return }
                 await self?.writeGroup(group, to: id)
             }
-            await self?.clearPromptWriteTask(id)
+            // Bitmiş task'ı dict'ten temizlemeyiz: yeni cevap replace, .exited/shutdown cancel eder.
+            // (Kendini temizlemek daha yeni bir task'ın handle'ını silme riskini doğurur — review T5.)
         }
     }
 
@@ -429,8 +431,6 @@ public final class RemoteService: RemoteServicing {
         }
         terminal.writeInput(data, to: id)
     }
-
-    private func clearPromptWriteTask(_ id: TerminalID) { promptWriteTasks[id] = nil }
 
     /// orca keystroke haritası (kesin): allow=byte 0x31 ('1'), deny=0x1b (ESC),
     /// question index i (0-tabanlı) → byte 0x31+i ('1'…'9'). Trailing Enter yok.
