@@ -8,7 +8,7 @@ import LumiKit
 /// child write'ta bloklanıp asla terminate olamazdı (klasik NSTask deadlock'u) —
 /// bu, büyük çıktı veren git komutlarında sahte "timeout" üretiyordu. Stdin de
 /// aynı sebepten `run()` SONRASI background'da yazılır.
-public struct SystemProcessRunner: ProcessRunning {
+public struct SystemProcessRunner: ProcessRunning, EnvironmentProcessRunning {
     public init() {}
 
     private final class OnceFlag: @unchecked Sendable {
@@ -67,6 +67,21 @@ public struct SystemProcessRunner: ProcessRunning {
         }
     }
 
+    /// Ortamı değiştirilmiş çağrı (karar 56): `environment` sürecin TAM
+    /// ortamıdır — miras alınan `ProcessInfo` ortamı otomatik eklenmez, çağıran
+    /// neyi geçireceğini açıkça seçer.
+    public func run(
+        _ executable: String,
+        arguments: [String],
+        environment: [String: String],
+        timeout: TimeInterval
+    ) async -> ProcessOutput? {
+        await run(
+            executable, arguments: arguments, currentDirectory: nil,
+            standardInput: nil, environment: environment, timeout: timeout
+        )
+    }
+
     /// Timeout veya başlatma hatasında nil döner; sessiz-fail sözleşmesi
     /// (fixProcessPath'in 5sn timeout semantiği).
     public func run(
@@ -76,11 +91,26 @@ public struct SystemProcessRunner: ProcessRunning {
         standardInput: Data?,
         timeout: TimeInterval
     ) async -> ProcessOutput? {
+        await run(
+            executable, arguments: arguments, currentDirectory: currentDirectory,
+            standardInput: standardInput, environment: nil, timeout: timeout
+        )
+    }
+
+    private func run(
+        _ executable: String,
+        arguments: [String],
+        currentDirectory: String?,
+        standardInput: Data?,
+        environment: [String: String]?,
+        timeout: TimeInterval
+    ) async -> ProcessOutput? {
         guard let raw = await runRaw(
             executable,
             arguments: arguments,
             currentDirectory: currentDirectory,
             standardInput: standardInput,
+            environment: environment,
             timeout: timeout
         ) else { return nil }
         return ProcessOutput(
@@ -99,6 +129,20 @@ public struct SystemProcessRunner: ProcessRunning {
         standardInput: Data?,
         timeout: TimeInterval
     ) async -> RawProcessOutput? {
+        await runRaw(
+            executable, arguments: arguments, currentDirectory: currentDirectory,
+            standardInput: standardInput, environment: nil, timeout: timeout
+        )
+    }
+
+    private func runRaw(
+        _ executable: String,
+        arguments: [String],
+        currentDirectory: String?,
+        standardInput: Data?,
+        environment: [String: String]?,
+        timeout: TimeInterval
+    ) async -> RawProcessOutput? {
         let box = ProcessBox()
         return await withTaskCancellationHandler {
             await withCheckedContinuation { continuation in
@@ -107,6 +151,9 @@ public struct SystemProcessRunner: ProcessRunning {
                 process.arguments = arguments
                 if let currentDirectory {
                     process.currentDirectoryURL = URL(fileURLWithPath: currentDirectory)
+                }
+                if let environment {
+                    process.environment = environment
                 }
                 let stdoutPipe = Pipe()
                 let stderrPipe = Pipe()
