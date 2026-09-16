@@ -52,17 +52,35 @@ public final class PromptJournal {
 
     private func makeQuestion(_ event: AgentHookEvent) -> ChatPrompt? {
         guard let obj = parse(event.toolInput),
-              let questions = obj["questions"] as? [[String: Any]],
-              let q0 = questions.first,
-              let question = q0["question"] as? String else { return nil }
-        let rawOptions = (q0["options"] as? [[String: Any]]) ?? []
+              let rawQuestions = obj["questions"] as? [[String: Any]], !rawQuestions.isEmpty else { return nil }
+        let parsed = rawQuestions.enumerated().compactMap { parseQuestion($1, index: $0) }
+        guard let first = parsed.first else { return nil }
+        if parsed.count == 1 {
+            // Tek soru → flat (Faz 3.0 uyumlu) + multiSelect/allowOther.
+            guard !first.options.isEmpty || first.allowOther else { return nil }
+            return ChatPrompt(itemId: itemId(event), revision: 0, kind: .question, title: first.question,
+                              detail: nil, options: first.options, state: .pending, selectedOptionId: nil,
+                              multiSelect: first.multiSelect, allowOther: first.allowOther, questions: [])
+        }
+        // Gruplu çok-soru → questions array (flat options boş).
+        return ChatPrompt(itemId: itemId(event), revision: 0, kind: .question, title: first.question,
+                          detail: nil, options: [], state: .pending, selectedOptionId: nil,
+                          multiSelect: false, allowOther: false, questions: parsed)
+    }
+
+    /// tool_input'taki bir soruyu ChatPromptQuestion'a çevirir (orca AskQuestion).
+    private func parseQuestion(_ q: [String: Any], index: Int) -> ChatPromptQuestion? {
+        guard let question = q["question"] as? String else { return nil }
+        let rawOptions = (q["options"] as? [[String: Any]]) ?? []
         let options = rawOptions.enumerated().compactMap { (i, o) -> ChatPromptOption? in
             guard let label = o["label"] as? String else { return nil }
             return ChatPromptOption(id: "opt-\(i)", label: label, description: o["description"] as? String)
         }
-        guard !options.isEmpty else { return nil }
-        return ChatPrompt(itemId: itemId(event), revision: 0, kind: .question, title: question,
-                          detail: nil, options: options, state: .pending, selectedOptionId: nil)
+        // allowOther: orca `freeTextQuestionId` varlığı / açık bayrak (§4.1 cihaz teyidi; yoksa false).
+        let allowOther = q["freeTextQuestionId"] != nil || (q["allowOther"] as? Bool ?? false)
+        return ChatPromptQuestion(id: q["header"] as? String ?? "q-\(index)", question: question,
+                                  header: q["header"] as? String, multiSelect: q["multiSelect"] as? Bool ?? false,
+                                  allowOther: allowOther, options: options)
     }
 
     private func makeApproval(_ event: AgentHookEvent) -> ChatPrompt? {

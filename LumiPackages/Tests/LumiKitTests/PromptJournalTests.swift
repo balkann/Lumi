@@ -84,6 +84,24 @@ import Foundation
         #expect(j.items.first { $0.itemId == "tu7" }?.state == .pending)
     }
 
+    @Test func singleQuestionMultiSelectFlag() {
+        let j = journal()
+        let input = #"{"questions":[{"question":"Pick","multiSelect":true,"options":[{"label":"A"},{"label":"B"}]}]}"#
+        let changed = j.reduce(ev(.preToolUse, tool: "AskUserQuestion", input: input, useID: "m1"))
+        #expect(changed.first?.multiSelect == true)
+        #expect(changed.first?.questions.isEmpty == true)   // tek soru → flat
+    }
+
+    @Test func groupedMultiQuestionPopulatesQuestions() {
+        let j = journal()
+        let input = #"{"questions":[{"question":"Q0","header":"H0","options":[{"label":"A"}]},{"question":"Q1","multiSelect":true,"options":[{"label":"C"},{"label":"D"}]}]}"#
+        let changed = j.reduce(ev(.preToolUse, tool: "AskUserQuestion", input: input, useID: "g1"))
+        #expect(changed.first?.questions.count == 2)
+        #expect(changed.first?.questions.first?.header == "H0")
+        #expect(changed.first?.questions.last?.multiSelect == true)
+        #expect(changed.first?.options.isEmpty == true)   // gruplu → flat options boş
+    }
+
     @Test func questionWithoutOptionsNotCreated() {
         let j = journal()
         let changed = j.reduce(ev(.preToolUse, tool: "AskUserQuestion",
