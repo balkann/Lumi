@@ -134,7 +134,8 @@ final class DropAwareTerminalView: TerminalView {
             // linkin üstünde değildir ve Ghostty regex'i her tıkta koşarsa
             // (satır birleştirmeli, scrollback boyu) main thread'e biner.
             beginGesture(link: nil, gesture: gesture, event: event)
-            // Seçim/odak davranışı korunur; TUI fare raporlamıyor (isAllowed).
+            // Seçim/odak davranışı korunur; PTY'ye giden rapor bekletilir ve
+            // jest bir linke dönüşmezse mouseUp'ta olduğu gibi akar.
             super.mouseDown(with: event)
         case .primary, .alternate:
             guard let link = link(at: event) else {
@@ -178,13 +179,13 @@ final class DropAwareTerminalView: TerminalView {
         onLinkActivation?(link, resolved.gesture, shellAnchor(for: event))
     }
 
-    /// `.actions` (düz tık) YALNIZ fare raporlamayan bir terminalde link yoluna
-    /// girer (kullanıcı kararı): Claude/tmux/htop çalışırken düz tık terminale
-    /// aittir — caret koyma, seçim ve sürükleme aynen korunur. Link için ⌘/⇧⌘
-    /// her koşulda çalışır.
+    /// Düz sol tık her terminalde link yoluna girer (Orca paritesi, kullanıcı
+    /// düzeltmesi: "orcada sol tık yetiyormuş"). Fare raporlayan bir TUI
+    /// çalışıyorsa tıkın raporu bekletilir; linke denk gelmediyse olduğu gibi
+    /// akar, yani link DIŞINDAKİ metinde caret koyma bozulmaz.
     private func isAllowed(_ gesture: TerminalLinkGesture) -> Bool {
         guard gesture == .actions else { return true }
-        return isLinkActionsEnabled && getTerminal().mouseMode == .off
+        return isLinkActionsEnabled
     }
 
     private func beginGesture(link: String?, gesture: TerminalLinkGesture, event: NSEvent) {
@@ -194,8 +195,8 @@ final class DropAwareTerminalView: TerminalView {
             origin: event.locationInWindow,
             hadSelection: selectionActive
         )
-        // Mod jest ortasında değişirse (TUI fare takibini yeni açtıysa) başıboş
-        // bir rapor kaçmasın diye bekletme `.actions` jestinde yine kurulur.
+        // Bekletme mouseDown'da kurulur: tıkın linke denk gelip gelmediği ancak
+        // mouseUp'ta bilinir, rapor ise basar basmaz üretilir.
         if gesture == .actions { beginDeferredReports() }
     }
 

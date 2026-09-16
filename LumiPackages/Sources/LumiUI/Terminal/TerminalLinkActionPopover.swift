@@ -18,6 +18,14 @@ struct TerminalLinkActionPopover: View {
     /// yerleşim hesabını da tek değere bağlar.
     static let width: CGFloat = 288
 
+    /// Ölçüm gelmeden önceki ilk kare için kaba yükseklik (başlık + ayraç +
+    /// satırlar + dolgu). Gerçek ölçüm gelince yerleşim kendini düzeltir.
+    static func estimatedSize(for request: TerminalLinkRequest) -> CGSize {
+        let header = Theme.Row.control + Theme.Spacing.md
+        let rows = CGFloat(request.actions.count) * (Theme.Row.control + Theme.Spacing.xxs)
+        return CGSize(width: width, height: header + rows + Theme.Spacing.md)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
             header

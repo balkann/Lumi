@@ -81,14 +81,15 @@ final class TerminalLinkViewGestureTests: XCTestCase {
         XCTAssertEqual(activations.first?.gesture, .actions)
     }
 
-    /// Kullanıcı kararı: Claude/tmux/htop çalışırken düz tık TERMİNALE aittir —
-    /// caret koyma, seçim ve sürükleme aynen korunur.
-    func testPlainClickIsLeftToTheTerminalWhileMouseReportingIsOn() {
+    /// Orca paritesi (kullanıcı düzeltmesi): fare raporlayan bir TUI çalışırken
+    /// de düz sol tık yeter — ⌘ gerekmez.
+    func testPlainClickAlsoWorksWhileMouseReportingIsOn() {
         enableMouseReporting()
 
         click(at: linkPoint())
 
-        XCTAssertTrue(activations.isEmpty)
+        XCTAssertEqual(activations.first?.gesture, .actions)
+        XCTAssertEqual(activations.first?.link, Self.link)
     }
 
     func testPlainClickIsLeftToTheTerminalWhenTheSettingIsOff() {

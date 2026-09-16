@@ -30,7 +30,10 @@ enum TerminalLinkPopoverPlacement {
 /// Kapanışta klavye odağı terminale geri verilir.
 public struct TerminalLinkActionOverlay: View {
     @Shell private var shell
-    @State private var popoverSize: CGSize = .zero
+    /// `nil` → henüz ölçülmedi; ilk kare tahmini boyutla yerleşir. Eskiden
+    /// ölçüm gelene kadar `opacity 0` çiziliyordu — ölçüm bir sebeple gelmezse
+    /// popover GÖRÜNMEZ ama tıklanabilir kalıyordu.
+    @State private var popoverSize: CGSize?
 
     public init() {}
 
@@ -42,14 +45,15 @@ public struct TerminalLinkActionOverlay: View {
     public var body: some View {
         if let request = shell.terminalLinks.request {
             GeometryReader { geometry in
+                let size = popoverSize ?? TerminalLinkActionPopover.estimatedSize(for: request)
                 let origin = TerminalLinkPopoverPlacement.origin(
                     anchor: request.anchor,
-                    popoverSize: popoverSize,
+                    popoverSize: size,
                     container: geometry.size
                 )
                 ZStack(alignment: .topLeading) {
                     TerminalLinkDismissCatcher(
-                        popoverFrame: CGRect(origin: origin, size: popoverSize),
+                        popoverFrame: CGRect(origin: origin, size: size),
                         containerHeight: geometry.size.height,
                         onDismiss: { close(request) }
                     )
@@ -68,12 +72,10 @@ public struct TerminalLinkActionOverlay: View {
                         }
                     )
                     .offset(x: origin.x, y: origin.y)
-                    // Ölçüm tamamlanana kadar (ilk frame) çizilmez: aksi hâlde
-                    // popover bir kare yanlış yerde görünürdü.
-                    .opacity(popoverSize == .zero ? 0 : 1)
                 }
-                .onPreferenceChange(SizeKey.self) { size in
-                    Task { @MainActor in popoverSize = size }
+                .onPreferenceChange(SizeKey.self) { measured in
+                    guard measured.height > 0 else { return }
+                    Task { @MainActor in popoverSize = measured }
                 }
             }
             .id(request.id)
@@ -169,7 +171,10 @@ private struct TerminalLinkDismissCatcher: NSViewRepresentable {
                 // NSEvent Sendable değil: izolasyon sınırından yalnız Bool taşınır
                 // (`TerminalEventMonitor` ile aynı desen).
                 let isKeyDown = event.type == .keyDown
-                let isEscape = event.keyCode == Self.escapeKeyCode
+                // `keyCode` YALNIZ key event'lerinde geçerlidir; fare olayında
+                // okumak ObjC istisnası fırlatıp event dağıtımını kilitliyordu
+                // (uygulama hiçbir girdi almıyordu).
+                let isEscape = isKeyDown && event.keyCode == Self.escapeKeyCode
                 let insidePopover = MainActor.assumeIsolated {
                     self?.isInsidePopover(event) ?? true
                 }
