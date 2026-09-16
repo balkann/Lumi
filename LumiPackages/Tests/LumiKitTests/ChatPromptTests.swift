@@ -18,4 +18,18 @@ import Foundation
         #expect(opts?.first?["label"] as? String == "A")
         #expect(opts?.first?["description"] as? String == "aa")
     }
+
+    @Test func toDictEncodesFaz31Fields() {
+        let p = ChatPrompt(itemId: "i1", revision: 0, kind: .question, title: "G", detail: nil,
+            options: [], state: .pending, selectedOptionId: nil, multiSelect: true, allowOther: true,
+            questions: [ChatPromptQuestion(id: "q0", question: "Q0", header: "H", multiSelect: false,
+                                           allowOther: false, options: [ChatPromptOption(id: "opt-0", label: "A", description: nil)])])
+        let d = p.toDict()
+        #expect(d["multiSelect"] as? Bool == true)
+        #expect(d["allowOther"] as? Bool == true)
+        let qs = d["questions"] as? [[String: Any]]
+        #expect(qs?.first?["id"] as? String == "q0")
+        #expect(qs?.first?["header"] as? String == "H")
+        #expect((qs?.first?["options"] as? [[String: Any]])?.first?["label"] as? String == "A")
+    }
 }

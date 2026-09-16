@@ -27,4 +27,18 @@ final class PromptDecodeTests: XCTestCase {
         XCTAssertEqual(p.options.first?.description, "aa")
         XCTAssertNil(p.detail)
     }
+
+    func testDecodeGroupedQuestionPrompt() {
+        let frame = #"""
+        {"v":1,"type":"prompt","payload":{"sessionId":"s1","itemId":"g1","revision":0,"kind":"question","title":"G","detail":null,"options":[],"state":"pending","selectedOptionId":null,"multiSelect":false,"allowOther":true,"questions":[{"id":"q0","question":"Q0","header":"H","multiSelect":true,"allowOther":false,"options":[{"id":"opt-0","label":"A","description":null}]}]}}
+        """#
+        guard case let .prompt(_, p)? = PhoneProtocol.decodeServerMessage(frame) else {
+            return XCTFail("gruplu prompt decode edilemedi")
+        }
+        XCTAssertTrue(p.allowOther)
+        XCTAssertEqual(p.questions.count, 1)
+        XCTAssertEqual(p.questions.first?.id, "q0")
+        XCTAssertTrue(p.questions.first?.multiSelect ?? false)
+        XCTAssertEqual(p.questions.first?.options.first?.label, "A")
+    }
 }
