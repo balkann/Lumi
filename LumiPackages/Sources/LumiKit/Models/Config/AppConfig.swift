@@ -46,6 +46,10 @@ public struct AppConfig: Sendable, Equatable {
     /// (karar 45). Kapatılınca yönetilen girdiler sağlayıcı ayarlarından silinir
     /// ve durum yalnız OSC/çıktı sezgisiyle türer. Additive (karar 9): yoksa açık.
     public var agentHooksEnabled: Bool
+    /// Terminalde bir link/path'e DÜZ tıklayınca eylem popover'ının açılması
+    /// (karar 57). Kapalıyken düz tık terminale aittir (seçim/caret) ve link
+    /// yalnız ⌘ / ⇧⌘ ile açılır. Additive (karar 9): yoksa açık.
+    public var terminalLinkActionsEnabled: Bool
     /// Lumi'nin yönettiği Claude hesapları (karar 56). Kimlik bilgisi taşımaz —
     /// yalnız kimlik kartı. Additive (karar 9): yoksa boş.
     public var claudeAccounts: [ClaudeAccount]
@@ -83,6 +87,7 @@ public struct AppConfig: Sendable, Equatable {
         usageIndicators: .defaults,
         computerAwakeMode: .default,
         agentHooksEnabled: true,
+        terminalLinkActionsEnabled: true,
         claudeAccounts: [],
         claudeAccountSelection: .systemDefault,
         workspaces: [],
@@ -105,6 +110,7 @@ public struct AppConfig: Sendable, Equatable {
         usageIndicators: UsageIndicators = .defaults,
         computerAwakeMode: ComputerAwakeMode = .default,
         agentHooksEnabled: Bool = true,
+        terminalLinkActionsEnabled: Bool = true,
         claudeAccounts: [ClaudeAccount] = [],
         claudeAccountSelection: ClaudeAccountSelection = .systemDefault,
         workspaces: [ProjectWorkspace] = [],
@@ -126,6 +132,7 @@ public struct AppConfig: Sendable, Equatable {
         self.usageIndicators = usageIndicators
         self.computerAwakeMode = computerAwakeMode
         self.agentHooksEnabled = agentHooksEnabled
+        self.terminalLinkActionsEnabled = terminalLinkActionsEnabled
         self.claudeAccounts = claudeAccounts
         self.claudeAccountSelection = claudeAccountSelection
         self.workspaces = workspaces

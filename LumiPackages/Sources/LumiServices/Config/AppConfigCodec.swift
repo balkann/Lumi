@@ -44,6 +44,9 @@ enum AppConfigCodec {
         if let value = JSONValue.bool(dict["agentHooksEnabled"]) {
             config.agentHooksEnabled = value
         }
+        if let value = JSONValue.bool(dict["terminalLinkActionsEnabled"]) {
+            config.terminalLinkActionsEnabled = value
+        }
         config.claudeAccounts = ClaudeAccountCodec.decodeList(dict["claudeAccounts"])
         config.claudeAccountSelection = ClaudeAccountCodec.decodeSelection(
             dict["activeClaudeAccountId"], accounts: config.claudeAccounts
@@ -70,6 +73,7 @@ enum AppConfigCodec {
             "usageIndicators": UsageIndicatorsCodec.overlay(config.usageIndicators),
             "computerAwakeMode": config.computerAwakeMode.rawValue,
             "agentHooksEnabled": config.agentHooksEnabled,
+            "terminalLinkActionsEnabled": config.terminalLinkActionsEnabled,
             "claudeAccounts": ClaudeAccountCodec.overlayList(config.claudeAccounts),
             "workspaces": ProjectWorkspaceCodec.overlayList(config.workspaces),
         ]

@@ -151,6 +151,13 @@ public final class FakeTerminalService: TerminalServicing {
         appliedCursors.append((shape, blink))
     }
 
+    /// Karar 57: uygulanan link-eylemi ayarlarının kaydı.
+    public private(set) var appliedLinkActions: [Bool] = []
+
+    public func applyLinkActions(enabled: Bool) {
+        appliedLinkActions.append(enabled)
+    }
+
     public func events() -> AsyncStream<TerminalEvent> {
         broadcaster.stream()
     }

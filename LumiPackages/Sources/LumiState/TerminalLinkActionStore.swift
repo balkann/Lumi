@@ -24,6 +24,12 @@ public struct TerminalLinkAction: Identifiable, Equatable, Sendable {
     public let title: String
     public let intent: TerminalLinkIntent
 
+    public init(slot: Slot, title: String, intent: TerminalLinkIntent) {
+        self.slot = slot
+        self.title = title
+        self.intent = intent
+    }
+
     public var id: String { slot.rawValue }
 
     /// Satırın sağındaki tuş kombinasyonu.

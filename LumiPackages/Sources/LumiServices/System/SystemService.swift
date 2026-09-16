@@ -96,6 +96,12 @@ public final class SystemService: SystemServicing {
         Task { await operations.revealInFinder(path: path) }
     }
 
+    /// Karar 57: terminal linkinden varsayılan uygulamada açma.
+    public func openWithDefaultApp(path: String) {
+        let operations = fileOperations
+        Task { await operations.openWithDefaultApp(path: path) }
+    }
+
     @MainActor
     public func chooseFolder() async -> String? {
         await folderChooser.choose()

@@ -15,17 +15,25 @@ public struct ShellActions {
     public let trash: @MainActor (String, String) -> Void
     /// Mutlak proje/workspace yolunu Finder'da göster (karar 51).
     public let revealPath: @MainActor (String) -> Void
+    /// http/https linkini sistemdeki varsayılan tarayıcıda aç (karar 57).
+    public let openURL: @MainActor (URL) -> Void
+    /// Dosyayı sistemin varsayılan uygulamasında aç (karar 57).
+    public let openPath: @MainActor (String) -> Void
 
     public init(
         chooseFolder: @escaping @MainActor () async -> String?,
         reveal: @escaping @MainActor (String, String) -> Void,
         trash: @escaping @MainActor (String, String) -> Void,
-        revealPath: @escaping @MainActor (String) -> Void = { _ in }
+        revealPath: @escaping @MainActor (String) -> Void = { _ in },
+        openURL: @escaping @MainActor (URL) -> Void = { _ in },
+        openPath: @escaping @MainActor (String) -> Void = { _ in }
     ) {
         self.chooseFolder = chooseFolder
         self.reveal = reveal
         self.trash = trash
         self.revealPath = revealPath
+        self.openURL = openURL
+        self.openPath = openPath
     }
 }
 
@@ -70,6 +78,8 @@ public final class ShellContext {
     public let deepSeek: DeepSeekStore
     /// Claude hesapları (karar 56) — Settings ▸ Accounts + usage popover'ı.
     public let claudeAccounts: ClaudeAccountStore
+    /// Terminal link eylemleri (karar 57) — tık noktasındaki popover.
+    public let terminalLinks: TerminalLinkActionStore
     /// Alt bar store'ları (karar 43).
     public let computerAwake: ComputerAwakeStore
     public let resourceUsage: ResourceUsageStore
@@ -100,6 +110,7 @@ public final class ShellContext {
         usage: [AgentProvider: UsageStore],
         deepSeek: DeepSeekStore,
         claudeAccounts: ClaudeAccountStore,
+        terminalLinks: TerminalLinkActionStore,
         computerAwake: ComputerAwakeStore,
         resourceUsage: ResourceUsageStore,
         viewProvider: any TerminalViewProviding,
@@ -125,6 +136,7 @@ public final class ShellContext {
         self.usage = usage
         self.deepSeek = deepSeek
         self.claudeAccounts = claudeAccounts
+        self.terminalLinks = terminalLinks
         self.computerAwake = computerAwake
         self.resourceUsage = resourceUsage
         self.viewProvider = viewProvider
@@ -271,6 +283,24 @@ public final class ShellContext {
         let request = await plastic.checkinMessageRequest(repoPath)
         guard let message = await commitAssistant.generate(repoPath, request: request) else { return }
         if plastic.checkinMessage(for: repoPath) == draftBefore { plastic.setCheckinMessage(message, for: repoPath) }
+    }
+
+    // MARK: - Terminal link eylemleri (karar 57)
+
+    /// Store yalnız niyeti üretir; sekme/FileViewer/Finder burada işletilir.
+    public func performTerminalLinkIntent(_ intent: TerminalLinkIntent) {
+        switch intent {
+        case .openURL(let url):
+            actions.openURL(url)
+        case .switchWorkspace(let path):
+            navigation.openTab(path)
+        case .openFile(let repoPath, let filePath):
+            Task { await fileViewer.presentView(repoPath: repoPath, filePath: filePath) }
+        case .openWithDefaultApp(let path):
+            actions.openPath(path)
+        case .revealInFinder(let path):
+            actions.revealPath(path)
+        }
     }
 
     public func reveal(_ relativePath: String) {

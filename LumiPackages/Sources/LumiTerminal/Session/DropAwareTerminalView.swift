@@ -89,6 +89,10 @@ final class DropAwareTerminalView: TerminalView {
     /// (Claude tıkı hiç görmez), değilse olduğu gibi akar.
     var onLinkGestureEnded: ((_ claimed: Bool) -> Void)?
 
+    /// Karar 57: düz tıkla açılan eylem popover'ı. Kapalıyken düz tık terminale
+    /// aittir; ⌘ / ⇧⌘ doğrudan açma her hâlde çalışır.
+    var isLinkActionsEnabled = true
+
     private var linkGesture = TerminalLinkGestureTracker()
     /// `.actions` jestinde `super.mouseDown` çağrıldığı için SwiftTerm seçim/
     /// rapor akışı normal işler; raporlar oturumda bekletilir.
@@ -96,7 +100,9 @@ final class DropAwareTerminalView: TerminalView {
 
     override func mouseDown(with event: NSEvent) {
         linkGesture.cancel()
-        guard let gesture = Self.gesture(for: event), let link = link(at: event) else {
+        guard let gesture = Self.gesture(for: event),
+              gesture != .actions || isLinkActionsEnabled,
+              let link = link(at: event) else {
             finishDeferredReports(claimed: false)
             super.mouseDown(with: event)
             return

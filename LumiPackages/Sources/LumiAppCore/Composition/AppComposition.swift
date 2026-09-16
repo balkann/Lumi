@@ -49,12 +49,13 @@ struct AppComposition {
             guard let store = usage?.usageStores[.claude] else { return }
             Task { await store.refreshAfterSourceChange() }
         })
+        let terminalLinks = TerminalLinkActionsAssembly()
         let container = AppContainer(
             services: registry,
             shared: shared,
             assemblies: [
                 agentHooks, terminal, notifications, sessionSchedule, usage, repo, workspaceBoot,
-                statusBar, deepSeek, tasks, claudeAccounts,
+                statusBar, deepSeek, tasks, claudeAccounts, terminalLinks,
             ]
         )
         let shell = ShellComposition.make(
@@ -68,7 +69,8 @@ struct AppComposition {
             statusBar: statusBar,
             deepSeek: deepSeek,
             claudeAccounts: claudeAccounts,
-            contributors: [tasks, terminal, repo, usage, statusBar, claudeAccounts]
+            terminalLinks: terminalLinks,
+            contributors: [tasks, terminal, repo, usage, statusBar, claudeAccounts, terminalLinks]
         )
         return AppComposition(
             registry: registry,

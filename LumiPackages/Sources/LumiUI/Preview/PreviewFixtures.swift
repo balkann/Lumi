@@ -56,6 +56,12 @@ public extension ShellContext {
             claudeAccounts: ClaudeAccountStore(
                 service: PreviewClaudeAccountService(), toasts: shared.toasts
             ),
+            terminalLinks: TerminalLinkActionStore(
+                terminals: shared.terminals, repos: repos,
+                workspaces: ProjectWorkspaceStore(
+                    service: PreviewWorkspaceService(), config: config, repos: repos, toasts: shared.toasts
+                )
+            ),
             computerAwake: ComputerAwakeStore(
                 terminals: shared.terminals, settings: shared.settings, assertion: PreviewSleepAssertion()
             ),
@@ -165,6 +171,7 @@ private final class PreviewTerminalService: TerminalServicing {
     func shutdown() {}
     func applyFont(_ font: NSFont) {}
     func applyCursor(shape: TerminalCursorShape, blink: Bool) {}
+    func applyLinkActions(enabled: Bool) {}
 }
 
 @MainActor
@@ -476,6 +483,7 @@ private struct PreviewSessionStarterService: SessionStarterServicing {
 private struct PreviewSystemService: SystemServicing {
     func runChecks(selectedProvider: AgentProvider) async -> [SystemCheckResult] { [] }
     func fixProcessPath() async {}
+    func openWithDefaultApp(path: String) {}
     func openExternal(_ url: URL) throws {}
     func trash(path: String) async throws {}
     func revealInFinder(path: String) {}

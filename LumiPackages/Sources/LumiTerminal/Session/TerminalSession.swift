@@ -243,6 +243,11 @@ final class TerminalSession {
         }
     }
 
+    /// Karar 57: düz tıkla açılan link eylemleri (Settings ▸ Terminal).
+    func setLinkActionsEnabled(_ enabled: Bool) {
+        (terminalView as? DropAwareTerminalView)?.isLinkActionsEnabled = enabled
+    }
+
     /// Tüm PTY-bound yazımların tek hunisi (design/01 §4): klavye, SwiftTerm
     /// oto-yanıtları, programatik write — hepsi filtre + serial io queue'dan geçer.
     func write(_ data: Data) {

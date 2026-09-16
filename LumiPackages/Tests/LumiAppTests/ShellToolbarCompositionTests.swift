@@ -25,7 +25,7 @@ final class ShellToolbarCompositionTests: XCTestCase {
         registries = ShellComposition.makeRegistries(
             contributors: [
                 TasksFeatureAssembly(), TerminalFeatureAssembly(), RepoFeatureAssembly(), UsageFeatureAssembly(),
-                StatusBarFeatureAssembly(),
+                StatusBarFeatureAssembly(), TerminalLinkActionsAssembly(),
             ]
         )
     }
@@ -52,6 +52,23 @@ final class ShellToolbarCompositionTests: XCTestCase {
             .panelToggle(.right),
         ])
         XCTAssertFalse(ids(.trailing).contains(.settings), "settings alt barda (karar 43)")
+    }
+
+    // MARK: - Overlay'ler
+
+    /// Karar 57: link eylemi popover'ı yalnız açık bir istek varken çizilir.
+    func testTerminalLinkOverlayIsRegisteredAndGatedOnAnOpenRequest() {
+        let descriptor = registries.overlays.all.first { $0.id == .terminalLinkActions }
+        XCTAssertNotNil(descriptor, "terminalLinkActions overlay'i kayıtlı değil")
+        XCTAssertEqual(descriptor?.alignment, .topLeading)
+        XCTAssertFalse(descriptor?.isPresented(fixture.context) ?? true)
+
+        fixture.context.terminalLinks.handle(TerminalLinkActivation(
+            terminalID: TerminalID(), link: "/tmp/logs",
+            gesture: .actions, anchor: CGPoint(x: 4, y: 4)
+        ))
+
+        XCTAssertTrue(descriptor?.isPresented(fixture.context) ?? false)
     }
 
     // MARK: - Alt bar (karar 43)
@@ -199,6 +216,9 @@ private struct ShellFixture {
             usage: [:],
             deepSeek: DeepSeekStore(service: FakeDeepSeekEnvironmentService(), toasts: toasts),
             claudeAccounts: ClaudeAccountStore(service: FakeClaudeAccountService(), toasts: toasts),
+            terminalLinks: TerminalLinkActionStore(
+                terminals: shared.terminals, repos: repos, workspaces: ProjectWorkspaceStore(service: FakeWorkspaceService(), config: config, repos: repos, toasts: toasts)
+            ),
             computerAwake: ComputerAwakeStore(
                 terminals: shared.terminals, settings: shared.settings, assertion: FakeSleepAssertion()
             ),

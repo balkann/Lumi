@@ -185,6 +185,7 @@ final class ConfigCodecIntegrityTests: XCTestCase {
         usageIndicators: UsageIndicators(claude: false, codex: true),
         computerAwakeMode: .auto,
         agentHooksEnabled: false,
+        terminalLinkActionsEnabled: false,
         claudeAccounts: [
             ClaudeAccount(
                 id: ConfigCodecIntegrityTests.accountID,

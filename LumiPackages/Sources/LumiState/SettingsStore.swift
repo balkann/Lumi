@@ -133,6 +133,11 @@ public final class SettingsStore: StoreLifecycle {
         apply { $0.agentHooksEnabled = enabled }
     }
 
+    /// Karar 57: düz tıkla açılan terminal link eylemleri.
+    public func setTerminalLinkActionsEnabled(_ enabled: Bool) {
+        apply { $0.terminalLinkActionsEnabled = enabled }
+    }
+
     public func setSessionTrigger(_ trigger: SessionTrigger) {
         apply { $0.sessionTrigger = trigger }
     }

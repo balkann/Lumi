@@ -73,6 +73,10 @@ final class TerminalFeatureAssembly: FeatureAssembly, ShellContributing {
             || old.terminalCursorBlink != new.terminalCursorBlink {
             applyCursor(new)
         }
+        // Karar 57
+        if old.terminalLinkActionsEnabled != new.terminalLinkActionsEnabled {
+            services.terminal.applyLinkActions(enabled: new.terminalLinkActionsEnabled)
+        }
         // Karar 24
         if old.autoMinimizeOnSend != new.autoMinimizeOnSend {
             shared.terminals.applyAutoMinimize(new.autoMinimizeOnSend)
@@ -91,6 +95,7 @@ final class TerminalFeatureAssembly: FeatureAssembly, ShellContributing {
     private func applyAppearance(_ config: AppConfig) {
         applyFont(config)
         applyCursor(config)
+        services.terminal.applyLinkActions(enabled: config.terminalLinkActionsEnabled)
     }
 
     private func applyFont(_ config: AppConfig) {
