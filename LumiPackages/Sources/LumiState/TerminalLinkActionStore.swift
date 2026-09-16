@@ -69,14 +69,6 @@ public struct TerminalLinkRequest: Identifiable, Equatable, Sendable {
         return false
     }
 
-    /// Dosya hedeflerinde ⌘ tık BİLE doğrudan açmaz, popover sorar (kullanıcı
-    /// kararı: "file path'leri direkt Lumi'de açmasın, Finder mı Lumi mi diye
-    /// sorsun"). Workspace / dizin / URL'de ⌘ doğrudan çalışır.
-    public var asksBeforePrimary: Bool {
-        if case .file = target { return true }
-        return false
-    }
-
     public var actions: [TerminalLinkAction] {
         [primary, alternate, extra].compactMap { $0 }
     }
@@ -155,8 +147,9 @@ public final class TerminalLinkActionStore {
         case .actions:
             request = resolved
         case .primary:
-            // Dosyada doğrudan açma YOK: popover "Lumi mi Finder mı" diye sorar.
-            if resolved.asksBeforePrimary { request = resolved } else { perform(resolved.primary) }
+            // Popover'ın kendi ipucu "⌘ Click → birincil eylem" diyor; dosyada
+            // da doğrudan çalışır. "Lumi mi Finder mı" sorusu DÜZ tıkın işidir.
+            perform(resolved.primary)
         case .alternate:
             // Alternatifi olmayan hedefte (URL, dizin) ⇧⌘ birincil eylemi işletir.
             perform(resolved.alternate ?? resolved.primary)

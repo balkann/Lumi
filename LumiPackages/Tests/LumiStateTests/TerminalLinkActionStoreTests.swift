@@ -64,17 +64,15 @@ final class TerminalLinkActionStoreTests: XCTestCase {
         XCTAssertTrue(intents.isEmpty, "popover açılırken eylem çalışmamalı")
     }
 
-    /// Kullanıcı kararı: dosya yolu DOĞRUDAN Lumi'de açılmaz — ⌘ tık da sorar.
-    func testCommandClickOnAFileAsksInsteadOfOpening() async {
+    /// Popover'ın kendi ipucu "⌘ Click → birincil eylem" diyor: dosyada da
+    /// doğrudan çalışır, sormaz. Seçim sorusu DÜZ tıkın işidir.
+    func testCommandClickRunsPrimaryOnFilesToo() async {
         await activate("src/App.swift", .primary)
 
-        XCTAssertEqual(store.request?.primary.intent, .openFile(
-            repoPath: "/projects/game", filePath: "src/App.swift"
-        ))
-        XCTAssertTrue(intents.isEmpty, "dosya hedefi doğrudan açılmamalı")
+        XCTAssertNil(store.request)
+        XCTAssertEqual(intents, [.openFile(repoPath: "/projects/game", filePath: "src/App.swift")])
     }
 
-    /// Workspace / dizin / URL'de ⌘ tık doğrudan çalışmaya devam eder.
     func testCommandClickRunsPrimaryForNonFileTargets() async {
         await activate("/workspaces/review", .primary)
 

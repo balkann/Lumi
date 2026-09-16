@@ -74,11 +74,14 @@ struct TerminalLinkActionPopover: View {
                 Text(action.title)
                     .font(Theme.Typography.ui(.body))
                     .lineLimit(1)
+                    .truncationMode(.tail)
+                    .layoutPriority(-1)
                 Spacer(minLength: Theme.Spacing.md)
                 if !action.shortcutKeys.isEmpty {
                     HStack(spacing: Theme.Spacing.xs) {
                         ForEach(action.shortcutKeys, id: \.self) { Keycap(key: $0) }
                     }
+                    .fixedSize()
                     .accessibilityHidden(true)
                 }
             }
