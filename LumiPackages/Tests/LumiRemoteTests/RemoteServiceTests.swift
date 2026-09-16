@@ -152,7 +152,7 @@ final class FakeTerminalServicing: TerminalServicing {
     }
 
     func writeInput(_ data: Data, to id: TerminalID) {
-        writtenInput[id] = data
+        writtenInput[id, default: Data()].append(data)   // biriktirir (paced çok-grup için)
         for c in inputContinuations { c.yield(()) }
     }
 

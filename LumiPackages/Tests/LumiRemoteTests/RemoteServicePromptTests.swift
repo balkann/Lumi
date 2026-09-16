@@ -59,4 +59,37 @@ import LumiTestSupport
         #expect(term.writtenInput[id] == Data([0x1b]))
         svc.stop()
     }
+
+    @Test func multiSelectQuestionWritesFullPacedSequence() async throws {
+        let conn = FakeRelayConnection(); let term = FakeTerminalServicing(); let hooks = FakeAgentHookServer()
+        let uuid = UUID()
+        term.metas.append(TerminalMeta(id: TerminalID(raw: uuid), name: "T", repoPath: "/repo",
+                                       createdAt: Date(), claudeSessionID: uuid.uuidString))
+        let sid = TerminalID(raw: uuid).description; let id = TerminalID(raw: uuid)
+        let svc = RemoteService(paths: .testDefaults(), terminal: term, repos: FakeRepoService(),
+            connection: conn, chatSource: FakeChatTranscriptSource(events: []), hookEvents: hooks.events(),
+            keystrokeScheduler: InstantScheduler())
+        await svc.start()
+        await conn.injectInbound(type: "subscribe", payload: ["sessionId": sid, "mode": "chat"])
+        try await conn.waitForSent(types: ["chat_status"])
+        hooks.emit(hookEvent(.preToolUse, terminalID: id, tool: "AskUserQuestion",
+            input: #"{"questions":[{"question":"Pick","multiSelect":true,"options":[{"label":"A"},{"label":"B"}]}]}"#, useID: "q1"))
+        try await conn.waitForCount(type: "prompt", atLeast: 1)
+        #expect(await conn.lastBool(type: "prompt", key: "multiSelect") == true)
+
+        // selections [0,1] → buildAskAnswerKeys → "1","2","\u{1b}[C","\r"
+        await conn.injectInbound(type: "prompt_respond",
+            payload: ["sessionId": sid, "itemId": "q1", "expectedRevision": 0, "selections": [["indices": [0, 1]]]])
+        try await conn.waitForCount(type: "prompt", atLeast: 2)   // resolved
+        let expected = Data([0x31, 0x32, 0x1b, 0x5b, 0x43, 0x0d])
+        var ok = false
+        for _ in 0..<200 { if term.writtenInput[id] == expected { ok = true; break }; try await Task.sleep(for: .milliseconds(5)) }
+        #expect(ok)
+        svc.stop()
+    }
+}
+
+/// Test için ani-çalışan scheduler (pacing gecikmesi yok).
+struct InstantScheduler: KeystrokeScheduling {
+    func sleep(_ duration: Duration) async throws {}
 }

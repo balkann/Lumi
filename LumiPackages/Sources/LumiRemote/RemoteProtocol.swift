@@ -110,13 +110,25 @@ enum RemoteProtocol {
 
     // MARK: Decode helpers (relay → Mac)
 
-    /// `prompt_respond` çözer (Faz 3). Telefon→Mac.
+    /// `prompt_respond` (approval) çözer — optionId (Faz 3). Telefon→Mac.
     static func decodePromptRespond(_ payload: [String: Any]) -> (sessionId: String, itemId: String, expectedRevision: Int, optionId: String)? {
         guard let sessionId = payload["sessionId"] as? String,
               let itemId = payload["itemId"] as? String,
               let rev = payload["expectedRevision"] as? Int,
               let optionId = payload["optionId"] as? String else { return nil }
         return (sessionId, itemId, rev, optionId)
+    }
+
+    /// `prompt_respond` (question) çözer — soru başına selection (Faz 3.1). Telefon→Mac.
+    static func decodePromptRespondSelections(_ payload: [String: Any]) -> (sessionId: String, itemId: String, expectedRevision: Int, selections: [AskSelection])? {
+        guard let sessionId = payload["sessionId"] as? String,
+              let itemId = payload["itemId"] as? String,
+              let rev = payload["expectedRevision"] as? Int,
+              let raw = payload["selections"] as? [[String: Any]] else { return nil }
+        let selections = raw.map { d in
+            AskSelection(indices: (d["indices"] as? [Int]) ?? [], other: d["other"] as? String)
+        }
+        return (sessionId, itemId, rev, selections)
     }
 
     /// `subscribe` mesajından sessionId çıkarır.

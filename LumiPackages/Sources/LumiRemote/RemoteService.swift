@@ -39,6 +39,9 @@ public final class RemoteService: RemoteServicing {
     private var turnReducers: [TerminalID: TurnStatusReducer] = [:]
     /// Faz 3: session başına etkileşimli prompt journal'ı.
     private var promptJournals: [TerminalID: PromptJournal] = [:]
+    /// Faz 3.1: soru cevabı keystroke'larını 1000ms aralıkla yazan iptal-edilebilir task'lar.
+    private let keystrokeScheduler: any KeystrokeScheduling
+    private var promptWriteTasks: [TerminalID: Task<Void, Never>] = [:]
     private var promptSeq = 0
     private var hookTask: Task<Void, Never>?
 
@@ -62,7 +65,8 @@ public final class RemoteService: RemoteServicing {
         chatSource: any ChatTranscriptSourcing,
         trust: any ClaudeWorkspaceTrusting = NoopClaudeWorkspaceTrust(),
         hookEvents: AsyncStream<AgentHookEvent> = AsyncStream { _ in },
-        turnClock: @escaping @Sendable () -> Date = { Date() }
+        turnClock: @escaping @Sendable () -> Date = { Date() },
+        keystrokeScheduler: any KeystrokeScheduling = LiveKeystrokeScheduler()
     ) {
         self.configService = RemoteConfigService(paths: paths)
         self.terminal = terminal
@@ -72,6 +76,7 @@ public final class RemoteService: RemoteServicing {
         self.chatSource = chatSource
         self.hookEvents = hookEvents
         self.turnClock = turnClock
+        self.keystrokeScheduler = keystrokeScheduler
     }
 
     public func events() -> AsyncStream<RemoteEvent> { broadcaster.stream() }
@@ -123,6 +128,8 @@ public final class RemoteService: RemoteServicing {
         hookTask?.cancel(); hookTask = nil
         turnReducers.removeAll()
         promptJournals.removeAll()
+        for t in promptWriteTasks.values { t.cancel() }
+        promptWriteTasks.removeAll()
         seqCounters.removeAll()
         await connection.stop()
         setState(.disconnected)
@@ -185,6 +192,7 @@ public final class RemoteService: RemoteServicing {
                 modelCache[id] = nil
                 turnReducers[id] = nil
                 promptJournals[id] = nil
+                promptWriteTasks[id]?.cancel(); promptWriteTasks[id] = nil
             }
             await sendSessions()
         case .titleChanged, .awaitingDecisionChanged, .bell, .providerChanged, .writeFailed, .stalled, .viewFocused:
@@ -354,8 +362,10 @@ public final class RemoteService: RemoteServicing {
         )
     }
 
-    /// Faz 3: telefon cevabını (optionId) keystroke'a çevirip PTY'ye yazar + resolved yayınlar.
+    /// Telefon cevabını PTY'ye ulaştırır. `selections` varsa Faz 3.1 soru yolu (paced);
+    /// yoksa Faz 3 approval (ve legacy tek-soru) optionId → tek keystroke.
     private func handlePromptRespond(_ payload: [String: Any]) {
+        if payload["selections"] != nil { handleQuestionRespond(payload); return }
         guard let r = RemoteProtocol.decodePromptRespond(payload),
               let id = terminalID(from: r.sessionId),
               let journal = promptJournals[id],
@@ -367,6 +377,60 @@ public final class RemoteService: RemoteServicing {
             Task { await emitPrompt(id: id, prompt: resolved) }
         }
     }
+
+    /// Faz 3.1: soru cevabı (selections) → buildAskAnswerKeys → key group'ları 1000ms aralıkla PTY.
+    private func handleQuestionRespond(_ payload: [String: Any]) {
+        guard let r = RemoteProtocol.decodePromptRespondSelections(payload),
+              let id = terminalID(from: r.sessionId),
+              let journal = promptJournals[id],
+              let item = journal.items.first(where: { $0.itemId == r.itemId }),
+              item.state == .pending, item.revision == r.expectedRevision,
+              item.kind == .question else { return }
+        // Codex provider wiring ertelendi (spec): Claude buildAskAnswerKeys.
+        let groups = buildAskAnswerKeys(questions: askInputs(from: item), selections: r.selections)
+        guard !groups.isEmpty else { return }
+        writeKeyGroups(id: id, groups: groups)
+        if let resolved = journal.resolve(itemId: r.itemId, optionId: "submitted") {
+            Task { await emitPrompt(id: id, prompt: resolved) }
+        }
+    }
+
+    /// ChatPrompt'tan buildAskAnswerKeys girdisi: gruplu → questions; tek-soru → flat title/options.
+    private func askInputs(from item: ChatPrompt) -> [AskQuestionInput] {
+        if !item.questions.isEmpty {
+            return item.questions.map {
+                AskQuestionInput(question: $0.question, header: $0.header,
+                                 multiSelect: $0.multiSelect, optionLabels: $0.options.map(\.label))
+            }
+        }
+        return [AskQuestionInput(question: item.title, header: nil,
+                                 multiSelect: item.multiSelect, optionLabels: item.options.map(\.label))]
+    }
+
+    /// orca pacing: her grubu 1000ms aralıkla, iptal-edilebilir yazar (@MainActor).
+    private func writeKeyGroups(id: TerminalID, groups: [KeyGroup]) {
+        promptWriteTasks[id]?.cancel()
+        let scheduler = keystrokeScheduler
+        promptWriteTasks[id] = Task { [weak self] in
+            for (i, group) in groups.enumerated() {
+                if i > 0 { try? await scheduler.sleep(.milliseconds(1000)) }
+                if Task.isCancelled { return }
+                await self?.writeGroup(group, to: id)
+            }
+            await self?.clearPromptWriteTask(id)
+        }
+    }
+
+    private func writeGroup(_ group: KeyGroup, to id: TerminalID) {
+        let data: Data
+        switch group {
+        case .raw(let s): data = Data(s.utf8)
+        case .text(let s): data = Data(("\u{1b}[200~" + s + "\u{1b}[201~").utf8)  // bracketed paste
+        }
+        terminal.writeInput(data, to: id)
+    }
+
+    private func clearPromptWriteTask(_ id: TerminalID) { promptWriteTasks[id] = nil }
 
     /// orca keystroke haritası (kesin): allow=byte 0x31 ('1'), deny=0x1b (ESC),
     /// question index i (0-tabanlı) → byte 0x31+i ('1'…'9'). Trailing Enter yok.
