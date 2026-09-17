@@ -1,3 +1,4 @@
+import LumiKit
 import XCTest
 @testable import LumiUI
 
@@ -5,7 +6,7 @@ import XCTest
 /// Liste MainMenuBuilder'ın görsel aynası — sapmaları erken yakalar.
 final class ShortcutReferenceTests: XCTestCase {
     func testCoversEveryMenuShortcutAction() {
-        let actions = Set(ShortcutReference.all.map(\.action))
+        let actions = Set(ShortcutReference.list().map(\.action))
 
         // MainMenuBuilder'daki kullanıcıya görünür kısayol aksiyonları
         let expected: Set<String> = [
@@ -21,7 +22,7 @@ final class ShortcutReferenceTests: XCTestCase {
 
     func testEveryComboIsNonEmpty() {
         // Repo tab geçişi ⌘'siz TEK kısayoldur (karar 55): ⌘1…⌘9 terminalde.
-        for ref in ShortcutReference.all {
+        for ref in ShortcutReference.list() {
             XCTAssertFalse(ref.combos.isEmpty, "\(ref.action) kombosuz")
             let expectedModifier = ref.action == "Switch to Tab N" ? "⌃" : "⌘"
             for combo in ref.combos {
@@ -35,12 +36,27 @@ final class ShortcutReferenceTests: XCTestCase {
     }
 
     func testRangeShortcutHasTwoCombos() {
-        let tabN = ShortcutReference.all.first { $0.action == "Switch to Tab N" }
+        let tabN = ShortcutReference.list().first { $0.action == "Switch to Tab N" }
         XCTAssertEqual(tabN?.combos.count, 2, "aralıklı kısayol iki kombo (⌃1 – ⌃9) olmalı")
     }
 
+    /// Karar 58: tablo menüyle aynı düzenden türer — takas edilince satırların
+    /// etiketleri aynı kalır, YALNIZ indeksli iki ailenin sembolü yer değiştirir.
+    func testSwappedStyleSwapsOnlyTheIndexedRows() {
+        let swapped = ShortcutReference.list(style: .repoOnCommand)
+        XCTAssertEqual(swapped.map(\.action), ShortcutReference.list().map(\.action))
+        XCTAssertEqual(
+            swapped.first { $0.action == "Switch to Tab N" }?.combos,
+            [["⌘", "1"], ["⌘", "9"]]
+        )
+        XCTAssertEqual(
+            swapped.first { $0.action == "Focus Terminal N" }?.combos,
+            [["⌃", "1"], ["⌃", "9"]]
+        )
+    }
+
     func testActionsAreUnique() {
-        let actions = ShortcutReference.all.map(\.action)
+        let actions = ShortcutReference.list().map(\.action)
         XCTAssertEqual(actions.count, Set(actions).count, "aksiyon adları benzersiz olmalı")
     }
 }

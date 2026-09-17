@@ -177,6 +177,7 @@ final class ConfigCodecIntegrityTests: XCTestCase {
         usageIndicators: UsageIndicators(claude: false, codex: true),
         computerAwakeMode: .auto,
         agentHooksEnabled: false,
+        indexShortcutStyle: .repoOnCommand,
         workspaces: [ProjectWorkspace(projectPath: "/p", path: "/w", name: "Feature", branch: "feature", scm: .git)],
         sidebarProjectPaths: ["/tmp/selected", "/tmp/another"]
     )

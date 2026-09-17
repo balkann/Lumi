@@ -429,7 +429,6 @@ Kullanıcı isteği: kendi Claude/Codex oturumlarını ekip arkadaşlarına gön
 
 - **Kişisel build ayarları:** `Scripts/make-app.sh` repo'da kalır (CI `release.yml` hem sürüm doğrulaması hem notarize build için ona bağlıdır), ama varsa `Scripts/make-app.local.sh`'ı source eder ve kurulumdan sonra tanımlıysa `post_install` fonksiyonunu çağırır. Yerel dosya `.gitignore`'dadır; yokken script aynen davranır, CI etkilenmez.
 
-
 ### 57. Arayüz zoom'u: token ölçeği (⌘+ / ⌘− / ⌘0) (2026-09-16)
 
 - **Kapsam:** zoom yalnız terminal fontunu değil **tüm arayüzü** ölçekler — Electron sürümünün `zoomIn`/`zoomOut`/`resetZoom` role'leri Chromium'un page zoom'uydu ve sidebar/panel/terminal birlikte büyürdü. Settings ▸ Terminal'deki font boyutu ayarı yerinde kalır; ölçekle **çarpılır**.
@@ -441,3 +440,12 @@ Kullanıcı isteği: kendi Claude/Codex oturumlarını ekip arkadaşlarına gön
 - **Kapsam dışı:** panel genişlikleri (kullanıcının sürükleyerek ayarladığı, `panelLayout`'ta px olarak persist edilen değerler) ölçeklenmez — zoom'da panel oransal olarak daralır/genişler. Gerekirse ayrı ele alınır.
 - **Sınırlar:** `UIState.uiScale` (additive, `ui-state.json`; %100'de anahtar YAZILMAZ — karar 9) → `LayoutStore.uiScale` + `zoomIn/zoomOut/resetZoom` + `onUIScaleChanged` → `AppDelegate.applyUIScale` → `Theme.uiScale` + `replaceContentView` + `applyFont`. Store `Theme`'i ve AppKit'i tanımaz.
 
+### 58. İndeksli kısayolların ⌘/⌃ ekseni ayardan takas edilebilir (2026-09-16)
+
+- **Kapsam:** karar 55'in iki indeksli ailesi (repo TAB geçişi / aktif repo içindeki terminal) aynı kalır; yalnız hangi ailenin ⌘ hangisinin ⌃ olacağı kullanıcı ayarıdır. **Varsayılan değişmedi:** ⌃1…⌃9 repo, ⌘1…⌘9 terminal (`repoOnControl`). Takas edilince (`repoOnCommand`) ⌘1…⌘9 repo, ⌃1…⌃9 terminal olur. Komutların NE YAPTIĞI, kimlikleri, menü başlıkları ve Shortcuts tablosundaki sırası her iki düzende de aynıdır.
+- **Tek kaynak korunur:** `AppCommands` ham tablosu (`table`) artık **private**'tır; menü, dispatcher ve Shortcuts tablosu yalnız `all(_:)` / `commands(in:style:)` / `reference(_:)` üzerinden okur ve düzen bu fonksiyonlarda `AppCommand.withModifiers` ile uygulanır. Böylece düzeni atlayan bir okuma yolu yapısal olarak yoktur; `MainMenuBuilder.build(dispatcher:style:)` ile `ShortcutReference.list(style:)` aynı üç fonksiyondan türer.
+- **Menü YENİDEN KURULUR:** `NSMenuItem.keyEquivalentModifierMask` ancak yeni item'larla değişir. Ayar değişimi bir config yan etkisidir: `AppDelegate` kendini assembly olmayan tek gözlemci olarak `ConfigChangeBridge` ile `AppContainer.registerConfigObserver`'a bağlar ve düzen gerçekten değiştiyse `MainMenuBuilder.install` çağırır. Köprü gerekli çünkü koordinatör gözlemcilerini güçlü tutar — AppDelegate'i doğrudan kaydetmek kabuk ↔ container döngüsü kurardı.
+- **Açılışta iki adım:** menü, config diskten okunmadan önce varsayılan düzende kurulur (menü çubuğu launch'ta boş kalmasın), bootstrap bitince gerçek düzen uygulanır. `installedShortcutStyle` alanı gereksiz yeniden kurulumu engeller.
+- **Sınırlar:** `AppConfig.indexShortcutStyle` (`IndexShortcutStyle`, additive — karar 9: yoksa/geçersizse `repoOnControl`, `~/.lumi/config.json`) → `SettingsStore.setIndexShortcutStyle` → `AppDelegate.applyShortcutStyle`. Settings ▸ Shortcuts sekmesi salt-okunur olmaktan çıkıp tek bir `LumiSegmented` kontrolü kazandı; altındaki tablo seçilen düzeni ANINDA yansıtır.
+- **Karar 55'in Mission Control sınırı yerinde durur** ama artık kaçış yolu var: ⌃1…⌃9 masaüstü geçişine takılıyorsa kullanıcı takası açar ve repo tab'ları ⌘1…⌘9'a taşınır (bu kez ⌃1…⌃9'a düşen terminal odağı kısayolları aynı sistem çakışmasını yaşar; ⌃6 SwiftTerm'de `0x1E` üretir). Uygulama içi telafi (CGEventTap + Accessibility izni) hâlâ kapsam dışıdır.
+- **Kapsam dışı:** kısayolların tek tek yeniden atanması (tuş yakalayıcı + çakışma çözümü). Ayar iki hazır düzen arasında seçim yapar, keyfi bir keymap editörü değildir.

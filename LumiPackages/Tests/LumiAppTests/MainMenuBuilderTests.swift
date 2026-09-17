@@ -11,8 +11,10 @@ import LumiUI
 final class MainMenuBuilderTests: XCTestCase {
     private let dispatcher = MenuActionDispatcher()
 
-    private func buildMenus() -> MainMenuBuilder.Menus {
-        MainMenuBuilder.build(dispatcher: dispatcher)
+    private func buildMenus(
+        style: IndexShortcutStyle = .default
+    ) -> MainMenuBuilder.Menus {
+        MainMenuBuilder.build(dispatcher: dispatcher, style: style)
     }
 
     // MARK: - Menü ağacı
@@ -59,7 +61,7 @@ final class MainMenuBuilderTests: XCTestCase {
     /// Tablodaki her komut menüde tam olarak beklenen kombo(lar)la görünür.
     func testEveryCommandInTheTableAppearsInTheMenu() {
         let menuCombos = Set(MenuShortcutExtractor.entries(in: buildMenus().mainMenu).map(\.combo))
-        for command in AppCommands.all {
+        for command in AppCommands.all() {
             for combo in command.displayCombosExpanded {
                 XCTAssertTrue(
                     menuCombos.contains(combo),
@@ -72,7 +74,7 @@ final class MainMenuBuilderTests: XCTestCase {
     /// Menüde tablonun DIŞINDA hiçbir kısayol yoktur — elle eklenen item
     /// tek kaynağı deler, test kırılır.
     func testMenuIntroducesNoShortcutOutsideTheTable() {
-        let tableCombos = Set(AppCommands.all.flatMap(\.displayCombosExpanded))
+        let tableCombos = Set(AppCommands.all().flatMap(\.displayCombosExpanded))
         for entry in MenuShortcutExtractor.entries(in: buildMenus().mainMenu) {
             XCTAssertTrue(
                 tableCombos.contains(entry.combo),
@@ -85,7 +87,7 @@ final class MainMenuBuilderTests: XCTestCase {
     /// responder chain'e gider (design/03 §2).
     func testAppSpecificItemsTargetTheDispatcherAndStandardsDoNot() {
         let menus = buildMenus()
-        for command in AppCommands.all where command.indexRange == nil {
+        for command in AppCommands.all() where command.indexRange == nil {
             guard let item = findItem(titled: command.title, in: menus.mainMenu) else {
                 return XCTFail("\(command.title) menüde yok")
             }
@@ -107,16 +109,44 @@ final class MainMenuBuilderTests: XCTestCase {
         }
     }
 
+    /// Karar 58: ayar takas edilince MENÜ de takas olur — indeksli item'ların
+    /// maskesi yer değiştirir, başlıkları/tag'leri aynı kalır.
+    func testSwappedStyleSwapsTheIndexedMenuModifiers() {
+        let menus = buildMenus(style: .repoOnCommand)
+        let repoItems = menus.mainMenu.items.compactMap(\.submenu)
+            .first { $0.title == "Shell" }?
+            .items.filter { $0.title.hasPrefix("Repository ") } ?? []
+        let terminalItems = menus.mainMenu.items.compactMap(\.submenu)
+            .first { $0.title == "Terminal" }?
+            .items.filter { $0.title.hasPrefix("Terminal ") } ?? []
+        XCTAssertEqual(repoItems.count, 9)
+        XCTAssertEqual(terminalItems.count, 9)
+        XCTAssertTrue(repoItems.allSatisfy { $0.keyEquivalentModifierMask == .command })
+        XCTAssertTrue(terminalItems.allSatisfy { $0.keyEquivalentModifierMask == .control })
+        XCTAssertEqual(repoItems.map(\.tag), Array(1...9))
+        XCTAssertEqual(terminalItems.map(\.tag), Array(1...9))
+    }
+
+    /// Takas edilmiş menüde de çakışan kısayol yoktur.
+    func testSwappedMenuHasNoDuplicateShortcuts() {
+        let combos = MenuShortcutExtractor
+            .entries(in: buildMenus(style: .repoOnCommand).mainMenu).map(\.combo)
+        var seen: Set<[String]> = []
+        for combo in combos {
+            XCTAssertTrue(seen.insert(combo).inserted, "çakışan kısayol: \(combo.joined())")
+        }
+    }
+
     // MARK: - Shortcuts referansı da aynı tablodan türer
 
     func testShortcutReferenceIsDerivedFromTheSameTable() {
         XCTAssertEqual(
-            ShortcutReference.all.map(\.action),
-            AppCommands.reference.map { $0.referenceTitle ?? $0.title }
+            ShortcutReference.list().map(\.action),
+            AppCommands.reference().map { $0.referenceTitle ?? $0.title }
         )
         XCTAssertEqual(
-            ShortcutReference.all.map(\.combos),
-            AppCommands.reference.map(\.displayCombos)
+            ShortcutReference.list().map(\.combos),
+            AppCommands.reference().map(\.displayCombos)
         )
     }
 
@@ -125,7 +155,7 @@ final class MainMenuBuilderTests: XCTestCase {
     /// burası kırılır — sessizce kaçmaz.
     func testSystemStandardCombosAreTheOnlyOnesMissingFromTheReference() {
         let menuCombos = Set(MenuShortcutExtractor.entries(in: buildMenus().mainMenu).map(\.combo))
-        let referenced = Set(AppCommands.reference.flatMap(\.displayCombosExpanded))
+        let referenced = Set(AppCommands.reference().flatMap(\.displayCombosExpanded))
         XCTAssertEqual(
             menuCombos.subtracting(referenced),
             [

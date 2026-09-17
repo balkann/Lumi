@@ -133,6 +133,7 @@ final class ConfigGoldenBytesTests: XCTestCase {
       "aiProvider" : "codex",
       "autoMinimizeOnSend" : true,
       "computerAwakeMode" : "auto",
+      "indexShortcutStyle" : "repoOnControl",
       "maxTerminals" : 12,
       "notifications" : {
         "seenEnabled" : false,

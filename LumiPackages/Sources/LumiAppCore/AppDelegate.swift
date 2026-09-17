@@ -17,6 +17,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let bridges = AppLifecycleBridges()
     private var harness: P1Harness?
     private var isShutdownComplete = false
+    /// Menüde KURULU olan indeksli kısayol düzeni (karar 58). Config yan
+    /// etkisi bununla karşılaştırılır — menü yalnız düzen değişince kurulur.
+    private var installedShortcutStyle = IndexShortcutStyle.default
+    private var shortcutStyleObserver: ConfigChangeBridge?
 
     init(pathsMode: LumiPaths.Mode) {
         self.pathsMode = pathsMode
@@ -43,13 +47,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         AppMenuCommands.register(in: dispatcher, shared: shared) { [weak self] in
             self?.openSettings()
         }
-        MainMenuBuilder.install(dispatcher: dispatcher)
+        // Config henüz diskten okunmadığı için menü varsayılan düzende kurulur;
+        // gerçek düzen bootstrap'ten sonra uygulanır (karar 58).
+        MainMenuBuilder.install(dispatcher: dispatcher, style: installedShortcutStyle)
+        observeShortcutStyle()
 
         Task { @MainActor in
             await composition.container.start()
+            applyShortcutStyle(shared.settings.current.indexShortcutStyle)
             await buildWindow()
             runP1HarnessIfRequested()
         }
+    }
+
+    // MARK: - İndeksli kısayol düzeni (karar 58)
+
+    /// Ayar değişince menü yeniden kurulur: `NSMenuItem` kısayolları ancak
+    /// yeni item'larla değişir, tablo da aynı düzenden türer.
+    private func observeShortcutStyle() {
+        let observer = ConfigChangeBridge { [weak self] old, new in
+            guard old.indexShortcutStyle != new.indexShortcutStyle else { return }
+            self?.applyShortcutStyle(new.indexShortcutStyle)
+        }
+        shortcutStyleObserver = observer
+        composition.container.registerConfigObserver(observer)
+    }
+
+    private func applyShortcutStyle(_ style: IndexShortcutStyle) {
+        guard installedShortcutStyle != style else { return }
+        installedShortcutStyle = style
+        MainMenuBuilder.install(dispatcher: dispatcher, style: style)
     }
 
     private func openSettings() {

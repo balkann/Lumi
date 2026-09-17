@@ -127,6 +127,23 @@ public struct AppCommand: Identifiable, Sendable, Equatable {
         self.referenceOrder = referenceOrder
     }
 
+    /// Yalnız değiştiricileri değişmiş kopya (karar 58: indeksli kısayol
+    /// düzeni ayardan gelir; komutun kimliği/başlığı/sırası aynı kalır).
+    public func withModifiers(_ modifiers: CommandModifiers) -> AppCommand {
+        AppCommand(
+            id: id,
+            title: title,
+            menu: menu,
+            key: key,
+            modifiers: modifiers,
+            isSystemStandard: isSystemStandard,
+            separatorBefore: separatorBefore,
+            indexRange: indexRange,
+            referenceTitle: referenceTitle,
+            referenceOrder: referenceOrder
+        )
+    }
+
     /// Kullanıcıya gösterilen kombo(lar). İndeksli komut iki uç kombo ile
     /// ifade edilir ("⌘1 – ⌘9"), tekil komut tek kombo.
     public var displayCombos: [[String]] {

@@ -47,6 +47,12 @@ final class AppContainer {
         }
     }
 
+    /// Assembly olmayan gözlemciler için (AppKit kabuğu — menü kısayol düzeni,
+    /// karar 58). `start()`'tan ÖNCE çağrılır; koordinatör gözlemciyi retain eder.
+    func registerConfigObserver(_ observer: any ConfigChangeObserving) {
+        configCoordinator.register(observer)
+    }
+
     /// Idempotent: ikinci çağrı uçuştaki (ya da bitmiş) bootstrap'i bekler.
     func start() async {
         if let startTask {

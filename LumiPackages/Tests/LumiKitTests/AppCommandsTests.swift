@@ -5,14 +5,14 @@ import XCTest
 /// tablosu bu tablodan türediği için buradaki kurallar üçünü birden korur.
 final class AppCommandsTests: XCTestCase {
     func testCommandIDsAreUnique() {
-        let ids = AppCommands.all.map(\.id)
+        let ids = AppCommands.all().map(\.id)
         XCTAssertEqual(ids.count, Set(ids).count, "komut kimlikleri benzersiz olmalı")
     }
 
     /// Her komutun ya bir tuşu ya da bir indeks aralığı vardır — kısayolsuz
     /// komut menüde sessizce kaybolurdu.
     func testEveryCommandCarriesAShortcut() {
-        for command in AppCommands.all {
+        for command in AppCommands.all() {
             XCTAssertTrue(
                 command.key != nil || command.indexRange != nil,
                 "\(command.title) kısayolsuz"
@@ -21,12 +21,13 @@ final class AppCommandsTests: XCTestCase {
         }
     }
 
-    /// Tüm kısayollar ⌘ taşır — TEK istisna repo tab geçişidir (karar 55).
-    /// İstisna burada AÇIKÇA listelenir ki ikinci bir ⌘'siz kısayol sessizce
-    /// eklenemesin.
+    /// Tüm kısayollar ⌘ taşır — TEK istisna indeksli ailelerden ⌃'ye düşenidir
+    /// (karar 55/58): varsayılanda repo tab geçişi, takas edilince terminal
+    /// odağı. İstisna burada AÇIKÇA listelenir ki üçüncü bir ⌘'siz kısayol
+    /// sessizce eklenemesin.
     func testEveryShortcutUsesCommandModifier() {
         let controlOnly: Set<CommandID> = [.switchToTabAtIndex]
-        for command in AppCommands.all {
+        for command in AppCommands.all() {
             if controlOnly.contains(command.id) {
                 XCTAssertEqual(command.modifiers, [.control], "\(command.title) yalnız ⌃ taşımalı")
                 continue
@@ -41,7 +42,7 @@ final class AppCommandsTests: XCTestCase {
     /// Aynı kombonun iki komuta düşmesi menüde sessiz çakışma yapardı.
     func testNoDuplicateCombosAcrossCommands() {
         var seen: Set<[String]> = []
-        for command in AppCommands.all {
+        for command in AppCommands.all() {
             let combos: [[String]]
             if let range = command.indexRange {
                 combos = range.map { AppCommand.symbols(command.modifiers) + [String($0)] }
@@ -59,15 +60,15 @@ final class AppCommandsTests: XCTestCase {
     /// Platform standardı komutlar (Cut/Copy/Paste/Select All/Minimize)
     /// kullanıcı tablosunda GÖRÜNMEZ (design/03 §2).
     func testReferenceExcludesSystemStandardCommands() {
-        let referenced = Set(AppCommands.reference.map(\.id))
-        for command in AppCommands.all where command.isSystemStandard {
+        let referenced = Set(AppCommands.reference().map(\.id))
+        for command in AppCommands.all() where command.isSystemStandard {
             XCTAssertFalse(referenced.contains(command.id), "\(command.title) tabloda olmamalı")
         }
-        XCTAssertEqual(AppCommands.reference.count, 16, "16 kullanıcı kısayolu")
+        XCTAssertEqual(AppCommands.reference().count, 16, "16 kullanıcı kısayolu")
     }
 
     func testReferenceIsSortedByReferenceOrder() {
-        let orders = AppCommands.reference.map { $0.referenceOrder ?? .max }
+        let orders = AppCommands.reference().map { $0.referenceOrder ?? .max }
         XCTAssertEqual(orders, orders.sorted())
         XCTAssertEqual(Set(orders).count, orders.count, "sıra numaraları benzersiz")
     }
@@ -75,7 +76,7 @@ final class AppCommandsTests: XCTestCase {
     /// Referans tablosunun gösterdiği etiketler — Settings ekranının paritesi.
     func testReferenceTitlesMatchTheUserFacingList() {
         XCTAssertEqual(
-            AppCommands.reference.map { $0.referenceTitle ?? $0.title },
+            AppCommands.reference().map { $0.referenceTitle ?? $0.title },
             [
                 "New Terminal", "Close Terminal", "Open Repository", "Switch to Tab N",
                 "Focus Terminal N", "Previous Terminal", "Next Terminal",
@@ -105,16 +106,59 @@ final class AppCommandsTests: XCTestCase {
 
     /// İndeksli komut iki UÇ kombo ile ifade edilir ("⌘1 – ⌘9").
     func testIndexedCommandExposesRangeEndpoints() {
-        let tabSwitch = AppCommands.all.first { $0.id == .switchToTabAtIndex }
+        let tabSwitch = AppCommands.all().first { $0.id == .switchToTabAtIndex }
         XCTAssertEqual(tabSwitch?.displayCombos, [["⌃", "1"], ["⌃", "9"]])
-        let terminalFocus = AppCommands.all.first { $0.id == .focusTerminalAtIndex }
+        let terminalFocus = AppCommands.all().first { $0.id == .focusTerminalAtIndex }
         XCTAssertEqual(terminalFocus?.displayCombos, [["⌘", "1"], ["⌘", "9"]])
+    }
+
+    // MARK: - İndeksli kısayol düzeni (karar 58)
+
+    /// Takas YALNIZ iki indeksli ailenin değiştiricilerini yer değiştirir.
+    func testSwappedStyleExchangesIndexedModifiers() {
+        let swapped = AppCommands.all(.repoOnCommand)
+        let tabSwitch = swapped.first { $0.id == .switchToTabAtIndex }
+        XCTAssertEqual(tabSwitch?.displayCombos, [["⌘", "1"], ["⌘", "9"]])
+        let terminalFocus = swapped.first { $0.id == .focusTerminalAtIndex }
+        XCTAssertEqual(terminalFocus?.displayCombos, [["⌃", "1"], ["⌃", "9"]])
+    }
+
+    /// Takas edilmiş tabloda da çakışan kombo yoktur ve ⌘'siz kısayol yine
+    /// TEK ailedir (bu kez terminal odağı).
+    func testSwappedStyleKeepsTheTableConsistent() {
+        var seen: Set<[String]> = []
+        for command in AppCommands.all(.repoOnCommand) {
+            let combos = command.indexRange.map { range in
+                range.map { AppCommand.symbols(command.modifiers) + [String($0)] }
+            } ?? command.displayCombos
+            for combo in combos {
+                XCTAssertTrue(seen.insert(combo).inserted, "çakışan kombo: \(combo.joined())")
+            }
+            if command.id != .focusTerminalAtIndex {
+                XCTAssertTrue(command.modifiers.contains(.command), "\(command.title) ⌘ taşımıyor")
+            } else {
+                XCTAssertEqual(command.modifiers, [.control], "\(command.title) yalnız ⌃ taşımalı")
+            }
+        }
+    }
+
+    /// Takas kısayolların NE YAPTIĞINI değiştirmez: kimlikler, sıra ve
+    /// etiketler aynı kalır — yalnız değiştiriciler yer değiştirir.
+    func testSwappedStyleKeepsIdentitiesAndOrder() {
+        XCTAssertEqual(
+            AppCommands.all(.repoOnCommand).map(\.id),
+            AppCommands.all(.repoOnControl).map(\.id)
+        )
+        XCTAssertEqual(
+            AppCommands.reference(.repoOnCommand).map { $0.referenceTitle ?? $0.title },
+            AppCommands.reference(.repoOnControl).map { $0.referenceTitle ?? $0.title }
+        )
     }
 
     // MARK: - Menü bölümleri
 
     func testEverySectionKeepsTableOrder() {
-        let fromSections = MenuSection.allCases.flatMap(AppCommands.commands(in:))
-        XCTAssertEqual(fromSections.map(\.id), AppCommands.all.map(\.id))
+        let fromSections = MenuSection.allCases.flatMap { AppCommands.commands(in: $0) }
+        XCTAssertEqual(fromSections.map(\.id), AppCommands.all().map(\.id))
     }
 }

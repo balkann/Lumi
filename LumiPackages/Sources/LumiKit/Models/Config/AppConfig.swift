@@ -46,6 +46,9 @@ public struct AppConfig: Sendable, Equatable {
     /// (karar 45). Kapatılınca yönetilen girdiler sağlayıcı ayarlarından silinir
     /// ve durum yalnız OSC/çıktı sezgisiyle türer. Additive (karar 9): yoksa açık.
     public var agentHooksEnabled: Bool
+    /// ⌃1…⌃9 / ⌘1…⌘9 indeksli kısayolların hangi eksene bağlandığı (karar 58).
+    /// Additive (karar 9): yoksa/geçersizse karar 55 düzeni (`repoOnControl`).
+    public var indexShortcutStyle: IndexShortcutStyle
     public var workspaces: [ProjectWorkspace]
 
     /// Terminal font boyutu için geçerli aralık — doğrulamanın TEK tanımı
@@ -75,6 +78,7 @@ public struct AppConfig: Sendable, Equatable {
         usageIndicators: .defaults,
         computerAwakeMode: .default,
         agentHooksEnabled: true,
+        indexShortcutStyle: .default,
         workspaces: [],
         sidebarProjectPaths: []
     )
@@ -95,6 +99,7 @@ public struct AppConfig: Sendable, Equatable {
         usageIndicators: UsageIndicators = .defaults,
         computerAwakeMode: ComputerAwakeMode = .default,
         agentHooksEnabled: Bool = true,
+        indexShortcutStyle: IndexShortcutStyle = .default,
         workspaces: [ProjectWorkspace] = [],
         sidebarProjectPaths: [String] = []
     ) {
@@ -114,6 +119,7 @@ public struct AppConfig: Sendable, Equatable {
         self.usageIndicators = usageIndicators
         self.computerAwakeMode = computerAwakeMode
         self.agentHooksEnabled = agentHooksEnabled
+        self.indexShortcutStyle = indexShortcutStyle
         self.workspaces = workspaces
     }
 }
