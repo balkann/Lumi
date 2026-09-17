@@ -104,4 +104,12 @@ final class ProtocolTests: XCTestCase {
         XCTAssertEqual(payload["model"] as? String, "sonnet")
         XCTAssertEqual(payload["commandId"] as? String, "m9")
     }
+
+    func testChatSendFrame() throws {
+        // Faz 2: telefon→Mac mesaj frame'i — type, sessionId ve text doğru encode edilmeli.
+        let frame = PhoneProtocol.chatSendFrame(sessionId: "s42", text: "Merhaba")
+        let p = try payload(of: frame, expectedType: "chat_send")
+        XCTAssertEqual(p["sessionId"] as? String, "s42")
+        XCTAssertEqual(p["text"] as? String, "Merhaba")
+    }
 }

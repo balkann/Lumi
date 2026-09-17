@@ -143,6 +143,11 @@ public enum PhoneProtocol {
         ])
     }
 
+    /// Faz 2: kullanıcı mesajı gönderme — telefon→Mac. `chat_send` frame'i.
+    public static func chatSendFrame(sessionId: String, text: String) -> String {
+        frame(type: "chat_send", payload: ["sessionId": sessionId, "text": text])
+    }
+
     // MARK: Giden
 
     public static func helloFrame(token: String) -> String {

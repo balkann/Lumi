@@ -12,6 +12,20 @@ struct SessionMeta {
     let model: String?
     let cols: Int
     let rows: Int
+    let kind: String?   // oturum türü (örn. "chat", "terminal"); Faz 2 — yoksa nil
+
+    init(id: String, repoName: String, status: String,
+         title: String? = nil, model: String? = nil,
+         cols: Int, rows: Int, kind: String? = nil) {
+        self.id = id
+        self.repoName = repoName
+        self.status = status
+        self.title = title
+        self.model = model
+        self.cols = cols
+        self.rows = rows
+        self.kind = kind
+    }
 
     func toDict() -> [String: Any] {
         var d: [String: Any] = [
@@ -20,6 +34,7 @@ struct SessionMeta {
             "status": status,
             "cols": cols,
             "rows": rows,
+            "kind": kind.map { $0 as Any } ?? NSNull(),
         ]
         if let title { d["title"] = title }
         if let model { d["model"] = model }
@@ -147,6 +162,13 @@ enum RemoteProtocol {
     /// `subscribe` payload'ından mode; yoksa geriye-uyumlu `terminal`.
     static func decodeSubscribeMode(_ payload: [String: Any]) -> String {
         payload["mode"] as? String ?? "terminal"
+    }
+
+    /// `chat_send` çözer — telefon→Mac sohbet mesajı. sessionId ve text String olmalı.
+    static func decodeChatSend(_ payload: [String: Any]) -> (sessionId: String, text: String)? {
+        guard let sessionId = payload["sessionId"] as? String,
+              let text = payload["text"] as? String else { return nil }
+        return (sessionId, text)
     }
 }
 

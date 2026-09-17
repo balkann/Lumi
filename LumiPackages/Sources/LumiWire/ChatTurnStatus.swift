@@ -5,13 +5,15 @@ import Foundation
 /// zarfında taşınır, modelin parçası değildir.
 public struct ChatTurnStatus: Sendable, Equatable {
     public var working: Bool
-    public var startedAtMs: Int?   // tur başı (epoch ms); working=false ise nil
-    public var tool: String?       // o an koşan lider araç adı; yoksa nil
+    public var startedAtMs: Int?      // tur başı (epoch ms); working=false ise nil
+    public var tool: String?          // o an koşan lider araç adı; yoksa nil
+    public var streamingText: String? // canlı in-flight assistant metni (Faz 2); yoksa nil
 
-    public init(working: Bool, startedAtMs: Int?, tool: String?) {
+    public init(working: Bool, startedAtMs: Int?, tool: String?, streamingText: String? = nil) {
         self.working = working
         self.startedAtMs = startedAtMs
         self.tool = tool
+        self.streamingText = streamingText
     }
 
     public static let idle = ChatTurnStatus(working: false, startedAtMs: nil, tool: nil)
@@ -21,6 +23,7 @@ public struct ChatTurnStatus: Sendable, Equatable {
             "working": working,
             "startedAtMs": startedAtMs.map { $0 as Any } ?? NSNull(),
             "tool": tool.map { $0 as Any } ?? NSNull(),
+            "streamingText": streamingText.map { $0 as Any } ?? NSNull(),
         ]
     }
 
@@ -28,7 +31,8 @@ public struct ChatTurnStatus: Sendable, Equatable {
         ChatTurnStatus(
             working: dict["working"] as? Bool ?? false,
             startedAtMs: dict["startedAtMs"] as? Int,
-            tool: dict["tool"] as? String
+            tool: dict["tool"] as? String,
+            streamingText: dict["streamingText"] as? String
         )
     }
 }

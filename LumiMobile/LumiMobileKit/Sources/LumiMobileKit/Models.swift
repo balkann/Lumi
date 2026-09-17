@@ -118,10 +118,11 @@ public struct SessionMeta: Decodable, Sendable, Equatable, Identifiable {
     public let model: String?
     public let cols: Int
     public let rows: Int
+    public let kind: String?   // oturum türü (örn. "chat", "terminal"); Faz 2 — yoksa nil
 
     public init(id: String, repoName: String, status: String,
                 title: String? = nil, model: String? = nil,
-                cols: Int, rows: Int) {
+                cols: Int, rows: Int, kind: String? = nil) {
         self.id = id
         self.repoName = repoName
         self.status = status
@@ -129,10 +130,11 @@ public struct SessionMeta: Decodable, Sendable, Equatable, Identifiable {
         self.model = model
         self.cols = cols
         self.rows = rows
+        self.kind = kind
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, repoName, status, title, model, cols, rows
+        case id, repoName, status, title, model, cols, rows, kind
     }
 
     public init(from decoder: Decoder) throws {
@@ -144,7 +146,8 @@ public struct SessionMeta: Decodable, Sendable, Equatable, Identifiable {
             title: try c.decodeIfPresent(String.self, forKey: .title),
             model: try c.decodeIfPresent(String.self, forKey: .model),
             cols: try c.decode(Int.self, forKey: .cols),
-            rows: try c.decode(Int.self, forKey: .rows)
+            rows: try c.decode(Int.self, forKey: .rows),
+            kind: try c.decodeIfPresent(String.self, forKey: .kind)
         )
     }
 

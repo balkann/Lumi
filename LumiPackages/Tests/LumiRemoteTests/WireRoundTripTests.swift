@@ -87,6 +87,14 @@ import LumiWire
         #expect(decoded == original)
     }
 
+    @Test func chatStatusStreamingTextRoundTrips() {
+        let status = ChatTurnStatus(working: true, startedAtMs: 100, tool: "Bash", streamingText: "Sel")
+        let payload = RemoteProtocol.chatStatusPayload(sessionId: "s1", status: status)
+        let decoded = ChatTurnStatus.decode(payload)
+        #expect(decoded.streamingText == "Sel")
+        #expect(decoded.working == true)
+    }
+
     // MARK: - ChatMessage (via chatPayload)
 
     /// chatPayload produces `{sessionId, messages:[msg.toDict()]}`.
