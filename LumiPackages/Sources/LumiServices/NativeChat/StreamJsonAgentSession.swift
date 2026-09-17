@@ -17,7 +17,8 @@ public actor StreamJsonAgentSession {
     private var finished = false
 
     public init(sessionID: String, repoPath: String, environment: [String: String],
-                spawner: any StreamingProcessSpawning, binaryLocator: any BinaryLocating) {
+                spawner: any StreamingProcessSpawning = LiveStreamingProcess(),
+                binaryLocator: any BinaryLocating = SystemBinaryLocator()) {
         self.sessionID = sessionID
         self.repoPath = repoPath
         self.environment = environment
