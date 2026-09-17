@@ -15,6 +15,11 @@ public final class PromptJournal {
             guard let p = makeQuestion(event) else { return [] }
             return upsert(p)
         case .permissionRequest where event.isLead:
+            // AskUserQuestion'a izin kartı YOK: terminal UI'ı sorunun kendisi —
+            // izin kartının Allow'u (keystroke '1') sorunun 1. seçeneğini
+            // seçiyordu ve kart her seferinde yeniden çıkıyordu. Soru kartı
+            // (preToolUse) etkileşimin tamamını karşılar.
+            guard !event.isUserQuestionTool else { return [] }
             guard let p = makeApproval(event) else { return [] }
             return upsert(p)
         case .postToolUse, .postToolUseFailure:

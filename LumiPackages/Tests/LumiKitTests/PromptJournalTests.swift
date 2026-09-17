@@ -109,4 +109,21 @@ import Foundation
         #expect(changed.isEmpty)   // options yok → item yaratılmaz
         #expect(j.items.isEmpty)
     }
+
+    /// AskUserQuestion için izin kartı ÜRETİLMEZ: terminal UI'ı sorunun kendisi —
+    /// izin kartının Allow'u (keystroke '1') sorunun 1. seçeneğini seçiyordu.
+    @Test func permissionRequestForUserQuestionToolProducesNoApproval() {
+        let j = journal()
+        // Soru kartı normal oluşur…
+        let q = j.reduce(ev(.preToolUse, tool: "AskUserQuestion",
+            input: #"{"questions":[{"question":"Pick","options":[{"label":"A"},{"label":"B"}]}]}"#))
+        #expect(q.count == 1 && q[0].kind == .question)
+        // …ama aynı aracın permissionRequest'i approval üretmez.
+        let a = j.reduce(ev(.permissionRequest, tool: "AskUserQuestion", input: "{}"))
+        #expect(a.isEmpty)
+        #expect(j.items.count == 1)   // yalnız soru kartı
+        // Başka araçların izni etkilenmez.
+        let b = j.reduce(ev(.permissionRequest, tool: "Bash", input: "{}"))
+        #expect(b.count == 1 && b[0].kind == .approval)
+    }
 }
