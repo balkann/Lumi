@@ -9,8 +9,12 @@ import SwiftUI
 /// beklemeden kapanır. Hover bölgesi animasyondan bağımsızdır; açılışta
 /// şerit ile panel arasında tracking devri yapılmaz.
 ///
-/// Header (top bar) örtülmez: overlay kabuğun tamamını kapladığı için üstten
-/// `TopBarMetrics.height` + ayraç payı bırakılır.
+/// Hover'ın kaynağı SwiftUI `.onHover` DEĞİL, `PointerPresence` sensörüdür
+/// (karar 59) — gerekçesi o dosyanın başındadır.
+///
+/// Header ve alt durum barı örtülmez: overlay kabuğun tamamını kapladığı için
+/// üstten `TopBarMetrics.height`, alttan `StatusBarMetrics.height` + ayraç
+/// payı bırakılır.
 public struct PanelRevealOverlay: View {
     /// Kenar hover'ı anlamlı olan yuvalar — `.bottom`'ın kenarı yoktur.
     public static let slots: [PanelSlot] = [.left, .right]
@@ -33,7 +37,9 @@ public struct PanelRevealOverlay: View {
                 }
             }
         }
+        // Header ve alt durum barı örtülmez: overlay kabuğun tamamını kaplar.
         .padding(.top, shell.layout.isFocusMode ? 0 : TopBarMetrics.height + Theme.Stroke.hairline)
+        .padding(.bottom, shell.layout.isFocusMode ? 0 : StatusBarMetrics.height + Theme.Stroke.hairline)
     }
 
     private static func alignment(for slot: PanelSlot) -> Alignment {
@@ -64,6 +70,10 @@ private struct EdgeRevealZone: View {
         Color.clear
             .frame(width: isRevealed ? panelWidth : Self.triggerWidth)
             .frame(maxHeight: .infinity)
+            // Hover'ın kaynağı AppKit sensörüdür (karar 59): SwiftUI `.onHover`
+            // terminal üstünde hiç tetiklenmiyor, popover açılınca yanlışlıkla
+            // "çıktı" diyor, bazı çıkışları da hiç bildirmiyordu.
+            .background(PointerPresence(onChange: pointerPresenceChanged))
             .overlay(alignment: slot == .right ? .trailing : .leading) {
                 ZStack {
                     if isRevealed {
@@ -78,29 +88,28 @@ private struct EdgeRevealZone: View {
                 )
                 .allowsHitTesting(isRevealed)
             }
-            .contentShape(Rectangle())
-            .onHover { inside in
-                if inside {
-                    guard !shell.layout.isSlotRevealed(slot), pendingTask == nil else { return }
-                    pendingTask = Task { @MainActor in
-                        do {
-                            try await Task.sleep(for: Theme.Motion.sidebarRevealDelay)
-                        } catch {
-                            return
-                        }
-                        guard !Task.isCancelled else { return }
-                        pendingTask = nil
-                        shell.layout.setRevealed(slot, true)
-                    }
-                } else {
-                    cancelPending()
-                    shell.layout.setRevealed(slot, false)
-                }
-            }
             .onDisappear {
                 cancelPending()
                 shell.layout.setRevealed(slot, false)
             }
+    }
+
+    private func pointerPresenceChanged(_ isInside: Bool) {
+        guard isInside else {
+            cancelPending()
+            shell.layout.setRevealed(slot, false)
+            return
+        }
+        guard !shell.layout.isSlotRevealed(slot), pendingTask == nil else { return }
+        pendingTask = Task { @MainActor in
+            defer { pendingTask = nil }
+            do {
+                try await Task.sleep(for: Theme.Motion.sidebarRevealDelay)
+            } catch {
+                return
+            }
+            shell.layout.setRevealed(slot, true)
+        }
     }
 
     private func cancelPending() {

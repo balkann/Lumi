@@ -63,6 +63,34 @@ final class WorkspaceServiceTests: XCTestCase {
         XCTAssertEqual(try outputGit(in: source, "branch", "--list", "unsafe"), "")
     }
 
+    /// Yönetilen kökün ÜSTÜNDEKİ bir repo işaretçisi (ev dizinindeki dotfile
+    /// repo'su, Plastic istemcisinin `~/.plastic` klasörü) oluşturmayı
+    /// engellememeli — aksi hâlde o makinelerde hiçbir workspace açılamıyordu.
+    func testAllowsDestinationWhenRepositoryMarkerIsAboveManagedRoot() async throws {
+        let source = try makeGitProject("source")
+        let container = root.appendingPathComponent("container")
+        try FileManager.default.createDirectory(at: container, withIntermediateDirectories: true)
+        try Data("gitdir: /elsewhere".utf8).write(to: container.appendingPathComponent(".git"))
+        try FileManager.default.createDirectory(at: container.appendingPathComponent(".plastic"), withIntermediateDirectories: true)
+
+        let service = WorkspaceService(workspaceRoot: container.appendingPathComponent("workspaces"))
+        let result = try await service.create(WorkspaceCreateRequest(project: repo(source), name: "review"))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: result.workspace.path + "/a.txt"))
+    }
+
+    func testRejectsDestinationNestedInRepositoryInsideManagedRoot() async throws {
+        let source = try makeGitProject("source")
+        let workspaceRoot = root.appendingPathComponent("workspaces")
+        try FileManager.default.createDirectory(at: workspaceRoot, withIntermediateDirectories: true)
+        try Data("gitdir: /elsewhere".utf8).write(to: workspaceRoot.appendingPathComponent(".git"))
+
+        let service = WorkspaceService(workspaceRoot: workspaceRoot)
+        do {
+            _ = try await service.create(WorkspaceCreateRequest(project: repo(source), name: "review"))
+            XCTFail("Expected nested repository rejection")
+        } catch { XCTAssertTrue(error.localizedDescription.contains("existing repository")) }
+    }
+
     func testRejectsExistingDestinationWithoutChangingIt() async throws {
         let source = try makeGitProject("source")
         let service = WorkspaceService(workspaceRoot: root.appendingPathComponent("workspaces"))

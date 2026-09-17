@@ -554,3 +554,25 @@ Kullanıcı isteği: dialogdaki native dropdown'lar ve butonlar Lumi'ye yabancı
 - **Karar 61 ile aynı köprü deseni:** yüz de token KAYNAĞINDA değişir (`Theme.uiFontFamily` → `Theme.monoFont`), çağrı yerleri yüzü bilmez; LumiUI'da literal punto yasak olduğu için (`DesignTokenLintTests`) her metin bu fabrikadan geçer. Değişim `AppDelegate.rebuildContentView` ile içerik view'ını baştan kurar (SwiftUI static token okumalarını izlemez); ölçekle ortak olan bu ayak `applyUIScale`/`applyUIFontFamily` arasında paylaşılır.
 - **Sınırlar:** `UIState.uiFontFamily` (`UIFontFamily`, additive — karar 9: `ui-state.json`, varsayılan yüzde anahtar YAZILMAZ, bozuk değer `.system`'e düşer) → `LayoutStore.uiFontFamily` + `setUIFontFamily` + `onUIFontFamilyChanged` → `AppDelegate.applyUIFontFamily` → `Theme.uiFontFamily` + `replaceContentView`. Store `Theme`'i tanımaz.
 - **Kapsam dışı:** keyfi sistem fontu seçimi (terminaldeki gibi aile listesi), punto/ağırlık/tracking'in tek tek ayarlanması ve italik yüzlerin eklenmesi (arayüzde tek `.italic()` çağrısı var). Ayar iki hazır yüz arasında seçim yapar.
+
+### 64. Kenar hover'ı (auto-reveal) AppKit sensörüne taşındı (2026-09-17)
+
+Kullanıcı şikâyeti: sol/sağ panelin auto-reveal'ı çalışmıyor; ayrıca eskiden panelin üstünde bir popover açılınca panel kapanıyor, bazen de fare panelden çıktığı hâlde kapanmıyordu.
+
+Üç belirtinin de kaynağı aynıydı: karar 44'ün hover'ı SwiftUI `.onHover` ile kuruluydu ve `.onHover` bu üç durumda da yanlış cevap veriyor.
+
+- **Hiç açılmama (asıl regresyon).** `TerminalEventMonitor`, `mouseMode == .anyEvent` olan bir terminalin üstündeki `.mouseMoved` event'lerini **yutar** (`shouldConsumeHover`, karar 37/57 — SwiftTerm'in alt-buffer köprüsü). Claude/Codex TUI'si tam olarak bu modu açar. Kenar şeridi SwiftUI çizimi olduğu için `window.hitTest` altındaki terminal view'ını döndürüyor, event monitör onu yutuyor ve SwiftUI hover'ı **hiç** görmüyordu: terminal açık her repo'da auto-reveal ölüydü, yalnız boş orta alanda çalışıyordu.
+- **Popover açılınca kapanma.** `NSPopover` (Explorer görünüm menüsü, sağ tık menüleri) ve `DropdownPanel` ayrı pencere açar; SwiftUI bunu "fare view'dan çıktı" olarak bildirir ve panel kullanıcının menüsü elinin altındayken kapanırdı.
+- **Çıkışta kapanmama.** Kaçan `mouseExited` (pencere/uygulama değişimi, hızlı çıkış, view'ın yeniden kurulması) tek bildirim kanalıyken panel açık kalıyordu.
+
+Çözüm: hover'ın kaynağı `PointerPresence` (AppKit `NSViewRepresentable`) sensörüdür.
+
+- **Tracking area** (`.mouseEnteredAndExited`, `.activeAlways`, `.inVisibleRect`) — `mouseEntered/Exited` event monitöründen bağımsız üretilir, terminalin yuttuğu `.mouseMoved`'a bağlı değildir.
+- **Doğrulama tik'i** (0,1 sn, yalnız fare İÇERİDEYKEN çalışır; boşta timer yok) fiziksel `NSEvent.mouseLocation`'ı bölgenin ekran dikdörtgeniyle karşılaştırır — kaçan çıkış bildirimi paneli açık bırakamaz.
+- **Bağlı pencereler içeri sayılır:** imlecin altındaki pencere ana pencerenin (zincirleme) çocuğuysa — popover, `DropdownPanel` — fare "içeride"dir. Karar kuralı saftır ve test edilir (`PointerPresenceRule.isInside`, `PointerPresenceRuleTests`).
+- **Sensör tıklama yutmaz:** `hitTest` daima `nil` döner; şeridin altındaki terminalin seçim/tıklama davranışı değişmez.
+- Uygulama arka plandayken hover yoktur (`NSApp.isActive`), pencereye girmemiş view ölçülemez → dışarıdadır.
+
+Ek düzeltme: overlay artık alttan da `StatusBarMetrics.height` payı bırakır — açılan panel 24px durum barını (Settings dişlisi dahil) örtmüyor.
+
+- **Sınırlar.** `PointerPresence`/`PointerPresenceRule` (LumiUI/Support) → `PanelRevealOverlay.EdgeRevealZone`. `LayoutStore` auto-reveal durumu (karar 44) ve `ui-state` biçimi değişmedi.

@@ -32,7 +32,7 @@ final class AppMenuCommandsTests: XCTestCase {
         await shared.terminals.start()
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         shared.terminals.stop()
     }
 

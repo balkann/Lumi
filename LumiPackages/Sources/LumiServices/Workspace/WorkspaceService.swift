@@ -352,7 +352,12 @@ public actor WorkspaceService: WorkspaceServicing {
             throw WorkspaceFailure("Workspace destination must be outside every source project and workspace.")
         }
         guard !Self.entryExists(destination.path) else { throw WorkspaceFailure("Workspace destination already exists: \(destination.path)") }
-        guard Self.ancestor(with: ".git", of: target) == nil, Self.ancestor(with: ".plastic", of: target) == nil else {
+        // Yalnız yönetilen kök ile hedef arasına bakılır: `workspaceRoot` ÜSTÜNDEKİ
+        // `.git`/`.plastic` girdileri (ev dizinindeki dotfile repo'su, Plastic
+        // istemcisinin `~/.plastic` klasörü) Lumi'yi ilgilendirmez ve eskiden o
+        // makinelerde her workspace oluşturmayı bloke ediyordu.
+        guard Self.ancestor(with: ".git", of: target, stoppingAt: workspaceRoot.path) == nil,
+              Self.ancestor(with: ".plastic", of: target, stoppingAt: workspaceRoot.path) == nil else {
             throw WorkspaceFailure("Workspace destination cannot be inside an existing repository.")
         }
     }
@@ -407,12 +412,16 @@ public actor WorkspaceService: WorkspaceServicing {
         var directory: ObjCBool = false
         return FileManager.default.fileExists(atPath: path, isDirectory: &directory) && directory.boolValue
     }
-    private static func ancestor(with marker: String, of path: String) -> String? {
+    /// `stop` dizini de taranır, üstüne çıkılmaz; varsayılan "/" ile kök dizine
+    /// kadar yürür.
+    private static func ancestor(with marker: String, of path: String, stoppingAt stop: String = "/") -> String? {
         var current = URL(fileURLWithPath: path).standardizedFileURL
-        while current.path != "/" {
+        while true {
             if entryExists(current.appendingPathComponent(marker).path) { return canonical(current.path) }
-            current.deleteLastPathComponent()
+            if current.path == stop || current.path == "/" { return nil }
+            let parent = current.deletingLastPathComponent().standardizedFileURL
+            if parent.path == current.path { return nil }
+            current = parent
         }
-        return nil
     }
 }

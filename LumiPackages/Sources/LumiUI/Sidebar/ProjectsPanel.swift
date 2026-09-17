@@ -14,6 +14,8 @@ public struct ProjectsPanel: View {
     @State private var isCollapsed = false
     @State private var searchText = ""
     @State private var collapsedProjects = Set<String>()
+    /// Sağ tık menüsü açık olan projenin yolu (karar 53 deseni).
+    @State private var menuProjectPath: String?
 
     public init() {}
 
@@ -115,15 +117,49 @@ public struct ProjectsPanel: View {
         HoverReader { isHovering in
             projectRowContent(project, isHovering: isHovering)
         }
-        .contextMenu {
-            Button("Create Workspace…") { shell.dialogs.present(.createWorkspace(projectPath: project.path)) }
-                .disabled(shell.workspaces.isCreating)
-            Button("Reveal in Finder") { shell.actions.revealPath(project.path) }
-            Button("Copy Path") { Pasteboard.copy(project.path) }
-            Divider()
-            Button("Remove from Projects") { Task { await shell.workspaces.removeProject(project) } }
-                .disabled(shell.workspaces.isCreating && operationBelongs(to: project))
+        // Native `contextMenu` koyu panelde sistem görünümüyle çıkıyordu;
+        // menü Lumi'nin kendi `PopoverMenu`suyla çizilir (karar 53 deseni).
+        .onRightClick { menuProjectPath = project.path }
+        .popover(
+            isPresented: Binding(
+                get: { menuProjectPath == project.path },
+                set: { if !$0 { menuProjectPath = nil } }
+            ),
+            arrowEdge: .bottom
+        ) {
+            PopoverMenu(items: menuItems(project), dismiss: { menuProjectPath = nil })
         }
+    }
+
+    private func menuItems(_ project: Repo) -> [PopoverMenu.Item] {
+        [
+            .action("Create Workspace…", icon: "plus", isEnabled: !shell.workspaces.isCreating) {
+                shell.dialogs.present(.createWorkspace(projectPath: project.path))
+            },
+            .divider,
+            .action("Open CLAUDE.md", icon: "doc.text", isEnabled: hasClaudeInstructions(project)) {
+                Task { await shell.fileViewer.presentView(repoPath: project.path, filePath: Self.claudeInstructionsFile) }
+            },
+            .action("Reveal in Finder", icon: "folder") { shell.actions.revealPath(project.path) },
+            .action("Copy Path", icon: "doc.on.doc") { Pasteboard.copy(project.path) },
+            .divider,
+            .action(
+                "Remove from Projects", icon: "trash", isDestructive: true,
+                isEnabled: !(shell.workspaces.isCreating && operationBelongs(to: project))
+            ) {
+                Task { await shell.workspaces.removeProject(project) }
+            },
+        ]
+    }
+
+    /// Proje kökündeki CLAUDE.md. Menü yalnız sağ tıkta kurulduğu için
+    /// dosya kontrolü her çizimde değil, açılışta bir kez yapılır.
+    static let claudeInstructionsFile = "CLAUDE.md"
+
+    private func hasClaudeInstructions(_ project: Repo) -> Bool {
+        FileManager.default.fileExists(
+            atPath: URL(fileURLWithPath: project.path).appendingPathComponent(Self.claudeInstructionsFile).path
+        )
     }
 
     private func projectRowContent(_ project: Repo, isHovering: Bool) -> some View {
