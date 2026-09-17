@@ -19,15 +19,19 @@ public struct PanelRevealOverlay: View {
     /// Kenar hover'ı anlamlı olan yuvalar — `.bottom`'ın kenarı yoktur.
     public static let slots: [PanelSlot] = [.left, .right]
 
-    let registry: PanelItemRegistry
+    /// Kayıt defteri CANLI tutulur (karar 68): `AppShellView` gibi `registries`
+    /// nesnesi saklanır, `panels` DEĞER kopyası saklanmaz — kopya, kompozisyon
+    /// sırası yüzünden boş donuyordu.
+    let registries: ShellRegistries
 
     @Shell private var shell
 
-    public init(registry: PanelItemRegistry) {
-        self.registry = registry
+    public init(registries: ShellRegistries) {
+        self.registries = registries
     }
 
     public var body: some View {
+        let registry = registries.panels
         ZStack {
             ForEach(Self.slots, id: \.self) { slot in
                 if shell.layout.canAutoReveal(slot),
@@ -121,7 +125,7 @@ private struct EdgeRevealZone: View {
 #if DEBUG
 #Preview("PanelRevealOverlay") {
     let shell = ShellContext.preview()
-    PanelRevealOverlay(registry: PanelItemRegistry())
+    PanelRevealOverlay(registries: ShellRegistries())
         .frame(width: 720, height: 400)
         .background(Theme.bgDeep)
         .environment(\.shell, shell)

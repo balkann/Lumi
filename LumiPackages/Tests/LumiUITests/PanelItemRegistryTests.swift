@@ -49,6 +49,23 @@ final class PanelItemRegistryTests: XCTestCase {
         registry.resolved(slot: slot, layout: layout, context: fixture.context).map(\.id)
     }
 
+    // MARK: - Değer semantiği (karar 68)
+
+    /// `PanelItemRegistry` bir DEĞER tipidir: erken alınan bir kopya, sonradan
+    /// kaydedilen öğeleri GÖRMEZ. Kenar hover'ı overlay'i (karar 44) tam bu
+    /// tuzağa düşmüştü — descriptor'ı kompozisyonun en başında kaydedildiği
+    /// için `registries.panels`'ın BOŞ kopyasını donduruyor, `resolved` hep boş
+    /// dönüyor ve auto-reveal hiç kurulmuyordu. Çözüm, kopya yerine
+    /// `ShellRegistries` nesnesini saklayıp `panels`'ı render anında okumaktır.
+    func testCopyTakenBeforeRegistrationDoesNotSeeLaterItems() {
+        var live = PanelItemRegistry()
+        let earlyCopy = live
+        live.register(descriptor(.tasks))
+
+        XCTAssertTrue(ids(earlyCopy, .left, .defaults).isEmpty)
+        XCTAssertEqual(ids(live, .left, .defaults), [.tasks])
+    }
+
     // MARK: - Sıra
 
     func testOrderComesFromLayoutNotRegistrationOrder() {

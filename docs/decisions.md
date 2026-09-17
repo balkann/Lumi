@@ -613,3 +613,27 @@ Karar: guard **yıkıcı** işleme, yani `trash`'e özeldir. Finder'da gösterme
 Ek düzeltme (görsel): `TerminalLinkResolver.standardized` `NSString.standardizingPath` kullanıyor; bu API var olan `/private/...` yollarından `/private`'ı atıyor ve popover başlığı terminalde yazan metinden farklı çıkıyordu. Ön ek artık geri konur — "gösterilen yol, terminalde yazan yolla aynı kalmalı" kuralı `/private` için de geçerli. (İşlevsel etkisi yoktu: `RepoPathGuard` iki tarafı da `resolvingSymlinksInPath()` ile eşitliyor.)
 
 - **Sınırlar.** `FileSystemOperations` (guard yalnız `trash`'te), `TerminalLinkResolver.standardized`. `RepoPathGuard`, git tarafı, `LiveServiceRegistry`'nin kök listesi ve karar 57'nin jest/çözümleme tablosu değişmedi.
+
+### 68. Auto-reveal'in gerçek kök nedeni: overlay panel kayıt defterinin BOŞ kopyasını tutuyordu (2026-09-17)
+
+Kullanıcı şikâyeti (karar 64 ve 66'dan sonra da): paneller GİZLİYKEN kenar hover'ı hiçbir şey açmıyor.
+
+Bu kez kod okuyarak değil, **ölçerek** bulundu: kenar şeridinin kurulduğu yere geçici bir tanı çıktısı konup uygulama gerçek konfigürasyonla çalıştırıldı. Çıktı:
+
+```
+[HOVERDBG] slot=left  canAutoReveal=true items=0
+[HOVERDBG] slot=right canAutoReveal=true items=0
+```
+
+Yani koşullar doğruydu (tercih açık, yuva gizli, overlay sunuluyor) ama `PanelItemRegistry.resolved` **hiç öğe döndürmüyordu**; `EdgeRevealZone` hiç kurulmuyor, dolayısıyla `PointerPresence` sensörü hiç doğmuyordu. Hover makinesi (karar 64/66) baştan beri devreye bile girmiyordu.
+
+Sebep bir **değer semantiği tuzağı**: `PanelItemRegistry` bir `struct`. `ShellComposition.makeRegistries` kenar hover'ı overlay'ini z-sırası gereği EN BAŞTA kaydediyor (karar 44: bütün modal/dialog/toast'ların altında kalmalı) ve descriptor o an `let panels = registries.panels` ile kaydı **kopyalıyordu**. Feature assembly'ler (`TasksFeatureAssembly`, `RepoFeatureAssembly`) panel öğelerini bu kopyadan SONRA kaydettiği için overlay'in elindeki defter sonsuza dek boş kalıyordu.
+
+Karar: kenar hover'ı overlay'i kayıt defterini **canlı okur**. `PanelRevealOverlay` artık `PanelItemRegistry` değeri değil, `ShellRegistries` nesnesini alır ve `panels`'ı body'de okur — `AppShellView`'ın (`RootView`) zaten yaptığı şey. Descriptor closure'ı defteri `weak` yakalar (defter closure'ı tuttuğu için güçlü yakalama döngü olurdu). Kayıt sırası, dolayısıyla z-sırası, değişmedi.
+
+Ders ve koruma: kayıt defterleri değer tipidir; bir descriptor'ın içine defter KOPYALANMAZ, defterin sahibi tutulur. Tuzak `PanelItemRegistryTests.testCopyTakenBeforeRegistrationDoesNotSeeLaterItems` ile kilitlendi.
+
+Not: karar 66 (hover'ın imleç yoklamasına dayanması) geçerliliğini korur — `.mouseMoved` yutulduğunda AppKit crossing event'i de doğmadığı için sensör, şerit kurulduktan sonra da yoklamaya muhtaçtır. Karar 66'nın "kullanıcının paneli sabitti" gözlemi ise yalnızca yan bir gözlemdi, kök neden değildi: kullanıcı testlerini paneller gizliyken yapıyordu.
+
+- **Sınırlar.** `ShellComposition.registerPanelRevealOverlay`, `PanelRevealOverlay.init(registries:)`. `LayoutStore`, `PanelLayout`, `ui-state` biçimi, `OverlayRegistry` ve hover sensörü değişmedi.
+
