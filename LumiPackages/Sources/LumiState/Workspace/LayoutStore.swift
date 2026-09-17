@@ -11,10 +11,10 @@ import Observation
 public struct LayoutSnapshot: Equatable, Sendable {
     public var panelLayout: PanelLayout
     public var projectGridLayouts: [String: GridLayout]
-    /// Karar 57: arayüz ölçeği. %100'de `nil` yazılır — additive anahtar
+    /// Karar 61: arayüz ölçeği. %100'de `nil` yazılır — additive anahtar
     /// varsayılan değerde diske hiç girmez (karar 9).
     public var uiScale: Double?
-    /// Karar 59: arayüz yazı tipi. `.system`'de `nil` yazılır (uiScale ile aynı
+    /// Karar 63: arayüz yazı tipi. `.system`'de `nil` yazılır (uiScale ile aynı
     /// gerekçe).
     public var uiFontFamily: UIFontFamily?
 
@@ -66,11 +66,11 @@ public final class LayoutStore {
     /// Oturumluk — persist edilmez; kalıcı tercih `panelLayout.autoRevealSlots`.
     public private(set) var revealedSlots: Set<PanelSlot> = []
 
-    /// Karar 57: arayüz ölçeği (⌘+/⌘−/⌘0). 1.0 = %100.
+    /// Karar 61: arayüz ölçeği (⌘+/⌘−/⌘0). 1.0 = %100.
     public private(set) var uiScale: CGFloat = 1
 
-    /// Karar 59: arayüz yazı tipi (Settings ▸ Appearance). Varsayılan `.system`
-    /// = SF Mono, yani karar 59 öncesi davranış.
+    /// Karar 63: arayüz yazı tipi (Settings ▸ Appearance). Varsayılan `.system`
+    /// = SF Mono, yani karar 63 öncesi davranış.
     public private(set) var uiFontFamily: UIFontFamily = .system
 
     /// Kapalı basamak kümesi — Electron'un çarpansal zoom'u yerine bilinen
@@ -84,7 +84,7 @@ public final class LayoutStore {
     /// (LumiUI/AppKit tarafı). Store `Theme`'i tanımaz.
     @ObservationIgnored public var onUIScaleChanged: ((CGFloat) -> Void)?
 
-    /// Karar 59: yazı tipi değişimi — `onUIScaleChanged` ile aynı köprü deseni
+    /// Karar 63: yazı tipi değişimi — `onUIScaleChanged` ile aynı köprü deseni
     /// (token'ı kur + içerik view'ını yeniden kur). Store `Theme`'i tanımaz.
     @ObservationIgnored public var onUIFontFamilyChanged: ((UIFontFamily) -> Void)?
 
@@ -119,7 +119,7 @@ public final class LayoutStore {
         // ölçekle açılmaz.
         uiScale = Self.nearestScaleStep(state.uiScale.map { CGFloat($0) } ?? 1)
         onUIScaleChanged?(uiScale)
-        // Karar 59: anahtar yoksa/bozuksa `.system` — eski davranış.
+        // Karar 63: anahtar yoksa/bozuksa `.system` — eski davranış.
         uiFontFamily = state.uiFontFamily ?? .system
         onUIFontFamilyChanged?(uiFontFamily)
         projectGridLayouts = state.projectGridLayouts
@@ -312,7 +312,7 @@ public final class LayoutStore {
         )
     }
 
-    // MARK: - Arayüz ölçeği (karar 57)
+    // MARK: - Arayüz ölçeği (karar 61)
 
     public func zoomIn() { stepZoom(by: 1) }
     public func zoomOut() { stepZoom(by: -1) }
@@ -325,7 +325,7 @@ public final class LayoutStore {
         applyScale(steps[target])
     }
 
-    // MARK: - Arayüz yazı tipi (karar 59)
+    // MARK: - Arayüz yazı tipi (karar 63)
 
     public func setUIFontFamily(_ family: UIFontFamily) {
         guard family != uiFontFamily else { return }

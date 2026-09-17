@@ -34,7 +34,7 @@ Bu beş tip **gerçekten ayrı dosyalardır** (Faz 3.6): tasarımın ilk hâlind
 
 **Focus köprüsü:** `windowDidBecomeKey/ResignKey` → `terminal.setWindowFocused(_:)` — bildirim semantiği buna bağlıdır (Electron sürümüyle aynı semantikle akmalı, yoksa bildirimler bozulur).
 
-**Menü = TEK kısayol kaynağı, komut tablosu = tek kaynak.** Kısayolların otoritesi `LumiKit/Commands/` altındaki `AppCommands` tablosudur (Faz 3.5). Ham tablo private'tır; tüketiciler `all(_:)` / `commands(in:style:)` / `reference(_:)` üzerinden okur — parametre indeksli kısayolların ⌘/⌃ eksenidir (`IndexShortcutStyle`, karar 58). `MainMenuBuilder` `NSMenu`'yu **bu tablodan** kurar, `LumiUI.ShortcutReference.list(style:)` (Settings → Shortcuts) **aynı tablodan** türer — elle tutulan ikinci bir liste yoktur, iki taraf yapısal olarak ayrışamaz. Bir `AppCommand` `id: CommandID`, `title`, `menu: MenuSection` (`app`/`shell`/`edit`/`terminal`/`view`/`window`), `key`, `modifiers: CommandModifiers` ve `isSystemStandard` taşır.
+**Menü = TEK kısayol kaynağı, komut tablosu = tek kaynak.** Kısayolların otoritesi `LumiKit/Commands/` altındaki `AppCommands` tablosudur (Faz 3.5). Ham tablo private'tır; tüketiciler `all(_:)` / `commands(in:style:)` / `reference(_:)` üzerinden okur — parametre indeksli kısayolların ⌘/⌃ eksenidir (`IndexShortcutStyle`, karar 62). `MainMenuBuilder` `NSMenu`'yu **bu tablodan** kurar, `LumiUI.ShortcutReference.list(style:)` (Settings → Shortcuts) **aynı tablodan** türer — elle tutulan ikinci bir liste yoktur, iki taraf yapısal olarak ayrışamaz. Bir `AppCommand` `id: CommandID`, `title`, `menu: MenuSection` (`app`/`shell`/`edit`/`terminal`/`view`/`window`), `key`, `modifiers: CommandModifiers` ve `isSystemStandard` taşır.
 
 Tablodaki kısayollar:
 
@@ -43,20 +43,20 @@ Tablodaki kısayollar:
 | `openSettings` | ⌘, |
 | `quit` | ⌘Q |
 | `newTerminal` | ⌘T |
-| `closeTerminal` | **⌘W — terminali kapatır, pencereyi DEĞİL** (menü interception); aktif terminal yoksa repo TAB'ını kapatır (karar 55) |
+| `closeTerminal` | **⌘W — terminali kapatır, pencereyi DEĞİL** (menü interception); aktif terminal yoksa repo TAB'ını kapatır (karar 59) |
 | `openRepoSelector` | ⌘O |
-| `switchToTabAtIndex` | **⌃1 … ⌃9 — repo TAB'ını değiştirir** (karar 55; tablodaki tek ⌘'siz kısayol, Mission Control çakışması bilinçli kabul) |
+| `switchToTabAtIndex` | **⌃1 … ⌃9 — repo TAB'ını değiştirir** (karar 59; tablodaki tek ⌘'siz kısayol, Mission Control çakışması bilinçli kabul) |
 | `focusTerminalAtIndex` | ⌘1 … ⌘9 (aktif repo İÇİNDEKİ terminali odaklar; indeks `NSMenuItem.tag`'de) |
-| *(iki indeksli aile)* | ⌘/⌃ ekseni Settings ▸ Shortcuts'tan takas edilebilir (`AppConfig.indexShortcutStyle`, karar 58); yukarıdaki satırlar VARSAYILAN düzendir |
+| *(iki indeksli aile)* | ⌘/⌃ ekseni Settings ▸ Shortcuts'tan takas edilebilir (`AppConfig.indexShortcutStyle`, karar 62); yukarıdaki satırlar VARSAYILAN düzendir |
 | `focusNextTerminal` / `focusPreviousTerminal` | ⌘⇧→ / ⌘⇧← |
 | `toggleMaximizeTerminal` | **⌘⌃M** |
 | `toggleLeftSidebar` / `toggleRightSidebar` | ⌘B / ⌘⇧B |
 | `toggleFocusMode` | ⌘⇧F |
-| `zoomIn` / `zoomOut` / `resetZoom` | **⌘+ / ⌘− / ⌘0 — TÜM arayüzü ölçekler** (karar 57; `Theme.uiScale` token çarpanı, çizim ölçeği değil) |
+| `zoomIn` / `zoomOut` / `resetZoom` | **⌘+ / ⌘− / ⌘0 — TÜM arayüzü ölçekler** (karar 61; `Theme.uiScale` token çarpanı, çizim ölçeği değil) |
 | `minimizeWindow` | ⌘M |
 | `cut`/`copy`/`paste`/`selectAll` | ⌘X/⌘C/⌘V/⌘A — platform standardı (`isSystemStandard`), terminal copy-paste için zorunlu; Shortcuts tablosunda **gösterilmez** |
 
-Item'lar `MenuActionDispatcher`'a (@MainActor, app target) hedeflenir: tek `performCommand(_:)` selector'ü, `representedObject`'teki `CommandID`'yi `register(_:_:)` ile kaydedilmiş closure'a çevirir (12 ayrı `@objc` aksiyon yerine). `validateMenuItem` store state okur (örn. aktif terminal yokken ⌘W disabled). **Yeni komut = tabloya bir satır + dispatcher'a bir `register`.** İndeksli kısayol düzeni değişince menü **yeniden kurulur** (`NSMenuItem.keyEquivalentModifierMask` ancak yeni item'larla değişir): `AppDelegate`, `ConfigChangeBridge` ile `AppContainer.registerConfigObserver`'a bağlanan tek assembly-dışı gözlemcidir (karar 58). **SwiftUI `.keyboardShortcut` ve `keyDown` handler'ı hiçbir yerde kullanılmaz** — Electron'un çift-kaynak bug sınıfı yapısal olarak silinir.
+Item'lar `MenuActionDispatcher`'a (@MainActor, app target) hedeflenir: tek `performCommand(_:)` selector'ü, `representedObject`'teki `CommandID`'yi `register(_:_:)` ile kaydedilmiş closure'a çevirir (12 ayrı `@objc` aksiyon yerine). `validateMenuItem` store state okur (örn. aktif terminal yokken ⌘W disabled). **Yeni komut = tabloya bir satır + dispatcher'a bir `register`.** İndeksli kısayol düzeni değişince menü **yeniden kurulur** (`NSMenuItem.keyEquivalentModifierMask` ancak yeni item'larla değişir): `AppDelegate`, `ConfigChangeBridge` ile `AppContainer.registerConfigObserver`'a bağlanan tek assembly-dışı gözlemcidir (karar 62). **SwiftUI `.keyboardShortcut` ve `keyDown` handler'ı hiçbir yerde kullanılmaz** — Electron'un çift-kaynak bug sınıfı yapısal olarak silinir.
 
 **Quit akışı (her çıkış yolu):** `applicationShouldTerminate` → canlı terminal varsa `.terminateLater` + `dialogs.presentQuitDialog(terminalCount:)` (custom SwiftUI dialog — görsel kimlik korunur; sonuç `DialogRouter.onQuitResolved` ile geri döner); onay → `await terminal.killAll()` → `NSApp.reply(toApplicationShouldTerminate: true)`; iptal → `false`. Cmd+Q, Dock quit ve logout dahil hepsi bu akıştan geçer. Pencere çarpısı (X) da dahildir: `windowShouldClose` kapatmayı reddedip `NSApp.terminate`'e yönlendirir — dialog pencere içeriğinde yaşadığından pencere önce kapansaydı onay görünmez kalır ve `.terminateLater` cevapsız asılırdı; pencere yalnız uygulama gerçekten çıkarken kapanır. Çıkışta temp dizini (`tmp/lumi*`) silinir.
 

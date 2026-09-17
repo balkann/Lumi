@@ -5,7 +5,7 @@ import LumiTestSupport
 import XCTest
 @testable import LumiAppCore
 
-/// Menü komutlarının store'lara BAĞLANMA davranışı (karar 55).
+/// Menü komutlarının store'lara BAĞLANMA davranışı (karar 59).
 ///
 /// `MenuActionDispatcherTests` yalnız yönlendirmeyi (id → closure) kilitler;
 /// burası closure'ın gerçekten ne yaptığını kilitler — repo tab'ları ile

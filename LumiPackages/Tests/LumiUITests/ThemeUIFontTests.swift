@@ -4,7 +4,7 @@ import SwiftUI
 import XCTest
 @testable import LumiUI
 
-/// Arayüz yazı tipinin (karar 59) token'lara indiğini kilitler.
+/// Arayüz yazı tipinin (karar 63) token'lara indiğini kilitler.
 ///
 /// Bu testlerin varlık sebebi: `Font.custom` KAYITSIZ bir adda hata vermez —
 /// sessizce orantılı sistem fontuna düşer. Böyle bir sapma derlemede değil,
@@ -68,7 +68,7 @@ final class ThemeUIFontTests: XCTestCase {
         )
     }
 
-    /// Yüz seçimi ölçekten (karar 57) bağımsızdır: ikisi de aynı fabrikadan
+    /// Yüz seçimi ölçekten (karar 61) bağımsızdır: ikisi de aynı fabrikadan
     /// geçer, biri diğerini yutmaz.
     ///
     /// Beklenen punto ÇARPIM DEĞİL yuvarlanmış değerdir: 13 * 1.5 = 19.5 ve

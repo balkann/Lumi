@@ -1,7 +1,7 @@
 import XCTest
 @testable import LumiUI
 
-/// Arayüz ölçeğinin (karar 57) token'lara indiğini kilitler.
+/// Arayüz ölçeğinin (karar 61) token'lara indiğini kilitler.
 ///
 /// Bu testlerin varlık sebebi: ölçek ÇİZİMİ değil **token'ları** büyütür —
 /// layout bu sayede gerçekten yeniden akar (Chromium page zoom paritesi).

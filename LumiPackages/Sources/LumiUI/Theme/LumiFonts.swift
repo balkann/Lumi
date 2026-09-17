@@ -57,7 +57,7 @@ public enum LumiFonts {
     /// NSFontManager'ın 0–15 ağırlık ölçeğinde "normal" (regular) değeri.
     private static let fontManagerNormalWeight = 5
 
-    // MARK: - Arayüz yüzü (karar 59)
+    // MARK: - Arayüz yüzü (karar 63)
 
     /// Bundle'daki dört UI ağırlığının PostScript adları. Ağırlık AİLE ADIYLA
     /// değil, doğrudan yüzle çözülür: statik JetBrains Mono dosyalarında Medium

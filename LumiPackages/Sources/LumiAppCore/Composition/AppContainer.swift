@@ -48,7 +48,7 @@ final class AppContainer {
     }
 
     /// Assembly olmayan gözlemciler için (AppKit kabuğu — menü kısayol düzeni,
-    /// karar 58). `start()`'tan ÖNCE çağrılır; koordinatör gözlemciyi retain eder.
+    /// karar 62). `start()`'tan ÖNCE çağrılır; koordinatör gözlemciyi retain eder.
     func registerConfigObserver(_ observer: any ConfigChangeObserving) {
         configCoordinator.register(observer)
     }

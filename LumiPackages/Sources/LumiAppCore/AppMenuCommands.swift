@@ -24,7 +24,7 @@ enum AppMenuCommands {
             )
         }
         // Electron paritesi: aktif terminal yoksa ⌘W repo TAB'ını kapatır
-        // (karar 55). Tab kapanışı `requestCloseTab` guard'ından geçer —
+        // (karar 59). Tab kapanışı `requestCloseTab` guard'ından geçer —
         // minimize terminali olan tab dialog'suz kapanmaz.
         dispatcher.register(.closeTerminal) {
             if let activeID = shared.terminals.activeTerminalID {

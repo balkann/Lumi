@@ -1,12 +1,12 @@
 import LumiKit
 import SwiftUI
 
-/// Arayüz yazı tipi (karar 59) — Electron sürümünün tipografi paritesi.
+/// Arayüz yazı tipi (karar 63) — Electron sürümünün tipografi paritesi.
 ///
 /// **Neden token kaynağında, çağrı yerinde DEĞİL:** LumiUI'da her metin
 /// `Theme.Typography` fabrikalarından geçer (`DesignTokenLintTests` literal
 /// puntoyu yasaklar), bu yüzden yüz seçimi tek noktadan tüm arayüze iner —
-/// `Theme.uiScale` (karar 57) ile aynı desen.
+/// `Theme.uiScale` (karar 61) ile aynı desen.
 ///
 /// `nonisolated(unsafe)`: yalnız `LayoutStore` köprüsünden (MainActor) yazılır,
 /// okuyanlar view body'leridir (`uiScale` ile aynı gerekçe).

@@ -127,7 +127,7 @@ public struct AppCommand: Identifiable, Sendable, Equatable {
         self.referenceOrder = referenceOrder
     }
 
-    /// Yalnız değiştiricileri değişmiş kopya (karar 58: indeksli kısayol
+    /// Yalnız değiştiricileri değişmiş kopya (karar 62: indeksli kısayol
     /// düzeni ayardan gelir; komutun kimliği/başlığı/sırası aynı kalır).
     public func withModifiers(_ modifiers: CommandModifiers) -> AppCommand {
         AppCommand(

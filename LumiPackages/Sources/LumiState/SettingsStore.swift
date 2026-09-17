@@ -133,7 +133,7 @@ public final class SettingsStore: StoreLifecycle {
         apply { $0.agentHooksEnabled = enabled }
     }
 
-    /// Karar 58: indeksli kısayolların ⌘/⌃ ekseni. Menü yeniden kurulumu
+    /// Karar 62: indeksli kısayolların ⌘/⌃ ekseni. Menü yeniden kurulumu
     /// config yan etkisidir (`AppDelegate`); store AppKit'i tanımaz.
     public func setIndexShortcutStyle(_ style: IndexShortcutStyle) {
         apply { $0.indexShortcutStyle = style }

@@ -6,7 +6,7 @@ import Foundation
 ///
 /// Yeni komut eklemek = bu tabloya bir satır + dispatcher'da bir handler.
 ///
-/// Tablo `IndexShortcutStyle` ile parametriktir (karar 58): indeksli iki ailenin
+/// Tablo `IndexShortcutStyle` ile parametriktir (karar 62): indeksli iki ailenin
 /// (repo tab'ı / terminal) ⌘ ve ⌃ değiştiricileri ayardan gelir. Ham tablo
 /// private'tır — tüketiciler `all(_:)` / `commands(in:style:)` / `reference(_:)`
 /// üzerinden okur, böylece hiçbir yol düzeni atlayamaz.
@@ -40,8 +40,8 @@ public enum AppCommands {
             separatorBefore: true, referenceTitle: "Open Repository", referenceOrder: 3
         ),
         // ⌃1…⌃9 repo TAB'ını değiştirir (Electron paritesi). ⌘1…⌘9 ise aktif
-        // repo içindeki terminali odaklar — ikisi ayrı eksendir (karar 55).
-        // Değiştiriciler ayardan takas edilebilir (karar 58).
+        // repo içindeki terminali odaklar — ikisi ayrı eksendir (karar 59).
+        // Değiştiriciler ayardan takas edilebilir (karar 62).
         AppCommand(
             id: .switchToTabAtIndex, title: "Repository", menu: .shell, key: nil,
             modifiers: IndexShortcutStyle.default.repoModifiers,
@@ -96,7 +96,7 @@ public enum AppCommands {
             modifiers: [.command, .shift], separatorBefore: true,
             referenceTitle: "Focus Mode", referenceOrder: 11
         ),
-        // Karar 57: tüm arayüzü ölçekler (Electron `zoomIn`/`zoomOut`/
+        // Karar 61: tüm arayüzü ölçekler (Electron `zoomIn`/`zoomOut`/
         // `resetZoom` paritesi) — yalnız terminal fontunu değil.
         AppCommand(
             id: .zoomIn, title: "Zoom In", menu: .view, key: "+",
@@ -118,7 +118,7 @@ public enum AppCommands {
         ),
     ]
 
-    /// Komut tablosu, indeksli kısayol düzeni uygulanmış hâlde (karar 58).
+    /// Komut tablosu, indeksli kısayol düzeni uygulanmış hâlde (karar 62).
     public static func all(_ style: IndexShortcutStyle = .default) -> [AppCommand] {
         table.map { command in
             switch command.id {

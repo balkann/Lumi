@@ -73,9 +73,9 @@ public extension Theme {
 
         /// Monospace — metinlerin varsayılanı.
         ///
-        /// Punto ÜÇ fabrikada da `Theme.scaledFontSize` üzerinden geçer (karar 57):
+        /// Punto ÜÇ fabrikada da `Theme.scaledFontSize` üzerinden geçer (karar 61):
         /// arayüz ölçeği tek noktadan iner, çağrı yerleri ölçeği bilmez. YÜZ de
-        /// aynı biçimde tek noktadan iner (karar 59): sistem monospace'i
+        /// aynı biçimde tek noktadan iner (karar 63): sistem monospace'i
         /// (SF Mono, varsayılan) ya da bundle'daki JetBrains Mono.
         public static func mono(_ size: Size, weight: Font.Weight = .regular) -> Font {
             Theme.monoFont(size: Theme.scaledFontSize(size.points), weight: weight)
@@ -93,7 +93,7 @@ public extension Theme {
 
         // MARK: - Semantik hazır fontlar
 
-        // `var`: ölçek değiştiğinde yeniden hesaplanmaları gerekir (karar 57).
+        // `var`: ölçek değiştiğinde yeniden hesaplanmaları gerekir (karar 61).
         // `let` olsalardı ilk erişimdeki ölçekte donup kalırlardı.
         public static var caption: Font { ui(.caption) }
         public static var captionMono: Font { mono(.caption) }

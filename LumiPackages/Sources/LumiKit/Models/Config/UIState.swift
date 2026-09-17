@@ -32,10 +32,10 @@ public struct UIState: Sendable, Equatable {
     /// (migration için); yazımda overlay'e girmez, ham anahtar
     /// bilinmeyen-anahtar korumasıyla diskte aynen kalır.
     public var legacyGridColumns: GridLayout?
-    /// Karar 57 (additive): arayüz ölçeği (⌘+/⌘−/⌘0). nil = dosyada yok → %100.
+    /// Karar 61 (additive): arayüz ölçeği (⌘+/⌘−/⌘0). nil = dosyada yok → %100.
     /// Terminal font boyutu ayrı bir ayardır ve bu ölçekle ÇARPILIR.
     public var uiScale: Double?
-    /// Karar 59 (additive): arayüz yazı tipi. nil = dosyada yok → `.system`
+    /// Karar 63 (additive): arayüz yazı tipi. nil = dosyada yok → `.system`
     /// (SF Mono, eski davranış). Terminal fontu AYRI bir ayardır.
     public var uiFontFamily: UIFontFamily?
 

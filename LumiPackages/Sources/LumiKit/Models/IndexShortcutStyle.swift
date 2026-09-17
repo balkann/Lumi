@@ -1,10 +1,10 @@
 import Foundation
 
-/// İndeksli (1…9) kısayolların hangi eksene bağlandığı (karar 58).
+/// İndeksli (1…9) kısayolların hangi eksene bağlandığı (karar 62).
 ///
-/// İki indeksli kısayol ailesi vardır (karar 55): repo TAB geçişi ve aktif repo
+/// İki indeksli kısayol ailesi vardır (karar 59): repo TAB geçişi ve aktif repo
 /// içindeki terminal odağı. Hangisinin ⌘ hangisinin ⌃ olacağı kullanıcı
-/// ayarıdır; varsayılan karar 55'teki Electron paritesidir.
+/// ayarıdır; varsayılan karar 59'teki Electron paritesidir.
 public enum IndexShortcutStyle: String, Sendable, Equatable, CaseIterable {
     /// Varsayılan: ⌃1…⌃9 repo tab'ı, ⌘1…⌘9 terminal.
     case repoOnControl

@@ -1,6 +1,6 @@
 import CoreGraphics
 
-/// Arayüz ölçeği (karar 57) — Electron sürümünün `zoomIn`/`zoomOut`/`resetZoom`
+/// Arayüz ölçeği (karar 61) — Electron sürümünün `zoomIn`/`zoomOut`/`resetZoom`
 /// paritesi.
 ///
 /// **Neden token çarpanı, çizim ölçeği DEĞİL:** Chromium'un page zoom'u CSS
@@ -35,7 +35,7 @@ public extension Theme {
     /// metin taban çizgileri keyfi alt-piksel fazlarına düşer, her glyph farklı
     /// gri dağılımıyla raster'lanır ve yazı "parıldıyor" gibi görünür. Chromium'un
     /// page zoom'unda bu olmaz çünkü o da layout'u cihaz pikseline snap'ler —
-    /// yani yuvarlama, karar 57'nin taklit ettiği davranışın eksik kalan yarısıdır.
+    /// yani yuvarlama, karar 61'nin taklit ettiği davranışın eksik kalan yarısıdır.
     ///
     /// Sıfır (`Radius.none`) sıfır kalır; sıfırdan farklı bir değer ise asla
     /// sıfıra çökmez (bir çizgi tamamen kaybolurdu).

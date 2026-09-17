@@ -109,7 +109,7 @@ final class MainMenuBuilderTests: XCTestCase {
         }
     }
 
-    /// Karar 58: ayar takas edilince MENÜ de takas olur — indeksli item'ların
+    /// Karar 62: ayar takas edilince MENÜ de takas olur — indeksli item'ların
     /// maskesi yer değiştirir, başlıkları/tag'leri aynı kalır.
     func testSwappedStyleSwapsTheIndexedMenuModifiers() {
         let menus = buildMenus(style: .repoOnCommand)

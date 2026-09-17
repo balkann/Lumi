@@ -17,7 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let bridges = AppLifecycleBridges()
     private var harness: P1Harness?
     private var isShutdownComplete = false
-    /// Menüde KURULU olan indeksli kısayol düzeni (karar 58). Config yan
+    /// Menüde KURULU olan indeksli kısayol düzeni (karar 62). Config yan
     /// etkisi bununla karşılaştırılır — menü yalnız düzen değişince kurulur.
     private var installedShortcutStyle = IndexShortcutStyle.default
     private var shortcutStyleObserver: ConfigChangeBridge?
@@ -48,7 +48,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.openSettings()
         }
         // Config henüz diskten okunmadığı için menü varsayılan düzende kurulur;
-        // gerçek düzen bootstrap'ten sonra uygulanır (karar 58).
+        // gerçek düzen bootstrap'ten sonra uygulanır (karar 62).
         MainMenuBuilder.install(dispatcher: dispatcher, style: installedShortcutStyle)
         observeShortcutStyle()
 
@@ -60,7 +60,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    // MARK: - İndeksli kısayol düzeni (karar 58)
+    // MARK: - İndeksli kısayol düzeni (karar 62)
 
     /// Ayar değişince menü yeniden kurulur: `NSMenuItem` kısayolları ancak
     /// yeni item'larla değişir, tablo da aynı düzenden türer.
@@ -114,12 +114,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         shared.layout.onFocusModeChanged = { [weak self] active in
             self?.windowController.setTrafficLightsHidden(active)
         }
-        // Karar 57: ölçek → token çarpanı + arayüzün yeniden kurulması.
+        // Karar 61: ölçek → token çarpanı + arayüzün yeniden kurulması.
         // Store `Theme`'i ve AppKit'i tanımaz; köprü burada.
         shared.layout.onUIScaleChanged = { [weak self] scale in
             self?.applyUIScale(scale)
         }
-        // Karar 59: yazı tipi → Theme token'ı + arayüzün yeniden kurulması.
+        // Karar 63: yazı tipi → Theme token'ı + arayüzün yeniden kurulması.
         shared.layout.onUIFontFamilyChanged = { [weak self] family in
             self?.applyUIFontFamily(family)
         }
@@ -127,7 +127,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         applyUIFontFamily(shared.layout.uiFontFamily)
     }
 
-    /// Ölçek değişiminin ÜÇ ayağı (karar 57):
+    /// Ölçek değişiminin ÜÇ ayağı (karar 61):
     /// 1. `Theme.uiScale` — punto/boşluk token'larının çarpanı.
     /// 2. İçerik view'ının yeniden kurulması — SwiftUI static token okumalarını
     ///    izlemediği için mevcut ağaç eski ölçekte donar; `NSHostingView`
@@ -161,7 +161,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return factor > 0 ? 1 / factor : 0.5
     }
 
-    /// Karar 59: yazı tipi değişimi ölçeğin ikinci ayağını paylaşır (içerik
+    /// Karar 63: yazı tipi değişimi ölçeğin ikinci ayağını paylaşır (içerik
     /// view'ının yeniden kurulması). Terminal fontu ETKİLENMEZ — o ayrı bir
     /// ayardır ve zaten JetBrains Mono'yu varsayılan alır.
     private func applyUIFontFamily(_ family: UIFontFamily) {

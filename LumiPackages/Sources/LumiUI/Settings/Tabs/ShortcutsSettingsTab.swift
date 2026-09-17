@@ -2,7 +2,7 @@ import LumiKit
 import SwiftUI
 
 /// Kısayol referansı (tek kaynak: `AppCommands`) + indeksli kısayolların
-/// ⌘/⌃ ekseni (karar 58). Tablonun geri kalanı salt-okunurdur.
+/// ⌘/⌃ ekseni (karar 62). Tablonun geri kalanı salt-okunurdur.
 struct ShortcutsSettingsTab: SettingsTabContent {
     static let tab: SettingsTab = .shortcuts
 

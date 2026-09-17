@@ -28,7 +28,7 @@ enum MainMenuBuilder {
         .quit: #selector(NSApplication.terminate(_:)),
     ]
 
-    /// `style` indeksli kısayolların ⌘/⌃ ekseni (karar 58) — ayar değişince
+    /// `style` indeksli kısayolların ⌘/⌃ ekseni (karar 62) — ayar değişince
     /// menü bu fonksiyonla YENİDEN kurulur.
     static func install(
         dispatcher: MenuActionDispatcher,

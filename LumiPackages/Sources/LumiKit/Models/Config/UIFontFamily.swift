@@ -1,6 +1,6 @@
 import Foundation
 
-/// Arayüz yazı tipi (karar 59) — Electron sürümüyle tipografi paritesi.
+/// Arayüz yazı tipi (karar 63) — Electron sürümüyle tipografi paritesi.
 ///
 /// Karar 13 "JetBrains Mono tipografi native'de yeniden üretilir" diyordu ama
 /// `Theme.Typography.mono` `.system(design: .monospaced)` (SF Mono) döndürüyordu;

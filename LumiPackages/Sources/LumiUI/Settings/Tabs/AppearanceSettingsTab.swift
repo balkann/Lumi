@@ -1,7 +1,7 @@
 import LumiKit
 import SwiftUI
 
-/// Arayüz yazı tipi (karar 59) + panel görünürlükleri + kenar hover'ıyla
+/// Arayüz yazı tipi (karar 63) + panel görünürlükleri + kenar hover'ıyla
 /// açılma (karar 44) — anında uygulanır ve hatırlanır.
 struct AppearanceSettingsTab: SettingsTabContent {
     static let tab: SettingsTab = .appearance

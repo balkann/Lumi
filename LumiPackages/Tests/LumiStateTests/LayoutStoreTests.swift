@@ -28,7 +28,7 @@ final class LayoutStoreTests: XCTestCase {
         }
     }
 
-    // MARK: - Arayüz ölçeği (karar 57)
+    // MARK: - Arayüz ölçeği (karar 61)
 
     func testZoomStepsThroughTheClosedSet() {
         XCTAssertEqual(store.uiScale, 1)
@@ -102,7 +102,7 @@ final class LayoutStoreTests: XCTestCase {
         XCTAssertEqual(store.uiScale, LayoutStore.uiScaleSteps.last)
     }
 
-    // MARK: - Arayüz yazı tipi (karar 59)
+    // MARK: - Arayüz yazı tipi (karar 63)
 
     /// Anahtar yoksa eski davranış (SF Mono) sürer — mevcut kurulumlar yüz
     /// değiştirmez.

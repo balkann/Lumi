@@ -22,7 +22,7 @@ final class AppCommandsTests: XCTestCase {
     }
 
     /// Tüm kısayollar ⌘ taşır — TEK istisna indeksli ailelerden ⌃'ye düşenidir
-    /// (karar 55/58): varsayılanda repo tab geçişi, takas edilince terminal
+    /// (karar 59/58): varsayılanda repo tab geçişi, takas edilince terminal
     /// odağı. İstisna burada AÇIKÇA listelenir ki üçüncü bir ⌘'siz kısayol
     /// sessizce eklenemesin.
     func testEveryShortcutUsesCommandModifier() {
@@ -112,7 +112,7 @@ final class AppCommandsTests: XCTestCase {
         XCTAssertEqual(terminalFocus?.displayCombos, [["⌘", "1"], ["⌘", "9"]])
     }
 
-    // MARK: - İndeksli kısayol düzeni (karar 58)
+    // MARK: - İndeksli kısayol düzeni (karar 62)
 
     /// Takas YALNIZ iki indeksli ailenin değiştiricilerini yer değiştirir.
     func testSwappedStyleExchangesIndexedModifiers() {

@@ -48,11 +48,11 @@ enum UIStateCodec {
             fallbackRightOpen: state.rightSidebarOpen
         )
         state.legacyGridColumns = GridLayoutCodec.decodeLegacyColumns(dict["gridColumns"])
-        // Karar 57 (additive): arayüz ölçeği. Yoksa nil → %100.
+        // Karar 61 (additive): arayüz ölçeği. Yoksa nil → %100.
         if let value = JSONValue.double(dict["uiScale"]) {
             state.uiScale = value
         }
-        // Karar 59 (additive): arayüz yazı tipi. Yoksa/bozuksa nil → `.system`.
+        // Karar 63 (additive): arayüz yazı tipi. Yoksa/bozuksa nil → `.system`.
         if let raw = dict["uiFontFamily"] as? String {
             state.uiFontFamily = UIFontFamily(rawValue: raw)
         }
@@ -90,12 +90,12 @@ enum UIStateCodec {
             overlay["panelLayout"] = PanelLayoutCodec.overlay(layout)
             overlay["visibleSlots"] = PanelLayoutCodec.visibleSlotsOverlay(layout)
         }
-        // Karar 57 (additive): yalnız DOLU iken yazılır — %100'de eski
+        // Karar 61 (additive): yalnız DOLU iken yazılır — %100'de eski
         // dosyalarda olmayan bir anahtar üretilmez (karar 9).
         if let scale = state.uiScale {
             overlay["uiScale"] = scale
         }
-        // Karar 59 (additive): yalnız DOLU iken yazılır — varsayılan yüzde eski
+        // Karar 63 (additive): yalnız DOLU iken yazılır — varsayılan yüzde eski
         // dosyalarda olmayan bir anahtar üretilmez (karar 9).
         if let family = state.uiFontFamily {
             overlay["uiFontFamily"] = family.rawValue

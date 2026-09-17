@@ -19,7 +19,7 @@ public struct ShortcutReference: Sendable, Identifiable, Equatable {
 
     /// Kullanıcıya gösterilen kısayol tablosu (platform standardı Edit/Window
     /// item'ları bilinçli olarak dışarıdadır — design/03 §2). `style` ayardan
-    /// gelen indeksli kısayol düzenidir (karar 58): tablo menüyle aynı anda
+    /// gelen indeksli kısayol düzenidir (karar 62): tablo menüyle aynı anda
     /// takas olur.
     public static func list(style: IndexShortcutStyle = .default) -> [ShortcutReference] {
         AppCommands.reference(style).map {

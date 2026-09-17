@@ -46,8 +46,8 @@ public struct AppConfig: Sendable, Equatable {
     /// (karar 45). Kapatılınca yönetilen girdiler sağlayıcı ayarlarından silinir
     /// ve durum yalnız OSC/çıktı sezgisiyle türer. Additive (karar 9): yoksa açık.
     public var agentHooksEnabled: Bool
-    /// ⌃1…⌃9 / ⌘1…⌘9 indeksli kısayolların hangi eksene bağlandığı (karar 58).
-    /// Additive (karar 9): yoksa/geçersizse karar 55 düzeni (`repoOnControl`).
+    /// ⌃1…⌃9 / ⌘1…⌘9 indeksli kısayolların hangi eksene bağlandığı (karar 62).
+    /// Additive (karar 9): yoksa/geçersizse karar 59 düzeni (`repoOnControl`).
     public var indexShortcutStyle: IndexShortcutStyle
     public var workspaces: [ProjectWorkspace]
 

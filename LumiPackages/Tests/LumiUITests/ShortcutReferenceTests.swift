@@ -21,7 +21,7 @@ final class ShortcutReferenceTests: XCTestCase {
     }
 
     func testEveryComboIsNonEmpty() {
-        // Repo tab geçişi ⌘'siz TEK kısayoldur (karar 55): ⌘1…⌘9 terminalde.
+        // Repo tab geçişi ⌘'siz TEK kısayoldur (karar 59): ⌘1…⌘9 terminalde.
         for ref in ShortcutReference.list() {
             XCTAssertFalse(ref.combos.isEmpty, "\(ref.action) kombosuz")
             let expectedModifier = ref.action == "Switch to Tab N" ? "⌃" : "⌘"
@@ -40,7 +40,7 @@ final class ShortcutReferenceTests: XCTestCase {
         XCTAssertEqual(tabN?.combos.count, 2, "aralıklı kısayol iki kombo (⌃1 – ⌃9) olmalı")
     }
 
-    /// Karar 58: tablo menüyle aynı düzenden türer — takas edilince satırların
+    /// Karar 62: tablo menüyle aynı düzenden türer — takas edilince satırların
     /// etiketleri aynı kalır, YALNIZ indeksli iki ailenin sembolü yer değiştirir.
     func testSwappedStyleSwapsOnlyTheIndexedRows() {
         let swapped = ShortcutReference.list(style: .repoOnCommand)
