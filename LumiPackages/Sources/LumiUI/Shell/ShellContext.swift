@@ -172,6 +172,73 @@ public final class ShellContext {
         }
     }
 
+    /// ⇧⌘W (karar 66): aktif checkout'un PROJESİNİ Projects'ten kaldırır.
+    ///
+    /// ⌘W'ye değil ayrı bir korda bağlıdır — kaldırma kalıcı kullanıcı verisine
+    /// dokunur ve projenin TÜM checkout'larını kapatır; ⌘W ise refleks bir tuş.
+    public func requestCloseActiveProject() {
+        guard let checkout = activeRepoPath,
+              let projectPath = navigation.projectPath(containing: checkout),
+              let project = repos.repo(at: projectPath)
+        else { return }
+        requestRemoveProject(project)
+    }
+
+    /// Kaldırmanın TEK kapısı: sağ tık menüsü de ⇧⌘W de buradan geçer.
+    ///
+    /// Minimize terminal varsa önce onay sorulur. Karar 65'te kaldırma açık
+    /// checkout'ları kapatmaya başlamıştı ama `closeTab`'ı doğrudan çağırıp
+    /// `requestCloseTab` guard'ını ATLIYORDU — görünmeyen bir terminal
+    /// sessizce ölüyordu. Guard artık projenin tüm checkout'ları üzerinden
+    /// toplanır.
+    public func requestRemoveProject(_ project: Repo) {
+        let minimized = projectCheckouts(of: project.path)
+            .reduce(0) { $0 + terminals.minimizedTerminals(in: $1).count }
+        guard minimized > 0 else {
+            Task { await removeSidebarProject(project) }
+            return
+        }
+        dialogs.present(.closeTab(CloseTabDialogState(
+            repoPath: project.path,
+            repoName: project.name,
+            minimizedCount: minimized,
+            isProject: true
+        )))
+    }
+
+    private func projectCheckouts(of projectPath: String) -> [String] {
+        [projectPath] + workspaces.workspaces(for: projectPath).map(\.path)
+    }
+
+    /// Projects'ten çıkarma (karar 65): açık checkout'ları da KAPATIR.
+    ///
+    /// Projects tek gezinme evreni olduğu için, listeden çıkan bir projenin
+    /// açık kalan checkout'una ulaşmanın yolu kalmazdı — ne panelde görünür,
+    /// ne indeksli kısayolda, ne ⌘O'da. Açık terminalleri de serbest bırakır.
+    public func removeSidebarProject(_ project: Repo) async {
+        for checkout in [project.path] + workspaces.workspaces(for: project.path).map(\.path)
+        where navigation.openTabs.contains(checkout) {
+            navigation.closeTab(checkout)
+        }
+        await workspaces.removeProject(project)
+    }
+
+    /// ⌘O'nun hedefi (karar 65): projeye GİT.
+    ///
+    /// Projects listesinde yoksa önce eklenir — "açtığın şeyi Projects'te
+    /// görürsün" kuralı buradan gelir; eskiden ⌘O görünmeyen bir tab
+    /// yaratıyordu ve o repo'ya bir daha ⌘O ile dönülemiyordu (seçici açık
+    /// tab'ları dışlıyordu). Zaten ekliyse yalnız geçilir.
+    ///
+    /// Açılan checkout, o projede en son kullanılandır (`checkoutToOpen`);
+    /// hiç kullanılmamışsa projenin kendi kökü.
+    public func goToProject(_ project: Repo) async {
+        if !workspaces.sidebarProjectPaths.contains(project.path) {
+            _ = await workspaces.addProject(project)
+        }
+        navigation.openTab(navigation.checkoutToOpen(in: project.path))
+    }
+
     // MARK: - Projects paneli ajan satırları ve silme (karar 51)
 
     /// Sidebar ajan satırı: terminalin sekmesi açık değilse açılır, sonra
@@ -244,7 +311,12 @@ public final class ShellContext {
     public func confirmCloseTab() {
         guard let dialog = dialogs.closeTabDialog else { return }
         dialogs.dismiss()
-        navigation.closeTab(dialog.repoPath)
+        guard dialog.isProject else {
+            navigation.closeTab(dialog.repoPath)
+            return
+        }
+        guard let project = repos.repo(at: dialog.repoPath) else { return }
+        Task { await removeSidebarProject(project) }
     }
 
     public func cancelCloseTab() {

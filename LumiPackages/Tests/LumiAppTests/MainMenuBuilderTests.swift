@@ -48,11 +48,11 @@ final class MainMenuBuilderTests: XCTestCase {
     func testSeparatorsFollowTheCommandTable() {
         let shellMenu = buildMenus().mainMenu.items
             .compactMap(\.submenu).first { $0.title == "Shell" }
-        // New Terminal, Close Terminal, ─────, Open Repo…, ─────, Repository 1…9
+        // New Terminal, Close Terminal, ─────, Go to Project…, ─────, Project 1…9
         XCTAssertEqual(
             shellMenu?.items.map { $0.isSeparatorItem ? "—" : $0.title },
-            ["New Terminal", "Close Terminal", "—", "Open Repo…", "—"]
-                + (1...9).map { "Repository \($0)" }
+            ["New Terminal", "Close Terminal", "Close Project", "—", "Go to Project…", "—"]
+                + (1...9).map { "Project \($0)" }
         )
     }
 
@@ -115,7 +115,7 @@ final class MainMenuBuilderTests: XCTestCase {
         let menus = buildMenus(style: .repoOnCommand)
         let repoItems = menus.mainMenu.items.compactMap(\.submenu)
             .first { $0.title == "Shell" }?
-            .items.filter { $0.title.hasPrefix("Repository ") } ?? []
+            .items.filter { $0.title.hasPrefix("Project ") } ?? []
         let terminalItems = menus.mainMenu.items.compactMap(\.submenu)
             .first { $0.title == "Terminal" }?
             .items.filter { $0.title.hasPrefix("Terminal ") } ?? []

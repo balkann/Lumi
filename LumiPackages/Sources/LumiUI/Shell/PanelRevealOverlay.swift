@@ -19,7 +19,7 @@ public struct PanelRevealOverlay: View {
     /// Kenar hover'ı anlamlı olan yuvalar — `.bottom`'ın kenarı yoktur.
     public static let slots: [PanelSlot] = [.left, .right]
 
-    /// Kayıt defteri CANLI tutulur (karar 68): `AppShellView` gibi `registries`
+    /// Kayıt defteri CANLI tutulur (karar 71): `AppShellView` gibi `registries`
     /// nesnesi saklanır, `panels` DEĞER kopyası saklanmaz — kopya, kompozisyon
     /// sırası yüzünden boş donuyordu.
     let registries: ShellRegistries

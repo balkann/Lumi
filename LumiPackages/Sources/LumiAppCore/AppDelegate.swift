@@ -44,9 +44,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSApp.activate(ignoringOtherApps: true)
         }
 
-        AppMenuCommands.register(in: dispatcher, shared: shared) { [weak self] in
-            self?.openSettings()
-        }
+        AppMenuCommands.register(
+            in: dispatcher,
+            shared: shared,
+            openSettings: { [weak self] in self?.openSettings() },
+            closeActiveProject: { [weak self] in
+                self?.composition.shell.context.requestCloseActiveProject()
+            }
+        )
         // Config henüz diskten okunmadığı için menü varsayılan düzende kurulur;
         // gerçek düzen bootstrap'ten sonra uygulanır (karar 62).
         MainMenuBuilder.install(dispatcher: dispatcher, style: installedShortcutStyle)

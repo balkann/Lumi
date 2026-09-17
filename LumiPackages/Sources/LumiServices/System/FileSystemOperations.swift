@@ -5,7 +5,7 @@ import LumiKit
 /// `context:delete-file` / `reveal-in-file-manager` karşılıkları.
 ///
 /// **Path guard (design/02 §8 sapmasının kapatılması, refactor 3.9; daralt:
-/// karar 67):** yalnız ÇÖPE ATMA bilinen köklere (projectsRoot +
+/// karar 70):** yalnız ÇÖPE ATMA bilinen köklere (projectsRoot +
 /// additionalPaths + workspaces) kapalıdır. Guard `RepoPathGuard` ile
 /// paylaşılır (git tarafıyla tek kural). Kök listesi boşsa (henüz
 /// yapılandırılmamış ilk açılış) ev dizinine düşülür — aksi halde silme
@@ -45,7 +45,7 @@ public struct FileSystemOperations: Sendable {
         }
     }
 
-    /// Kök guard'ı YOKTUR (karar 67): Finder'da gösterme yıkıcı değildir ve
+    /// Kök guard'ı YOKTUR (karar 70): Finder'da gösterme yıkıcı değildir ve
     /// terminalde tıklanan yol (ör. `/private/tmp/...`) neredeyse hiçbir zaman
     /// projectsRoot altında olmaz — guard bu eylemi sessizce öldürüyordu.
     public func revealInFinder(path: String) async {

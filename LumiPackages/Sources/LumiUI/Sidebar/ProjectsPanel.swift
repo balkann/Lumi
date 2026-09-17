@@ -147,7 +147,7 @@ public struct ProjectsPanel: View {
                 "Remove from Projects", icon: "trash", isDestructive: true,
                 isEnabled: !(shell.workspaces.isCreating && operationBelongs(to: project))
             ) {
-                Task { await shell.workspaces.removeProject(project) }
+                shell.requestRemoveProject(project)
             },
         ]
     }

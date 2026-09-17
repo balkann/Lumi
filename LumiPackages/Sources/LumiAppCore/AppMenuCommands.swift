@@ -13,7 +13,8 @@ enum AppMenuCommands {
     static func register(
         in dispatcher: MenuActionDispatcher,
         shared: SharedStores,
-        openSettings: @escaping () -> Void
+        openSettings: @escaping () -> Void,
+        closeActiveProject: @escaping () -> Void
     ) {
         dispatcher.register(.newTerminal) {
             guard let active = shared.navigation.activeRepoPath else { return }
@@ -40,6 +41,10 @@ enum AppMenuCommands {
                 minimizedCount: minimizedCount
             )))
         }
+        // Karar 66: kaldırma `repos` + `workspaces`'i gerektirir; ikisi de
+        // `SharedStores`'ta DEĞİL (kabuk repo feature'ına bağlanmaz — karar 33).
+        // `openSettings` ile aynı desen: aksiyon dışarıdan enjekte edilir.
+        dispatcher.register(.closeProject) { closeActiveProject() }
         dispatcher.register(.openRepoSelector) {
             shared.dialogs.isRepoSelectorOpen = true
         }
@@ -51,11 +56,11 @@ enum AppMenuCommands {
             guard let active = shared.navigation.activeRepoPath else { return }
             shared.terminals.focusPrevious(in: active)
         }
-        dispatcher.register(.switchToTabAtIndex) { index in
+        // Karar 65: indeks PROJELERE vurur. Eskiden `openTabs`'a vuruyordu —
+        // kullanıcının hiçbir yerde GÖREMEDİĞİ bir listeye.
+        dispatcher.register(.switchToProjectAtIndex) { index in
             guard let index else { return }
-            let tabs = shared.navigation.openTabs
-            guard tabs.indices.contains(index - 1) else { return }
-            shared.navigation.setRoute(.repo(tabs[index - 1]))
+            shared.navigation.openProject(at: index - 1)
         }
         dispatcher.register(.focusTerminalAtIndex) { index in
             guard let index, let active = shared.navigation.activeRepoPath else { return }

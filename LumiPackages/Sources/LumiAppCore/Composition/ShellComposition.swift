@@ -107,7 +107,7 @@ struct ShellComposition {
     /// Karar 44: İLK kayıt — diğer overlay'lerin (modal, toast, dialog) altında
     /// kalır. Yalnız en az bir yuva kenar hover'ına uygunken çizilir.
     ///
-    /// Karar 68: kayıt defteri CANLI okunur, kopyalanmaz. `PanelItemRegistry`
+    /// Karar 71: kayıt defteri CANLI okunur, kopyalanmaz. `PanelItemRegistry`
     /// bir DEĞER tipidir; burada `registries.panels` kopyalanınca descriptor,
     /// feature'lar öğelerini kaydetmeden ÖNCEKİ boş kopyayı donduruyordu
     /// (bu kayıt kasten en başta yapılıyor). `resolved` hep boş dönüyor, kenar

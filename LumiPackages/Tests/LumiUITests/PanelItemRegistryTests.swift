@@ -49,7 +49,7 @@ final class PanelItemRegistryTests: XCTestCase {
         registry.resolved(slot: slot, layout: layout, context: fixture.context).map(\.id)
     }
 
-    // MARK: - Değer semantiği (karar 68)
+    // MARK: - Değer semantiği (karar 71)
 
     /// `PanelItemRegistry` bir DEĞER tipidir: erken alınan bir kopya, sonradan
     /// kaydedilen öğeleri GÖRMEZ. Kenar hover'ı overlay'i (karar 44) tam bu

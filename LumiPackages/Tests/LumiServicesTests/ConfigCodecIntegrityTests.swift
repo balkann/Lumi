@@ -221,7 +221,8 @@ final class ConfigCodecIntegrityTests: XCTestCase {
             .settingWidth(320, for: .left),
         legacyGridColumns: nil,
         uiScale: 1.25,
-        uiFontFamily: .jetBrainsMono
+        uiFontFamily: .jetBrainsMono,
+        lastCheckouts: ["/r/alpha": "/r/alpha/wt"]
     )
 }
 

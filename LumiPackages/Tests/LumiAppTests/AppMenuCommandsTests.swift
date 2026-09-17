@@ -14,6 +14,7 @@ import XCTest
 @MainActor
 final class AppMenuCommandsTests: XCTestCase {
     private var dispatcher: MenuActionDispatcher!
+    private var closeProjectCount = 0
     private var shared: SharedStores!
     private var terminalService: FakeTerminalService!
 
@@ -26,7 +27,13 @@ final class AppMenuCommandsTests: XCTestCase {
             toastAutoDismissAfter: 60
         )
         dispatcher = MenuActionDispatcher()
-        AppMenuCommands.register(in: dispatcher, shared: shared, openSettings: {})
+        closeProjectCount = 0
+        AppMenuCommands.register(
+            in: dispatcher,
+            shared: shared,
+            openSettings: {},
+            closeActiveProject: { [weak self] in self?.closeProjectCount += 1 }
+        )
         // Terminal listesi servis stream'inden akar: lifecycle başlamadan
         // spawn edilen terminal store'a düşmez.
         await shared.terminals.start()
@@ -38,25 +45,64 @@ final class AppMenuCommandsTests: XCTestCase {
 
     // MARK: - ⌃1…⌃9 repo tab'ını değiştirir
 
-    func testSwitchToTabActivatesTheTabAtTheGivenIndex() {
-        shared.navigation.openTab("/r/alpha")
-        shared.navigation.openTab("/r/beta")
-        shared.navigation.openTab("/r/gamma")
+    /// Karar 65: indeks AÇIK TAB'lara değil, PROJELER listesine vurur —
+    /// kullanıcının gerçekten gördüğü liste odur.
+    func testSwitchToProjectActivatesTheProjectAtTheGivenIndex() {
+        wireProjects(["/r/alpha", "/r/beta", "/r/gamma"])
 
-        dispatcher.perform(.switchToTabAtIndex, index: 2)
+        dispatcher.perform(.switchToProjectAtIndex, index: 2)
 
         XCTAssertEqual(shared.navigation.activeRepoPath, "/r/beta")
     }
 
-    /// Açık tab sayısından büyük indeks sessizce yutulur — ⌃9 üç tab'lıyken
-    /// aktif tab'ı DEĞİŞTİRMEZ.
-    func testSwitchToTabIgnoresIndexBeyondOpenTabs() {
+    /// Proje sayısından büyük indeks sessizce yutulur — aktif olanı DEĞİŞTİRMEZ.
+    func testSwitchToProjectIgnoresIndexBeyondProjectCount() {
+        wireProjects(["/r/alpha", "/r/beta"])
+        dispatcher.perform(.switchToProjectAtIndex, index: 1)
+
+        dispatcher.perform(.switchToProjectAtIndex, index: 9)
+
+        XCTAssertEqual(shared.navigation.activeRepoPath, "/r/alpha")
+    }
+
+    /// Bir projeye dönünce, o projede EN SON kullanılan checkout açılır —
+    /// projenin kökü değil (karar 65).
+    func testSwitchToProjectReopensTheLastUsedCheckout() {
+        wireProjects(["/r/alpha", "/r/beta"], checkouts: ["/r/alpha": ["/r/alpha/wt"]])
+        shared.navigation.openTab("/r/alpha/wt")   // alpha'da worktree kullanıldı
+        dispatcher.perform(.switchToProjectAtIndex, index: 2)
+
+        dispatcher.perform(.switchToProjectAtIndex, index: 1)
+
+        XCTAssertEqual(shared.navigation.activeRepoPath, "/r/alpha/wt")
+    }
+
+    /// Hatırlanan checkout artık projeye ait değilse (worktree silinmiş)
+    /// projenin köküne düşülür — ölü bir yola gidilmez.
+    func testSwitchToProjectFallsBackWhenRememberedCheckoutIsGone() {
+        wireProjects(["/r/alpha"], checkouts: ["/r/alpha": ["/r/alpha/wt"]])
+        shared.navigation.openTab("/r/alpha/wt")
+        wireProjects(["/r/alpha"])                 // worktree kayboldu
+        shared.navigation.setRoute(.none)
+
+        dispatcher.perform(.switchToProjectAtIndex, index: 1)
+
+        XCTAssertEqual(shared.navigation.activeRepoPath, "/r/alpha")
+    }
+
+    /// Proje köprüsü enjekte edilmemişse (proje feature'ı olmayan kompozisyon)
+    /// komut sessizce hiçbir şey yapmaz — çökmez.
+    func testSwitchToProjectIsInertWithoutProjectBridge() {
         shared.navigation.openTab("/r/alpha")
-        shared.navigation.openTab("/r/beta")
 
-        dispatcher.perform(.switchToTabAtIndex, index: 9)
+        dispatcher.perform(.switchToProjectAtIndex, index: 1)
 
-        XCTAssertEqual(shared.navigation.activeRepoPath, "/r/beta")
+        XCTAssertEqual(shared.navigation.activeRepoPath, "/r/alpha")
+    }
+
+    private func wireProjects(_ projects: [String], checkouts: [String: [String]] = [:]) {
+        shared.navigation.projectOrder = { projects }
+        shared.navigation.projectCheckouts = { [$0] + (checkouts[$0] ?? []) }
     }
 
     /// İki indeksli aile aynı eksende DEĞİL: ⌘N terminal odaklar, tab'a
@@ -102,5 +148,21 @@ final class AppMenuCommandsTests: XCTestCase {
 
         XCTAssertTrue(shared.navigation.openTabs.isEmpty)
         XCTAssertTrue(terminalService.killedIDs.isEmpty)
+    }
+
+    /// Karar 66: ⇧⌘W ayrı bir komuttur ve enjekte edilen aksiyonu çağırır —
+    /// kaldırma `repos`+`workspaces` gerektirir, `SharedStores`'ta yokturlar.
+    func testCloseProjectInvokesTheInjectedAction() {
+        dispatcher.perform(.closeProject, index: nil)
+        XCTAssertEqual(closeProjectCount, 1)
+    }
+
+    /// ⌘W ile ⇧⌘W AYRI komutlardır: ⌘W projeyi kaldırmaz.
+    func testCloseTerminalDoesNotRemoveTheProject() {
+        shared.navigation.openTab("/r/alpha")
+
+        dispatcher.perform(.closeTerminal, index: nil)
+
+        XCTAssertEqual(closeProjectCount, 0)
     }
 }

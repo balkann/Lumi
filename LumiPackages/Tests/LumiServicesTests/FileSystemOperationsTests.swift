@@ -4,7 +4,7 @@ import XCTest
 
 @testable import LumiServices
 
-/// Refactor 3.9 (design/02 §8 sapmasının kapatılması) + karar 67: çöpe atma
+/// Refactor 3.9 (design/02 §8 sapmasının kapatılması) + karar 70: çöpe atma
 /// bilinen kökler dışında çalışmaz; reveal/open guard'ın dışındadır.
 final class FileSystemOperationsTests: XCTestCase {
     private final class Recorder: @unchecked Sendable {
@@ -96,7 +96,7 @@ final class FileSystemOperationsTests: XCTestCase {
         }
     }
 
-    /// Karar 67: Finder'da gösterme kök guard'ının DIŞINDADIR — terminalde
+    /// Karar 70: Finder'da gösterme kök guard'ının DIŞINDADIR — terminalde
     /// tıklanan yol (Claude'un `/private/tmp/...` scratchpad'i gibi) neredeyse
     /// hiçbir zaman projectsRoot altında olmaz.
     func testRevealWorksOutsideKnownRoots() async {

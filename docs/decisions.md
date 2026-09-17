@@ -555,7 +555,37 @@ Kullanıcı isteği: dialogdaki native dropdown'lar ve butonlar Lumi'ye yabancı
 - **Sınırlar:** `UIState.uiFontFamily` (`UIFontFamily`, additive — karar 9: `ui-state.json`, varsayılan yüzde anahtar YAZILMAZ, bozuk değer `.system`'e düşer) → `LayoutStore.uiFontFamily` + `setUIFontFamily` + `onUIFontFamilyChanged` → `AppDelegate.applyUIFontFamily` → `Theme.uiFontFamily` + `replaceContentView`. Store `Theme`'i tanımaz.
 - **Kapsam dışı:** keyfi sistem fontu seçimi (terminaldeki gibi aile listesi), punto/ağırlık/tracking'in tek tek ayarlanması ve italik yüzlerin eklenmesi (arayüzde tek `.italic()` çağrısı var). Ayar iki hazır yüz arasında seçim yapar.
 
-### 64. Kenar hover'ı (auto-reveal) AppKit sensörüne taşındı (2026-09-17)
+### 64. ⌘Q'da kurulum: `Scripts/install-on-quit.sh` (2026-09-17)
+
+- **Sorun:** `make-app.sh --install` Lumi çalışırken bilerek reddeder — çalışan uygulamanın bundle'ını silmek, süreç eski inode'u tuttuğu için sessizce "eski sürümü kullanmaya devam etme" durumu yaratır ve kullanıcı yeni sürümde olduğunu sanır. Ama Claude Code Lumi'nin kendi terminal kartında çalıştığında Lumi'yi kapatmak o oturumu da düşürür, yani kurulum oturum içinden tamamlanamaz. Bu akış şimdiye kadar `~/.lumi-installer` altında elle kurulan, ev dizinine sabitlenmiş bir script'le yürüyordu; repoda karşılığı yoktu.
+- **Çözüm:** kurulum launchd'ye devredilir. `Scripts/install-on-quit.sh` bir LaunchAgent kaydeder; agent Lumi'nin kapanmasını bekler, `/Applications`'a kurar, uygulamayı yeniden açar ve kendini siler. Kullanıcı yalnız ⌘Q yapar; oturumları resume edilerek geri gelir. `setsid`/`nohup` ile detach etmek YETMEZ (denendi: ⌘Q anında süreç öldü, kurulum sessizce yapılmadı) — süreci launchd'nin sahiplenmesi gerekir.
+- **Tek dosya, iki mod:** normal çağrı agent'ı kurar, agent aynı script'i `--watch <kaynak.app>` ile çağırır. Yol repo kökünden türetilir, `--skip-build` hazır `dist/Lumi.app` ile çalışır, `--cancel` bekleyen izleyiciyi kurulum yapmadan kaldırır. Lumi zaten kapalıysa ertelemeden doğrudan kurar. Bekleme 12 saatte biter ve kurulum YAPILMADAN temizlenir — günler sonra beklenmedik bir anda uygulamayı değiştirmesindense iptal olsun.
+- **`Scripts/make-app.local.sh` repoya girmez** (karar 60 yerinde): amacı kişisel olmaktır (imza `IDENTITY`'si, makineye özel `post_install`). Paylaşılması gereken şey kurulum mekanizmasıydı, kişisel ayarlar değil.
+- **İzleyici ve bundle TCC dışına SAHNELENİR** (2026-09-17 eki, ilk sürüm çalışmıyordu). Repo Desktop/Documents/Downloads altındaysa launchd script'i okuyamaz: `/bin/bash: …/Scripts/install-on-quit.sh: Operation not permitted`. Bu yüzden kurulum modu, kullanıcı olarak (erişimi var) hem script'i hem `dist/Lumi.app`'i korumasız `~/.lumi-installer/` altına kopyalar; LaunchAgent yalnız oraya bakar. Yan faydası: bekleme sürerken repo'da build almak, dal değiştirmek ya da klasörü taşımak kurulacak sürümü değiştirmez — ne sahnelendiyse o kurulur. Sahne, kurulumdan sonra ve `--cancel`'da silinir.
+- **Hatanın GÖRÜNMEZ olması asıl kusurdu:** plist'te `StandardErrorPath` yoktu, izleyici kendi log'unu `exec` ile açtığı için o satıra varamadan ölen her hata sessizce kayboluyordu — agent "kayıtlı ama çalışmıyor" görünüyor, sebebi hiçbir yerde yazmıyordu. Artık plist stdout/stderr'i `~/.lumi-installer/launchd.log`'a yazar. İki hata ancak bu sayede bulundu: TCC reddi ve `set -u` altında launchd'nin ortamında `HOME`'un gelmemesi (plist artık `HOME`/`PATH`'i açıkça geçirir, script'te de passwd kaydından okuyan bir yedek var).
+- **Doğrulama BEKLER:** `launchctl bootstrap` döndüğünde job henüz spawn edilmemiş olabilir; hemen bakılırsa "not running" görünür ve script yanlış yere hata verir. Durum 5 sn boyunca yoklanır.
+- **Aynı commit'te bir koruma hatası düzeltildi:** `make-app.sh --install`'ın "Lumi çalışıyor mu" kontrolü `ps -eo args= | grep -q …` kalıbındaydı ve dosyadaki `set -o pipefail` ile **bozuktu**. `grep -q` eşleşmeyi bulur bulmaz çıkıyor, `ps` SIGPIPE alıyor, pipefail pipeline'ı 141 yapıyordu — yani Lumi ÇALIŞIRKEN koşul "bulunamadı"ya düşüyor ve koruma hiç tetiklenmiyordu. `ps -eo args=` çıktısı ~150 KB, pipe buffer 64 KB olduğu için kaçınılmazdı. İki script de artık pipe kurmuyor: çıktı tamamen okunur, eşleşme kabukta `case` ile yapılır. `pgrep` ise zaten kullanılmıyor (`-x Lumi` eşleşmez, bazı bağlamlarda çalışan uygulamayı hiç görmez).
+
+### 65. Tek gezinme evreni: repo tab'ları yerine Projects (2026-09-17)
+
+- **Sorun:** karar 55 topbar'daki repo tab şeridini kaldırınca `openTabs` **görünmeyen** bir liste hâline geldi, ama ⌃1–⌃9 hâlâ ona indeksliyordu — kullanıcı göremediği bir listede gezinmeye çalışıyordu. Dahası ⌘O açık tab'ları DIŞLADIĞI için, Projects'e eklenmemiş bir repo'yu bir kez açtıktan sonra ona geri dönmenin hiçbir yolu kalmıyordu (panelde yok, ⌘O'da yok, yalnız indeksten — hangi indeks olduğunu gösteren bir şey de yok). Karar 50'nin "sidebar seçimi tab'lardan bağımsızdır" ilkesi şeritle birlikte anlamını yitirdi.
+- **Tek evren Projects'tir.** Gezinilebilir liste artık `sidebarProjectPaths` → Projects panelidir. `openTabs` kavramı KALKMAZ ama ayrı bir gezinme listesi olmaktan çıkar: yalnız "hangi checkout'un canlı oturumu var" durumudur (checkout satırındaki ✕ / `Close Tab` bunu gösterir) ve `ui-state.json`'a aynen yazılmaya devam eder (karar 9).
+- **⌃1–⌃9 PROJELERE vurur** (`switchToProjectAtIndex`; eski kimlik `switchToTabAtIndex`). Görünen satırlara değil projelere vurması bilinçlidir: proje daraltılıp genişletildikçe kısayolun anlamı kaymasın. Bir projeye geçince o projede **en son kullanılan checkout** açılır; hiç kullanılmamışsa projenin kökü. ⌘1–⌘9 aktif checkout'un terminallerini odaklamaya devam eder (karar 59) ve eksen takası yerinde kalır (karar 62 — `IndexShortcutStyle` rawValue'ları değişmedi).
+- **⌘O birleşik "Go to Project"e döndü.** Hiçbir şey dışlanmaz: seçilen proje listede yoksa **önce Projects'e eklenir**, sonra geçilir. "Açtığın şeyi Projects'te görürsün" kuralı buradan gelir ve karar 50'nin "topbar'da açmak sidebar'a eklemez" maddesi bilinçli olarak geri alınır. Welcome ekranındaki buton da aynı komuta bakar.
+- **`Remove from Projects` artık açık checkout'ları da kapatır.** Tek evren olduğu için listeden çıkan bir projenin açık checkout'una ulaşmanın yolu kalmazdı; terminalleri de serbest bırakılır.
+- **Son checkout hafızası additive'dir:** `UIState.lastCheckouts` (proje yolu → checkout yolu, yalnız DOLU iken yazılır; bozuk girdiler okumada atılır). Hatırlanan checkout artık projeye ait değilse (worktree silinmiş) projenin köküne düşülür — ölü yola gidilmez.
+- **Kabuk kuralı korundu (karar 33):** `SharedStores` proje store'unu tanımaz. `NavigationStore` iki okuma closure'ı (`projectOrder`, `projectCheckouts`) ile beslenir ve bunları `RepoFeatureAssembly` bağlar; enjekte edilmemişse proje gezinmesi sessizce devre dışıdır, tab davranışı aynen çalışır (headless test / proje feature'ı olmayan kompozisyon).
+- **Kapsam dışı:** checkout'lar arası ayrı bir indeksli kısayol (üçüncü eksen). Checkout seçimi panelden yapılır; gerekirse ayrı ele alınır.
+
+### 66. ⇧⌘W projeyi Projects'ten kaldırır (2026-09-17)
+
+- **⌘W değişmedi:** aktif terminal varsa onu, yoksa aktif CHECKOUT'un tab'ını kapatır (karar 59). Kullanıcı isteği "terminal kalmayınca proje de kapansın"dı; ayrı bir korda olması karşılıklı konuşuldu ve kabul edildi.
+- **Neden ⌘W'ye bağlanmadı:** kaldırma üç yerde ⌘W'nin taşıyamayacağı kadar ağır. (1) Kalıcı kullanıcı verisine dokunur — `config.json`'daki `sidebarProjectPaths`; ⌘W ise bir GÖRÜNÜM kapatan refleks bir tuştur. (2) Karar 65'ten sonra kaldırma projenin TÜM checkout'larını kapatır, yani üç worktree'li bir projede tek tuş hepsini birden öldürür; ⌘W bugün yalnız birini kapatıyor. (3) ⌃1–⌃9 konumsaldır — bir proje kaldırılınca ondan sonraki her indeks kayar ve kas hafızası sessizce bozulur. Geri alması ucuz (⌘O ekliyor) ama öldürülen ajanlar geri gelmez; asimetri burada.
+- **`Close Project` tek kapıdan geçer:** ⇧⌘W de sağ tık `Remove from Projects` de `ShellContext.requestRemoveProject` çağırır. Karar 65 kaldırmayı checkout kapatır hâle getirmişti ama `closeTab`'ı DOĞRUDAN çağırıp `requestCloseTab` guard'ını atlıyordu — minimize edilmiş, yani görünmeyen bir terminal sessizce ölüyordu. Guard artık projenin tüm checkout'ları üzerinden toplanır ve onay sorulur.
+- **Aynı dialog iki akışı taşır** (`CloseTabDialogState.isProject`, additive): başlık `Remove <ad> from Projects?`, buton `Remove Project`, mesaj checkout'lar genelindeki toplam minimize terminali söyler. "Close Tab" yazan bir buton kalıcı listeye dokunulduğunu gizlerdi.
+- **Kabuk kuralı korundu (karar 33):** kaldırma `repos` + `workspaces` ister, ikisi de `SharedStores`'ta değildir. Komut aksiyonu `openSettings` ile aynı desenle `AppDelegate`'ten enjekte edilir (`AppMenuCommands.register(closeActiveProject:)`); dispatcher repo feature'ını tanımaz.
+- **Kapsam dışı:** projeyi listede tutup yalnız checkout'larını kapatan ayrı bir "deactivate" eylemi. Gerekirse ayrı ele alınır.
+### 67. Kenar hover'ı (auto-reveal) AppKit sensörüne taşındı (2026-09-17)
 
 Kullanıcı şikâyeti: sol/sağ panelin auto-reveal'ı çalışmıyor; ayrıca eskiden panelin üstünde bir popover açılınca panel kapanıyor, bazen de fare panelden çıktığı hâlde kapanmıyordu.
 
@@ -567,8 +597,8 @@ Kullanıcı şikâyeti: sol/sağ panelin auto-reveal'ı çalışmıyor; ayrıca 
 
 Çözüm: hover'ın kaynağı `PointerPresence` (AppKit `NSViewRepresentable`) sensörüdür.
 
-- **Tracking area** (`.mouseEnteredAndExited`, `.activeAlways`, `.inVisibleRect`) — anında tepki için. (Bu maddenin "event monitöründen bağımsız üretilir" gerekçesi **yanlış çıktı**; karar 66'ya bakınız.)
-- **Doğrulama tik'i** (0,1 sn) fiziksel `NSEvent.mouseLocation`'ı bölgenin ekran dikdörtgeniyle karşılaştırır — kaçan bildirim paneli açık bırakamaz. (Karar 66'da tik, yalnız fare içerideyken değil, view pencerede olduğu sürece döner.)
+- **Tracking area** (`.mouseEnteredAndExited`, `.activeAlways`, `.inVisibleRect`) — anında tepki için. (Bu maddenin "event monitöründen bağımsız üretilir" gerekçesi **yanlış çıktı**; karar 69'a bakınız.)
+- **Doğrulama tik'i** (0,1 sn) fiziksel `NSEvent.mouseLocation`'ı bölgenin ekran dikdörtgeniyle karşılaştırır — kaçan bildirim paneli açık bırakamaz. (Karar 69'da tik, yalnız fare içerideyken değil, view pencerede olduğu sürece döner.)
 - **Bağlı pencereler içeri sayılır:** imlecin altındaki pencere ana pencerenin (zincirleme) çocuğuysa — popover, `DropdownPanel` — fare "içeride"dir. Karar kuralı saftır ve test edilir (`PointerPresenceRule.isInside`, `PointerPresenceRuleTests`).
 - **Sensör tıklama yutmaz:** `hitTest` daima `nil` döner; şeridin altındaki terminalin seçim/tıklama davranışı değişmez.
 - Uygulama arka plandayken hover yoktur (`NSApp.isActive`), pencereye girmemiş view ölçülemez → dışarıdadır.
@@ -577,7 +607,7 @@ Ek düzeltme: overlay artık alttan da `StatusBarMetrics.height` payı bırakır
 
 - **Sınırlar.** `PointerPresence`/`PointerPresenceRule` (LumiUI/Support) → `PanelRevealOverlay.EdgeRevealZone`. `LayoutStore` auto-reveal durumu (karar 44) ve `ui-state` biçimi değişmedi.
 
-### 65. Login timeout'u kesin sınır, usage auto refresh varsayılan açık (2026-09-17)
+### 68. Login timeout'u kesin sınır, usage auto refresh varsayılan açık (2026-09-17)
 
 Kullanıcı şikâyeti: Settings ▸ Accounts'ta bir hesabın yenile (Re-authenticate) düğmesine basınca uygulama "loop'a giriyor" ve artık başka bir hesaba geçilemiyor.
 
@@ -587,14 +617,14 @@ Sebep `SystemProcessRunner`'ın timeout yolundaydı. Sonuç ancak üç kapı bir
 - **Cancel yeniden doğrulamada da görünür** (`ClaudeAccountStore.isSigningIn`): kullanıcı timeout'u beklemek zorunda değil.
 - **`usageAutoRefresh.enabled` varsayılanı açık.** Karar 20'nin opt-in duruşu bırakıldı: elle yenilenmeyen gösterge bayat kalıyordu. Aralık varsayılanı 5 dk, idle-gate (karar 38) aynen korunur. `enabled` anahtarı dosyaya zaten yazılmış kurulumlarda kayıtlı değer kazanır — yeni varsayılan yalnız anahtarı olmayan config'lere uygulanır.
 
-### 66. Kenar hover'ı tamamen imleç yoklamasına dayanır (2026-09-17)
+### 69. Kenar hover'ı tamamen imleç yoklamasına dayanır (2026-09-17)
 
-Kullanıcı şikâyeti: karar 64'ten sonra da sol/sağ panelin auto-reveal'ı çalışmıyor.
+Kullanıcı şikâyeti: karar 67'den sonra da sol/sağ panelin auto-reveal'ı çalışmıyor.
 
 İki ayrı sebep vardı; ikisi de gerçek:
 
 - **Kullanıcının kurulumunda overlay hiç çizilmiyordu.** `canAutoReveal` = tercih açık **+ yuva gizli** + focus mode kapalı. `~/.lumi/ui-state.json`'da her iki yuva da `visibleSlots` içindeydi (sabit/docked) ve `autoReveal` her ikisi için açıktı: Settings ▸ Appearance dört bağımsız toggle sunuyor, auto-reveal'i panel sabitken açmak sessizce hiçbir şey yapmıyordu. Artık auto-reveal satırının ipucu duruma göre değişir: yuva sabitken "No effect while the sidebar is pinned — turn it off above to use hover" der. Semantik (karar 44) değişmedi; yalnız sebep görünür oldu.
-- **Karar 64'ün tracking-area gerekçesi yanlıştı.** Deneyle (yalıtılmış AppKit probe'u, tek değişkenli karşılaştırma) doğrulandı: AppKit `mouseEntered/Exited` crossing'lerini `.mouseMoved` dispatch'i **sırasında** üretir. `TerminalEventMonitor` local monitörden `nil` döndürüp `.mouseMoved`'ı yuttuğunda crossing event'i de hiç doğmaz — yani terminal `mouseMode == .anyEvent` iken tracking area da `.onHover` kadar ölüdür. (Occlusion, `hitTest` → `nil`, `.inVisibleRect` ve overlay katman sırası ELENDİ: probe'da hepsi sorunsuz çalıştı.)
+- **Karar 67'nin tracking-area gerekçesi yanlıştı.** Deneyle (yalıtılmış AppKit probe'u, tek değişkenli karşılaştırma) doğrulandı: AppKit `mouseEntered/Exited` crossing'lerini `.mouseMoved` dispatch'i **sırasında** üretir. `TerminalEventMonitor` local monitörden `nil` döndürüp `.mouseMoved`'ı yuttuğunda crossing event'i de hiç doğmaz — yani terminal `mouseMode == .anyEvent` iken tracking area da `.onHover` kadar ölüdür. (Occlusion, `hitTest` → `nil`, `.inVisibleRect` ve overlay katman sırası ELENDİ: probe'da hepsi sorunsuz çalıştı.)
 
 Karar: hover'ın **tek gerçek kaynağı** doğrulama tik'idir. `PointerPresenceView` artık timer'ı view pencerede olduğu SÜRECE döndürür (eskiden yalnız fare içerideyken dönüyordu, dolayısıyla "içeri girme" olayı hiç telafi edilmiyordu); tracking area yalnız anında tepki için durur, `updateTrackingAreas` da koşulsuz ölçer. Böylece sensör olay teslimatından tamamen bağımsızdır ve overlay imlecin altında doğduğunda da (panel gizlenir gizlenmez) doğru cevap verir.
 
@@ -602,7 +632,7 @@ Maliyet bilinçlidir: tik yalnız auto-reveal'e uygun **gizli** bir yuva varken,
 
 - **Sınırlar.** `PointerPresence` (LumiUI/Support), `AppearanceSettingsTab` ipucu. `LayoutStore`, `PanelLayout`, `ui-state` biçimi ve `PointerPresenceRule` değişmedi.
 
-### 67. Terminal link eylemlerinde kök guard'ı yalnız çöpe atmada kalır (2026-09-17)
+### 70. Terminal link eylemlerinde kök guard'ı yalnız çöpe atmada kalır (2026-09-17)
 
 Kullanıcı şikâyeti: terminalde `/private/tmp/...` ile başlayan bir yola tıklayınca popover açılıyor ama hiçbir eylem çalışmıyor.
 
@@ -614,9 +644,9 @@ Ek düzeltme (görsel): `TerminalLinkResolver.standardized` `NSString.standardiz
 
 - **Sınırlar.** `FileSystemOperations` (guard yalnız `trash`'te), `TerminalLinkResolver.standardized`. `RepoPathGuard`, git tarafı, `LiveServiceRegistry`'nin kök listesi ve karar 57'nin jest/çözümleme tablosu değişmedi.
 
-### 68. Auto-reveal'in gerçek kök nedeni: overlay panel kayıt defterinin BOŞ kopyasını tutuyordu (2026-09-17)
+### 71. Auto-reveal'in gerçek kök nedeni: overlay panel kayıt defterinin BOŞ kopyasını tutuyordu (2026-09-17)
 
-Kullanıcı şikâyeti (karar 64 ve 66'dan sonra da): paneller GİZLİYKEN kenar hover'ı hiçbir şey açmıyor.
+Kullanıcı şikâyeti (karar 67 ve 69'dan sonra da): paneller GİZLİYKEN kenar hover'ı hiçbir şey açmıyor.
 
 Bu kez kod okuyarak değil, **ölçerek** bulundu: kenar şeridinin kurulduğu yere geçici bir tanı çıktısı konup uygulama gerçek konfigürasyonla çalıştırıldı. Çıktı:
 
@@ -625,7 +655,7 @@ Bu kez kod okuyarak değil, **ölçerek** bulundu: kenar şeridinin kurulduğu y
 [HOVERDBG] slot=right canAutoReveal=true items=0
 ```
 
-Yani koşullar doğruydu (tercih açık, yuva gizli, overlay sunuluyor) ama `PanelItemRegistry.resolved` **hiç öğe döndürmüyordu**; `EdgeRevealZone` hiç kurulmuyor, dolayısıyla `PointerPresence` sensörü hiç doğmuyordu. Hover makinesi (karar 64/66) baştan beri devreye bile girmiyordu.
+Yani koşullar doğruydu (tercih açık, yuva gizli, overlay sunuluyor) ama `PanelItemRegistry.resolved` **hiç öğe döndürmüyordu**; `EdgeRevealZone` hiç kurulmuyor, dolayısıyla `PointerPresence` sensörü hiç doğmuyordu. Hover makinesi (karar 67/69) baştan beri devreye bile girmiyordu.
 
 Sebep bir **değer semantiği tuzağı**: `PanelItemRegistry` bir `struct`. `ShellComposition.makeRegistries` kenar hover'ı overlay'ini z-sırası gereği EN BAŞTA kaydediyor (karar 44: bütün modal/dialog/toast'ların altında kalmalı) ve descriptor o an `let panels = registries.panels` ile kaydı **kopyalıyordu**. Feature assembly'ler (`TasksFeatureAssembly`, `RepoFeatureAssembly`) panel öğelerini bu kopyadan SONRA kaydettiği için overlay'in elindeki defter sonsuza dek boş kalıyordu.
 
@@ -633,7 +663,7 @@ Karar: kenar hover'ı overlay'i kayıt defterini **canlı okur**. `PanelRevealOv
 
 Ders ve koruma: kayıt defterleri değer tipidir; bir descriptor'ın içine defter KOPYALANMAZ, defterin sahibi tutulur. Tuzak `PanelItemRegistryTests.testCopyTakenBeforeRegistrationDoesNotSeeLaterItems` ile kilitlendi.
 
-Not: karar 66 (hover'ın imleç yoklamasına dayanması) geçerliliğini korur — `.mouseMoved` yutulduğunda AppKit crossing event'i de doğmadığı için sensör, şerit kurulduktan sonra da yoklamaya muhtaçtır. Karar 66'nın "kullanıcının paneli sabitti" gözlemi ise yalnızca yan bir gözlemdi, kök neden değildi: kullanıcı testlerini paneller gizliyken yapıyordu.
+Not: karar 69 (hover'ın imleç yoklamasına dayanması) geçerliliğini korur — `.mouseMoved` yutulduğunda AppKit crossing event'i de doğmadığı için sensör, şerit kurulduktan sonra da yoklamaya muhtaçtır. Karar 69'un "kullanıcının paneli sabitti" gözlemi ise yalnızca yan bir gözlemdi, kök neden değildi: kullanıcı testlerini paneller gizliyken yapıyordu.
 
 - **Sınırlar.** `ShellComposition.registerPanelRevealOverlay`, `PanelRevealOverlay.init(registries:)`. `LayoutStore`, `PanelLayout`, `ui-state` biçimi, `OverlayRegistry` ve hover sensörü değişmedi.
 

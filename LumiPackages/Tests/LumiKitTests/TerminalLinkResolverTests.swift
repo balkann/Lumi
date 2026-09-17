@@ -100,7 +100,7 @@ final class TerminalLinkResolverTests: XCTestCase {
         )
     }
 
-    /// Karar 67: `standardizingPath` var olan `/private/...` yollarından
+    /// Karar 70: `standardizingPath` var olan `/private/...` yollarından
     /// `/private`'ı atıyordu; popover başlığı terminaldeki metinle aynı kalmalı.
     func testPrivatePrefixIsPreserved() {
         let path = "/private/tmp/claude-502/scratchpad/b_side.png"
