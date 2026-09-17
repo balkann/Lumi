@@ -86,4 +86,12 @@ final class TerminalEnvironmentTests: XCTestCase {
         XCTAssertEqual(env["PATH"], "/usr/bin")
         XCTAssertEqual(env["HOME"], "/Users/test")
     }
+
+    func testDisablesOhMyZshUpdatePrompt() {
+        // omz [Y/n] güncelleme sorusu launch komutunun ilk karakterini yiyordu
+        // ("claude"→"laude"); Lumi shell'lerinde soru tamamen kapalı olmalı.
+        let env = TerminalEnvironment.childEnvironment(base: [:])
+        XCTAssertEqual(env["DISABLE_UPDATE_PROMPT"], "true")
+        XCTAssertEqual(env["DISABLE_AUTO_UPDATE"], "true")
+    }
 }
