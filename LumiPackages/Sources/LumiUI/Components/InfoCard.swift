@@ -21,7 +21,7 @@ struct InfoCard: View {
             Text(text)
                 .font(Theme.Typography.labelMono)
                 .foregroundStyle(Theme.textSecondary)
-                .lineSpacing(3)
+                .lineSpacing(Theme.scaled(3))
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(Theme.Spacing.lg)

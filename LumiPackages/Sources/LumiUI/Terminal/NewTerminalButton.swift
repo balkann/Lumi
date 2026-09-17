@@ -53,8 +53,8 @@ struct NewTerminalButton: View {
                 }
                 .foregroundStyle(.white)
                 // 10/7pt: ölçek dışı ara değerler (v1 paritesi korunuyor).
-                .padding(.leading, 10)
-                .padding(.trailing, 7)
+                .padding(.leading, Theme.scaled(10))
+                .padding(.trailing, Theme.scaled(7))
                 .frame(height: TopBarMetrics.controlHeight)
                 .contentShape(Rectangle())
             }
@@ -63,14 +63,14 @@ struct NewTerminalButton: View {
 
             Rectangle()
                 .fill(Color.white.opacity(0.18))
-                .frame(width: Theme.Stroke.hairline, height: 14)
+                .frame(width: Theme.Stroke.hairline, height: Theme.scaled(14))
                 .accessibilityHidden(true)
 
             // Chevron yalnız görsel ipucu — açma/kapama hover'la sürülür.
             Image(systemName: "chevron.down")
                 .font(Theme.Typography.ui(.micro, weight: .bold))
                 .foregroundStyle(.white)
-                .padding(.horizontal, 7)
+                .padding(.horizontal, Theme.scaled(7))
                 .frame(height: TopBarMetrics.controlHeight)
                 .contentShape(Rectangle())
                 .accessibilityHidden(true)
@@ -119,7 +119,7 @@ struct NewTerminalButton: View {
             }
         }
         .padding(Theme.Spacing.sm)
-        .frame(width: 220)
+        .frame(width: Theme.scaled(220))
         .background(Theme.bgElevated)
     }
 }
@@ -141,8 +141,8 @@ private struct NewTerminalDropdownItem: View {
                 Spacer(minLength: 0)
             }
             // 10/7pt: ölçek dışı ara değerler (v1 paritesi korunuyor).
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
+            .padding(.horizontal, Theme.scaled(10))
+            .padding(.vertical, Theme.scaled(7))
         }
         .buttonStyle(
             HoverButtonStyle(

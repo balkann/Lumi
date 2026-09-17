@@ -19,8 +19,8 @@ struct RepoSelectorView: View {
     /// Dropdown'ın kendi geometrisi; ikisi de ölçek dışı ara değerler
     /// (v1 repo-dropdown paritesi).
     private enum Metrics {
-        static let width: CGFloat = 320
-        static let maxListHeight: CGFloat = 320
+        static var width: CGFloat { Theme.scaled(320) }
+        static var maxListHeight: CGFloat { Theme.scaled(320) }
     }
 
     // MARK: - Body

@@ -45,7 +45,7 @@ public struct CreateWorkspaceOverlay: View {
                         }
                     }
                     .padding(Theme.Spacing.xxxl)
-                    .frame(width: 520)
+                    .frame(width: Theme.scaled(520))
                 }
             }
             .task(id: effectiveProjectPath) {
@@ -61,9 +61,9 @@ public struct CreateWorkspaceOverlay: View {
     /// 680'di ve Cancel/Create butonları pencerede yer varken bile şeridin
     /// altında kalıyordu; başlık + proje seçici + paddingler için ayrılan pay
     /// da ölçüldü (32*2 padding + ~46 başlık + ~56 seçici + aralıklar).
-    private static let maxFormHeight: CGFloat = 860
-    private static let minFormHeight: CGFloat = 100
-    private static let chromeHeight: CGFloat = 150
+    private static var maxFormHeight: CGFloat { Theme.scaled(860) }
+    private static var minFormHeight: CGFloat { Theme.scaled(100) }
+    private static var chromeHeight: CGFloat { Theme.scaled(150) }
 
     private var header: some View {
         HStack {

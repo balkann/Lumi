@@ -22,7 +22,7 @@ public struct DeleteWorkspaceDialogOverlay: View {
         }
     }
 
-    private static let width: CGFloat = 440
+    private static var width: CGFloat { Theme.scaled(440) }
 
     private func content(_ dialog: DeleteWorkspaceDialogState) -> some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.lg) {

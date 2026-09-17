@@ -40,7 +40,7 @@ struct KeepAwakeMenu: View {
     let status: ComputerAwakeStatus
     let onSelect: (ComputerAwakeMode) -> Void
 
-    static let width: CGFloat = 256
+    static var width: CGFloat { Theme.scaled(256) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.xxxs) {

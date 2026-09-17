@@ -85,7 +85,7 @@ struct TerminalSettingsTab: SettingsTabContent {
         }
         .labelsHidden()
         .font(Theme.Typography.bodyMono)
-        .frame(width: 260, alignment: .leading)
+        .frame(width: Theme.scaled(260), alignment: .leading)
         .accessibilityLabel("Terminal font family")
     }
 
@@ -100,7 +100,7 @@ struct TerminalSettingsTab: SettingsTabContent {
         )
         .font(Theme.Typography.bodyMono)
         .foregroundStyle(Theme.textPrimary)
-        .frame(width: 140, alignment: .leading)
+        .frame(width: Theme.scaled(140), alignment: .leading)
     }
 
     private var cursorControls: some View {
@@ -115,7 +115,7 @@ struct TerminalSettingsTab: SettingsTabContent {
                 )
             )
             // 10pt: ölçek dışı ara değer (v1 paritesi korunuyor).
-            HStack(spacing: 10) {
+            HStack(spacing: Theme.scaled(10)) {
                 Text("Blink")
                     .font(Theme.Typography.bodyMono)
                     .foregroundStyle(Theme.textSecondary)

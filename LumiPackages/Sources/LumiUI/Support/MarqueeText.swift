@@ -25,7 +25,7 @@ struct MarqueeText: View {
     /// ebeveynin verdiği genişlik (v1 commit mesajı davranışı).
     var maxWidth: CGFloat? = nil
 
-    static let defaultTrailingGap: CGFloat = 50
+    static var defaultTrailingGap: CGFloat { Theme.scaled(50) }
     static let defaultCycleDuration: Double = 5
 
     @State private var textWidth: CGFloat = 0

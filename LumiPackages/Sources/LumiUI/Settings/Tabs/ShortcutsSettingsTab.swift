@@ -66,7 +66,7 @@ struct ShortcutsSettingsTab: SettingsTabContent {
         }
         .padding(.horizontal, Theme.Spacing.xl)
         // 10pt: ölçek dışı ara değer (v1 paritesi korunuyor).
-        .padding(.vertical, 10)
+        .padding(.vertical, Theme.scaled(10))
         .frame(maxWidth: .infinity)
         .background(Theme.bgDeep)
     }

@@ -45,7 +45,7 @@ public struct UsageIndicatorView: View {
 
     private var compact: some View {
         // 5pt: ölçek dışı ara değer (v1 paritesi korunuyor).
-        HStack(spacing: 5) {
+        HStack(spacing: Theme.scaled(5)) {
             ProviderIcon(provider: store.provider, size: .body)
             Text(label)
                 // 11.5pt → ölçekte `label` (11); yuvarlama asla büyütmez.
@@ -91,9 +91,9 @@ private struct UsagePopover: View {
     /// Popover'ın sabit genişliği ve iç kenar payı; ikisi de ölçek dışı ara
     /// değerler (v1 paritesi).
     private enum Metrics {
-        static let width: CGFloat = 320
-        static let inset: CGFloat = 14
-        static let rowInset: CGFloat = 10
+        static var width: CGFloat { Theme.scaled(320) }
+        static var inset: CGFloat { Theme.scaled(14) }
+        static var rowInset: CGFloat { Theme.scaled(10) }
     }
 
     var body: some View {
@@ -220,7 +220,7 @@ struct UsageWindowRow: View {
 
     /// Progress bar yüksekliği; yarıçap `Radius.sm` (4) yüksekliğin yarısına
     /// (3) kırpılır, yani v1'deki 3pt köşeyle birebir aynı çizilir.
-    private static let barHeight: CGFloat = 6
+    private static var barHeight: CGFloat { Theme.scaled(6) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.sm) {

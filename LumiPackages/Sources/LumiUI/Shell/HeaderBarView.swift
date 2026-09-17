@@ -44,7 +44,7 @@ struct HeaderBarView: View {
         .background(Theme.bgSurface.allowsHitTesting(false))
         .background(WindowDragArea())
         .overlay(alignment: .bottom) {
-            Theme.border.frame(height: 1)
+            Theme.border.frame(height: Theme.scaled(1))
         }
     }
 

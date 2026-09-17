@@ -172,8 +172,8 @@ struct LogoToolbarItem: View {
                 Image(nsImage: logo)
                     .resizable()
                     .interpolation(.high)
-                    .frame(width: Theme.Typography.Size.headline.points,
-                           height: Theme.Typography.Size.headline.points)
+                    .frame(width: Theme.Typography.Size.headline.scaledPoints,
+                           height: Theme.Typography.Size.headline.scaledPoints)
                     .accessibilityHidden(true)
             }
             Text(Self.appName)

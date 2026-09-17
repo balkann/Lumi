@@ -49,7 +49,7 @@ struct AppShellView: View {
                 HeaderBarView(registry: registries.toolbar)
                 Rectangle()
                     .fill(Theme.border)
-                    .frame(height: 1)
+                    .frame(height: Theme.scaled(1))
             }
             HStack(spacing: 0) {
                 PanelHostView(slot: .left, registry: registries.panels)

@@ -12,10 +12,10 @@ struct OnboardingView: View {
     let store: OnboardingStore
 
     var body: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: Theme.Spacing.xxl) {
             Spacer()
             stepContent
-                .frame(maxWidth: 460)
+                .frame(maxWidth: Theme.scaled(460))
             Spacer()
             footer
         }
@@ -36,7 +36,7 @@ struct OnboardingView: View {
     // MARK: - Adımlar
 
     private var welcomeStep: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: Theme.Spacing.xl) {
             Text("Lumi")
                 .font(Theme.Typography.mono(.hero, weight: .semibold))
                 .foregroundStyle(Theme.accentPrimary)
@@ -48,7 +48,7 @@ struct OnboardingView: View {
                 Text("Codex").tag(AgentProvider.codex)
             }
             .pickerStyle(.segmented)
-            .frame(width: 240)
+            .frame(width: Theme.scaled(240))
             .labelsHidden()
             Text("AI provider — can be changed later in Settings")
                 .font(Theme.Typography.mono(.caption))
@@ -61,7 +61,7 @@ struct OnboardingView: View {
     }
 
     private var checksStep: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Theme.Spacing.lg) {
             Text("System Checks")
                 .font(Theme.Typography.mono(.headline, weight: .semibold))
                 .foregroundStyle(Theme.textPrimary)
@@ -84,10 +84,10 @@ struct OnboardingView: View {
     }
 
     private func checkRow(_ check: SystemCheckResult) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Theme.Spacing.md) {
             Image(systemName: statusIcon(check.status))
                 .foregroundStyle(statusColor(check.status))
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: Theme.Spacing.xxxs) {
                 Text(check.label)
                     .font(Theme.Typography.mono(.body))
                     .foregroundStyle(Theme.textPrimary)
@@ -104,25 +104,25 @@ struct OnboardingView: View {
                 .buttonStyle(.bordered)
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, Theme.Spacing.xs)
     }
 
     private var projectsRootStep: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Theme.Spacing.lg) {
             Text("Projects Root")
                 .font(Theme.Typography.mono(.headline, weight: .semibold))
                 .foregroundStyle(Theme.textPrimary)
             Text("The folder where your repos live — first-level subdirectories are listed")
                 .font(Theme.Typography.mono(.label))
                 .foregroundStyle(Theme.textSecondary)
-            HStack(spacing: 8) {
+            HStack(spacing: Theme.Spacing.md) {
                 Text(store.projectsRoot.isEmpty ? "(not selected)" : store.projectsRoot)
                     .font(Theme.Typography.mono(.body))
                     .foregroundStyle(Theme.textSecondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(8)
+                    .padding(Theme.Spacing.md)
                     .background(Theme.bgElevated)
                     .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
                 Button("Browse…") {
@@ -134,7 +134,7 @@ struct OnboardingView: View {
     }
 
     private var readyStep: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: Theme.scaled(14)) {
             Image(systemName: "checkmark.circle.fill")
                 .font(Theme.Typography.ui(.splash))
                 .foregroundStyle(Theme.success)
@@ -167,7 +167,7 @@ struct OnboardingView: View {
             .tint(Theme.accentVivid)
             .disabled(!store.canAdvance)
         }
-        .padding(24)
+        .padding(Theme.Spacing.xxl)
     }
 
     private func statusIcon(_ status: SystemCheckResult.Status) -> String {

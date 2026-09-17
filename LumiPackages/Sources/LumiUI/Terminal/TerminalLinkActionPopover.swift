@@ -16,7 +16,7 @@ struct TerminalLinkActionPopover: View {
 
     /// Orca'nın `min-w-52 / max-w-21rem` aralığının karşılığı; sabit genişlik
     /// yerleşim hesabını da tek değere bağlar.
-    static let width: CGFloat = 288
+    static var width: CGFloat { Theme.scaled(288) }
 
     /// Ölçüm gelmeden önceki ilk kare için kaba yükseklik (başlık + ayraç +
     /// satırlar + dolgu). Gerçek ölçüm gelince yerleşim kendini düzeltir.

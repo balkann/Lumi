@@ -7,9 +7,9 @@ struct LumiToggleSwitch: View {
     /// Erişilebilirlik etiketi — satır başlığı verilmediğinde jenerik kalır.
     var label = "Toggle"
 
-    private static let trackWidth: CGFloat = 40
-    private static let trackHeight: CGFloat = 22
-    private static let thumbSize: CGFloat = 16
+    private static var trackWidth: CGFloat { Theme.scaled(40) }
+    private static var trackHeight: CGFloat { Theme.scaled(22) }
+    private static var thumbSize: CGFloat { Theme.scaled(16) }
 
     var body: some View {
         Button {
@@ -63,7 +63,7 @@ struct LumiToggleRow<Trailing: View>: View {
 
     var body: some View {
         // 10pt: ölçek dışı ara değer (v1 paritesi korunuyor).
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: Theme.scaled(10)) {
             HStack(spacing: Theme.Spacing.xl) {
                 VStack(alignment: .leading, spacing: Theme.Spacing.xxs) {
                     Text(title)

@@ -103,7 +103,7 @@ struct TerminalCardView: View {
         } content: {
             TerminalHostView(terminalID: meta.id, provider: viewProvider)
                 .id(meta.id)
-                .padding(8)
+                .padding(Theme.Spacing.md)
         }
     }
 }

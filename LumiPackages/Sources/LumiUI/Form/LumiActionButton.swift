@@ -37,7 +37,7 @@ struct LumiActionButton: View {
         }
     }
 
-    private static let minWidth: CGFloat = 88
+    private static var minWidth: CGFloat { Theme.scaled(88) }
 
     private var foreground: Color {
         switch kind {

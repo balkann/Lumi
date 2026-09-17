@@ -151,7 +151,7 @@ struct TerminalIdentityIcon: View {
                     .foregroundStyle(Theme.textMuted)
             }
         }
-        .frame(width: size.points, height: size.points)
+        .frame(width: size.scaledPoints, height: size.scaledPoints)
         .accessibilityLabel(provider.map { $0.rawValue.capitalized } ?? "Shell")
     }
 }
@@ -162,7 +162,7 @@ struct StatusDot: View {
 
     @State private var isPulsing = false
 
-    private static let diameter: CGFloat = 7
+    private static var diameter: CGFloat { Theme.scaled(7) }
 
     private var shouldPulse: Bool {
         status == .working || status == .waitingUnseen

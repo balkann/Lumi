@@ -20,11 +20,11 @@ struct FileViewerView: View {
     private enum Metrics {
         static let widthRatio: CGFloat = 0.85
         static let heightRatio: CGFloat = 0.8
-        static let commitListWidth: CGFloat = 220
-        static let statusBadgeWidth: CGFloat = 14
+        static var commitListWidth: CGFloat { Theme.scaled(220) }
+        static var statusBadgeWidth: CGFloat { Theme.scaled(14) }
         /// Başlık şeridinin iç kenar payları (ölçek dışı ara değerler).
-        static let headerInsetH: CGFloat = 14
-        static let headerInsetV: CGFloat = 10
+        static var headerInsetH: CGFloat { Theme.scaled(14) }
+        static var headerInsetV: CGFloat { Theme.scaled(10) }
     }
 
     var body: some View {
@@ -102,7 +102,7 @@ struct FileViewerView: View {
             .foregroundStyle(isRendered ? Theme.accentPrimary : Theme.textSecondary)
             .padding(.horizontal, Theme.Spacing.md)
             // 3pt: ölçek dışı ara değer (v1 paritesi korunuyor).
-            .padding(.vertical, 3)
+            .padding(.vertical, Theme.scaled(3))
             .background((isRendered ? Theme.accentPrimary : Theme.textMuted).opacity(0.18))
             .clipShape(Capsule())
             .contentShape(Capsule())
@@ -332,7 +332,7 @@ private struct HighlightedCodeView: View {
             attributed = await highlighter.highlight(
                 code: code,
                 fileName: fileName,
-                fontSize: Theme.Typography.Size.base.points
+                fontSize: Theme.Typography.Size.base.scaledPoints
             )
         }
     }

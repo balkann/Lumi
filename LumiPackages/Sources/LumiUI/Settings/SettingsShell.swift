@@ -8,11 +8,11 @@ import SwiftUI
 /// Kaydetme modeli: macOS anlık uygulama (karar 3) — Save/Cancel footer'ı YOK.
 struct SettingsShell: View {
     /// Karar 55 (kullanıcı düzeltmesi): form satırları 700×600'de sıkışıyordu.
-    private static let panelWidth: CGFloat = 860
-    private static let panelHeight: CGFloat = 720
+    private static var panelWidth: CGFloat { Theme.scaled(860) }
+    private static var panelHeight: CGFloat { Theme.scaled(720) }
     /// En uzun sekme adı ("Notifications") tek satıra sığmalı — 180'de son
     /// harf alt satıra düşüyordu (karar 55 kullanıcı düzeltmesi).
-    private static let navigationWidth: CGFloat = 200
+    private static var navigationWidth: CGFloat { Theme.scaled(200) }
 
     @Shell private var shell
 

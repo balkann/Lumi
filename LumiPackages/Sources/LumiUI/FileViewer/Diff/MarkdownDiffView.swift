@@ -11,8 +11,8 @@ struct MarkdownDiffView: View {
     /// eski `fontSize ± n` aritmetiği yerine ölçek basamağıyla türer (Faz 7.1).
     var size: Theme.Typography.Size = .base
 
-    private static let gutterWidth: CGFloat = 52
-    private static let indentStep: CGFloat = 14
+    private static var gutterWidth: CGFloat { Theme.scaled(52) }
+    private static var indentStep: CGFloat { Theme.scaled(14) }
 
     var body: some View {
         Group {
@@ -44,7 +44,7 @@ struct MarkdownDiffView: View {
                 .foregroundStyle(Theme.accentCyan)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, Theme.Spacing.md)
-                .padding(.vertical, 3)
+                .padding(.vertical, Theme.scaled(3))
                 .background(Theme.bgElevated)
         case .line(let line):
             HStack(alignment: .top, spacing: Theme.Spacing.md) {
@@ -54,7 +54,7 @@ struct MarkdownDiffView: View {
                     .frame(width: Self.gutterWidth, alignment: .trailing)
                 Rectangle()
                     .fill(markerColor(line.kind))
-                    .frame(width: 2)
+                    .frame(width: Theme.scaled(2))
                 lineContent(line)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .textSelection(.enabled)
@@ -99,7 +99,7 @@ struct MarkdownDiffView: View {
             HStack(alignment: .top, spacing: Theme.Spacing.md) {
                 Rectangle()
                     .fill(Theme.accentPrimary.opacity(0.6))
-                    .frame(width: 2)
+                    .frame(width: Theme.scaled(2))
                 prose(line.content)
                     .italic()
                     .foregroundStyle(Theme.textSecondary)
@@ -120,7 +120,7 @@ struct MarkdownDiffView: View {
             Rectangle()
                 .fill(Theme.border)
                 .frame(height: Theme.Stroke.hairline)
-                .padding(.vertical, 5)
+                .padding(.vertical, Theme.scaled(5))
         case .table:
             Text(line.content)
                 .font(Theme.Typography.mono(size.stepped(-1)))
@@ -128,7 +128,7 @@ struct MarkdownDiffView: View {
         case .paragraph:
             prose(line.content)
         case .blank:
-            Color.clear.frame(height: 5)
+            Color.clear.frame(height: Theme.scaled(5))
         }
     }
 

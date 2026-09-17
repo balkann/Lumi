@@ -14,7 +14,7 @@ public struct TasksPanelItem: View {
     /// sabit liste) kapladığı alan. İki satır bu alanı doldurmaz; yuvanın
     /// üst payı korunsun ve altındaki Projects paneli yerinden oynamasın diye
     /// taban yükseklik sabit tutulur (kullanıcı düzeltmesi).
-    private static let minContentHeight: CGFloat = 208
+    private static var minContentHeight: CGFloat { Theme.scaled(208) }
 
     @Shell private var shell
 

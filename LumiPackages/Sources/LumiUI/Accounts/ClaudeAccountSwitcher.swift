@@ -17,7 +17,7 @@ struct ClaudeAccountSwitcher: View {
     @State private var isExpanded = false
 
     /// Liste uzarsa popover'ı taşırmasın — kaydırılır.
-    private static let maxListHeight: CGFloat = 220
+    private static var maxListHeight: CGFloat { Theme.scaled(220) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.sm) {

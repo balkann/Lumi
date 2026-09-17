@@ -43,7 +43,7 @@ private struct SettingsNavItem: View {
                     Spacer(minLength: 0)
                 }
                 // 10pt: ölçek dışı ara değer (v1 paritesi korunuyor).
-                .padding(10)
+                .padding(Theme.scaled(10))
                 .background(background(isHovering: isHovering))
                 .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.lg))
                 .contentShape(Rectangle())

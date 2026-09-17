@@ -12,7 +12,7 @@ public struct RemoveClaudeAccountDialogOverlay: View {
 
     public init() {}
 
-    private static let width: CGFloat = 440
+    private static var width: CGFloat { Theme.scaled(440) }
 
     public var body: some View {
         if let dialog = shell.dialogs.removeClaudeAccountDialog {

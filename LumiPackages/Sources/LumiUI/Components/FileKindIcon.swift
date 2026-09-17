@@ -36,7 +36,7 @@ struct FileKindIcon: View {
                 .resizable()
                 .interpolation(.high)
                 .aspectRatio(contentMode: .fit)
-                .frame(width: size.points, height: size.points)
+                .frame(width: size.scaledPoints, height: size.scaledPoints)
         } else {
             Image(systemName: FileKindIcon.symbolName(for: kind))
                 .font(Theme.Typography.ui(size))

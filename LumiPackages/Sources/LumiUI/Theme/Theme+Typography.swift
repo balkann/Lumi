@@ -57,6 +57,15 @@ public extension Theme {
                 .base, .title, .headline, .heading, .display, .hero, .splash,
             ]
 
+            /// Basamağın YÜRÜRLÜKTEKİ ölçekteki puntosu.
+            ///
+            /// Glyph'iyle aynı boyutta durması gereken kaplar (ikon kutusu,
+            /// highlighter'a verilen punto) bunu kullanır: ham `points`
+            /// ölçeği ATLAR, kutu tam boyutta kalırken içindeki glyph küçülür.
+            /// `Theme.Typography` fabrikalarıyla aynı yuvarlamadan geçer, yani
+            /// kutu ile glyph tek piksel bile ayrışmaz.
+            public var scaledPoints: CGFloat { Theme.scaledFontSize(points) }
+
             /// Ölçekte `offset` basamak yukarı (+) / aşağı (−); uçlarda kırpılır.
             ///
             /// Türetilmiş puntoların (markdown başlık merdiveni, diff gutter'ı)

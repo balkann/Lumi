@@ -22,7 +22,7 @@ struct PopoverMenu: View {
     /// `nil` → içerik kadar genişler (uzun dal adlarının kırpılmaması için).
     var width: CGFloat? = PopoverMenu.width
 
-    static let width: CGFloat = 220
+    static var width: CGFloat { Theme.scaled(220) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.xxxs) {

@@ -12,7 +12,7 @@ import SwiftUI
 struct TerminalChipStrip: View {
     /// Chip başlığının üst sınırı: uzun terminal adları şeridi tek başına
     /// doldurup diğerlerini itiyordu; sığmayan ad "…" ile kırpılır.
-    static let titleMaxWidth: CGFloat = 160
+    static var titleMaxWidth: CGFloat { Theme.scaled(160) }
 
     /// Şeridin başındaki muted etiket (minimize şeridi için "Minimized:").
     var label: String?
@@ -40,7 +40,7 @@ struct TerminalChipStrip: View {
             onSelect(meta.id)
         } label: {
             // 5/3pt: ölçek dışı ara değerler (v1 paritesi korunuyor).
-            HStack(spacing: 5) {
+            HStack(spacing: Theme.scaled(5)) {
                 Circle()
                     .fill(Theme.statusColor(for: meta.status))
                     .frame(width: Theme.Spacing.sm, height: Theme.Spacing.sm)
@@ -53,7 +53,7 @@ struct TerminalChipStrip: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             .padding(.horizontal, Theme.Spacing.md)
-            .padding(.vertical, 3)
+            .padding(.vertical, Theme.scaled(3))
             .background(Theme.bgSurface)
             .overlay(
                 RoundedRectangle(cornerRadius: Theme.Radius.sm)

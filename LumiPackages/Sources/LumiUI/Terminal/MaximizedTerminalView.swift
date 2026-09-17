@@ -23,7 +23,7 @@ struct MaximizedTerminalView: View {
     @State private var isQueueOpen = false
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: Theme.Spacing.md) {
             terminalCard
             if !others.isEmpty {
                 TerminalChipStrip(items: others, onSelect: onSwitch)
@@ -58,7 +58,7 @@ struct MaximizedTerminalView: View {
         } content: {
             TerminalHostView(terminalID: maximized.id, provider: viewProvider)
                 .id(maximized.id)
-                .padding(8)
+                .padding(Theme.Spacing.md)
         }
     }
 }

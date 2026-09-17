@@ -82,6 +82,61 @@ final class DesignTokenLintTests: XCTestCase {
         return counts
     }
 
+    // MARK: - Ölçeklenmeyen metrikler (karar 61)
+
+    /// Boşluk / dolgu / frame / metrik sabiti literalleri — hepsi sıfır.
+    ///
+    /// **Neden ayrı bir kapı:** yukarıdaki iki kural yalnız puntoyu ve köşe
+    /// yarıçapını kapatıyordu, oysa arayüz zoom'u (karar 61) `Theme.scaled`'den
+    /// GEÇEN her ölçüye iner. Literal kalan bir boşluk ya da frame ölçekten
+    /// kaçar: %80'de yazı küçülürken kutusu tam boyutta kalır, pencere yarı
+    /// ölçeklenmiş görünür. Bu tam olarak yaşandı — modüle 125 kaçak birikmişti
+    /// ve hiçbiri testlere takılmamıştı.
+    ///
+    /// `static let` yerine `static var … { Theme.scaled(N) }` gerekir: `let`
+    /// ilk erişimdeki ölçekte donar ve zoom onu atlar.
+    ///
+    /// Kapsam dışı: sıfır (ölçeklense de sıfırdır), `#if DEBUG` preview
+    /// blokları, `…Ratio`/`…Scale` adlı oranlar (pencereye göre kesir
+    /// verirler, punto/mesafe değildirler) ve `PreferenceKey.defaultValue`.
+    private static let unscaledMetric = try! NSRegularExpression(
+        pattern: [
+            #"\bspacing:\s*[1-9]"#,
+            #"\.padding\(\s*(?:\.\w+\s*,\s*)?[1-9]"#,
+            #"\b(?:width|height|minWidth|maxWidth|minHeight|maxHeight|idealWidth|idealHeight):\s*[1-9]"#,
+            #"static\s+let\s+(?!\w*(?:Ratio|Scale)\b|defaultValue\b)\w+\s*:\s*CGFloat\s*=\s*[1-9]"#,
+        ].joined(separator: "|")
+    )
+
+    func testModuleContainsNoUnscaledMetrics() throws {
+        XCTAssertEqual(
+            try scanSkippingPreviews(Self.unscaledMetric), [:],
+            "Ölçeklenmeyen metrik literali kaldı — Theme.scaled / Theme.Spacing kullan (karar 61)"
+        )
+    }
+
+    /// `scan` ile aynı, ama `#if DEBUG` preview blokları sayılmaz: preview
+    /// kapları ekranda görünmez, ölçeklenmeleri de gerekmez.
+    private func scanSkippingPreviews(_ regex: NSRegularExpression) throws -> [String: Int] {
+        var counts: [String: Int] = [:]
+        for url in try Self.swiftFiles() {
+            guard !url.path.contains("/Theme/") else { continue }
+            let text = try String(contentsOf: url, encoding: .utf8)
+            var inDebug = false
+            var matches = 0
+            for line in text.split(separator: "\n", omittingEmptySubsequences: false) {
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                if trimmed.hasPrefix("#if DEBUG") { inDebug = true; continue }
+                if trimmed.hasPrefix("#endif") { inDebug = false; continue }
+                guard !inDebug, !trimmed.hasPrefix("//") else { continue }
+                let s = String(line)
+                matches += regex.numberOfMatches(in: s, range: NSRange(s.startIndex..., in: s))
+            }
+            if matches > 0 { counts[url.lastPathComponent] = matches }
+        }
+        return counts
+    }
+
     private static func swiftFiles() throws -> [URL] {
         let directory = sourceDirectory
         guard let enumerator = FileManager.default.enumerator(
