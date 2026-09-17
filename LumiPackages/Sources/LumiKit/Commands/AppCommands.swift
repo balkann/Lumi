@@ -10,13 +10,13 @@ public enum AppCommands {
         // MARK: App
         AppCommand(
             id: .openSettings, title: "Settings…", menu: .app, key: ",",
-            referenceTitle: "Settings", referenceOrder: 11
+            referenceTitle: "Settings", referenceOrder: 12
         ),
         // Standart `NSApplication.terminate(_:)` selector'ına gider ama
         // kullanıcıya sunulan tabloda listelenir.
         AppCommand(
             id: .quit, title: "Quit Lumi", menu: .app, key: "q",
-            separatorBefore: true, referenceTitle: "Quit", referenceOrder: 12
+            separatorBefore: true, referenceTitle: "Quit", referenceOrder: 13
         ),
 
         // MARK: Shell
@@ -33,6 +33,14 @@ public enum AppCommands {
             id: .openRepoSelector, title: "Open Repo…", menu: .shell, key: "o",
             separatorBefore: true, referenceTitle: "Open Repository", referenceOrder: 3
         ),
+        // ⌃1…⌃9 repo TAB'ını değiştirir (Electron paritesi). ⌘1…⌘9 ise aktif
+        // repo içindeki terminali odaklar — ikisi ayrı eksendir (karar 55).
+        AppCommand(
+            id: .switchToTabAtIndex, title: "Repository", menu: .shell, key: nil,
+            modifiers: [.control],
+            separatorBefore: true, indexRange: 1...9,
+            referenceTitle: "Switch to Tab N", referenceOrder: 4
+        ),
 
         // MARK: Edit (terminal copy-paste için ZORUNLU, design/03 §2)
         AppCommand(id: .cut, title: "Cut", menu: .edit, key: "x", isSystemStandard: true),
@@ -47,38 +55,38 @@ public enum AppCommands {
         AppCommand(
             id: .focusNextTerminal, title: "Next Terminal", menu: .terminal,
             key: CommandKey.rightArrow, modifiers: [.command, .shift],
-            referenceTitle: "Next Terminal", referenceOrder: 6
+            referenceTitle: "Next Terminal", referenceOrder: 7
         ),
         AppCommand(
             id: .focusPreviousTerminal, title: "Previous Terminal", menu: .terminal,
             key: CommandKey.leftArrow, modifiers: [.command, .shift],
-            referenceTitle: "Previous Terminal", referenceOrder: 5
+            referenceTitle: "Previous Terminal", referenceOrder: 6
         ),
         AppCommand(
             id: .focusTerminalAtIndex, title: "Terminal", menu: .terminal, key: nil,
             separatorBefore: true, indexRange: 1...9,
-            referenceTitle: "Switch to Tab N", referenceOrder: 4
+            referenceTitle: "Focus Terminal N", referenceOrder: 5
         ),
         AppCommand(
             id: .toggleMaximizeTerminal, title: "Maximize Terminal", menu: .terminal,
             key: "m", modifiers: [.command, .control], separatorBefore: true,
-            referenceTitle: "Maximize Terminal", referenceOrder: 7
+            referenceTitle: "Maximize Terminal", referenceOrder: 8
         ),
 
         // MARK: View
         AppCommand(
             id: .toggleLeftSidebar, title: "Toggle Left Sidebar", menu: .view, key: "b",
-            referenceTitle: "Toggle Left Sidebar", referenceOrder: 8
+            referenceTitle: "Toggle Left Sidebar", referenceOrder: 9
         ),
         AppCommand(
             id: .toggleRightSidebar, title: "Toggle Right Sidebar", menu: .view, key: "B",
             modifiers: [.command, .shift],
-            referenceTitle: "Toggle Right Sidebar", referenceOrder: 9
+            referenceTitle: "Toggle Right Sidebar", referenceOrder: 10
         ),
         AppCommand(
             id: .toggleFocusMode, title: "Toggle Focus Mode", menu: .view, key: "F",
             modifiers: [.command, .shift], separatorBefore: true,
-            referenceTitle: "Focus Mode", referenceOrder: 10
+            referenceTitle: "Focus Mode", referenceOrder: 11
         ),
 
         // MARK: Window

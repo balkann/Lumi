@@ -21,9 +21,16 @@ final class AppCommandsTests: XCTestCase {
         }
     }
 
-    /// Tüm kısayollar ⌘ taşır (design/03 §2: menü tek kaynak, ⌘'siz kısayol yok).
+    /// Tüm kısayollar ⌘ taşır — TEK istisna repo tab geçişidir (karar 55).
+    /// İstisna burada AÇIKÇA listelenir ki ikinci bir ⌘'siz kısayol sessizce
+    /// eklenemesin.
     func testEveryShortcutUsesCommandModifier() {
+        let controlOnly: Set<CommandID> = [.switchToTabAtIndex]
         for command in AppCommands.all {
+            if controlOnly.contains(command.id) {
+                XCTAssertEqual(command.modifiers, [.control], "\(command.title) yalnız ⌃ taşımalı")
+                continue
+            }
             XCTAssertTrue(
                 command.modifiers.contains(.command),
                 "\(command.title) ⌘ taşımıyor"
@@ -56,7 +63,7 @@ final class AppCommandsTests: XCTestCase {
         for command in AppCommands.all where command.isSystemStandard {
             XCTAssertFalse(referenced.contains(command.id), "\(command.title) tabloda olmamalı")
         }
-        XCTAssertEqual(AppCommands.reference.count, 12, "12 kullanıcı kısayolu")
+        XCTAssertEqual(AppCommands.reference.count, 13, "13 kullanıcı kısayolu")
     }
 
     func testReferenceIsSortedByReferenceOrder() {
@@ -71,9 +78,9 @@ final class AppCommandsTests: XCTestCase {
             AppCommands.reference.map { $0.referenceTitle ?? $0.title },
             [
                 "New Terminal", "Close Terminal", "Open Repository", "Switch to Tab N",
-                "Previous Terminal", "Next Terminal", "Maximize Terminal",
-                "Toggle Left Sidebar", "Toggle Right Sidebar", "Focus Mode",
-                "Settings", "Quit",
+                "Focus Terminal N", "Previous Terminal", "Next Terminal",
+                "Maximize Terminal", "Toggle Left Sidebar", "Toggle Right Sidebar",
+                "Focus Mode", "Settings", "Quit",
             ]
         )
     }
@@ -97,8 +104,10 @@ final class AppCommandsTests: XCTestCase {
 
     /// İndeksli komut iki UÇ kombo ile ifade edilir ("⌘1 – ⌘9").
     func testIndexedCommandExposesRangeEndpoints() {
-        let indexed = AppCommands.all.first { $0.indexRange != nil }
-        XCTAssertEqual(indexed?.displayCombos, [["⌘", "1"], ["⌘", "9"]])
+        let tabSwitch = AppCommands.all.first { $0.id == .switchToTabAtIndex }
+        XCTAssertEqual(tabSwitch?.displayCombos, [["⌃", "1"], ["⌃", "9"]])
+        let terminalFocus = AppCommands.all.first { $0.id == .focusTerminalAtIndex }
+        XCTAssertEqual(terminalFocus?.displayCombos, [["⌘", "1"], ["⌘", "9"]])
     }
 
     // MARK: - Menü bölümleri

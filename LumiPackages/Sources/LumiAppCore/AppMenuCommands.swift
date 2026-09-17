@@ -23,9 +23,22 @@ enum AppMenuCommands {
                 command: shared.settings.current.aiProvider.launchCommand
             )
         }
+        // Electron paritesi: aktif terminal yoksa ⌘W repo TAB'ını kapatır
+        // (karar 55). Tab kapanışı `requestCloseTab` guard'ından geçer —
+        // minimize terminali olan tab dialog'suz kapanmaz.
         dispatcher.register(.closeTerminal) {
-            guard let activeID = shared.terminals.activeTerminalID else { return }
-            shared.terminals.close(activeID)
+            if let activeID = shared.terminals.activeTerminalID {
+                shared.terminals.close(activeID)
+                return
+            }
+            guard let repoPath = shared.navigation.activeRepoPath,
+                  let minimizedCount = shared.navigation.requestCloseTab(repoPath)
+            else { return }
+            shared.dialogs.present(.closeTab(CloseTabDialogState(
+                repoPath: repoPath,
+                repoName: (repoPath as NSString).lastPathComponent,
+                minimizedCount: minimizedCount
+            )))
         }
         dispatcher.register(.openRepoSelector) {
             shared.dialogs.isRepoSelectorOpen = true
@@ -37,6 +50,12 @@ enum AppMenuCommands {
         dispatcher.register(.focusPreviousTerminal) {
             guard let active = shared.navigation.activeRepoPath else { return }
             shared.terminals.focusPrevious(in: active)
+        }
+        dispatcher.register(.switchToTabAtIndex) { index in
+            guard let index else { return }
+            let tabs = shared.navigation.openTabs
+            guard tabs.indices.contains(index - 1) else { return }
+            shared.navigation.setRoute(.repo(tabs[index - 1]))
         }
         dispatcher.register(.focusTerminalAtIndex) { index in
             guard let index, let active = shared.navigation.activeRepoPath else { return }

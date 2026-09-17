@@ -43,9 +43,10 @@ Tablodaki kısayollar:
 | `openSettings` | ⌘, |
 | `quit` | ⌘Q |
 | `newTerminal` | ⌘T |
-| `closeTerminal` | **⌘W — terminali kapatır, pencereyi DEĞİL** (menü interception) |
+| `closeTerminal` | **⌘W — terminali kapatır, pencereyi DEĞİL** (menü interception); aktif terminal yoksa repo TAB'ını kapatır (karar 55) |
 | `openRepoSelector` | ⌘O |
-| `focusTerminalAtIndex` | ⌘1 … ⌘9 (indeks `NSMenuItem.tag`'de) |
+| `switchToTabAtIndex` | **⌃1 … ⌃9 — repo TAB'ını değiştirir** (karar 55; tablodaki tek ⌘'siz kısayol, Mission Control çakışması bilinçli kabul) |
+| `focusTerminalAtIndex` | ⌘1 … ⌘9 (aktif repo İÇİNDEKİ terminali odaklar; indeks `NSMenuItem.tag`'de) |
 | `focusNextTerminal` / `focusPreviousTerminal` | ⌘⇧→ / ⌘⇧← |
 | `toggleMaximizeTerminal` | **⌘⌃M** |
 | `toggleLeftSidebar` / `toggleRightSidebar` | ⌘B / ⌘⇧B |
