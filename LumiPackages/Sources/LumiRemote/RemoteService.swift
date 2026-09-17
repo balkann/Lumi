@@ -260,6 +260,8 @@ public final class RemoteService: RemoteServicing {
         if RemoteProtocol.decodeSubscribeMode(payload) == "chat" {
             let meta = terminal.terminals.first(where: { $0.id == id })
             guard let meta else { return }
+            // Canlı terminal şeridi: chat modunda PTY feed'i de yayınlanır (spec 2026-09-17).
+            await startFeedEmission(id: id, raw: raw)
             guard let claudeSessionID = meta.claudeSessionID else {
                 rlog("chat subscribe: claudeSessionID yok, PTY'ye DÜŞMÜYOR — chat-unavailable: repo=\(meta.repoPath)")
                 // Ham-PTY'ye düşme. Boş chat + working:false durumu; Task 3 transcript keşfi bağlar.
@@ -290,6 +292,13 @@ public final class RemoteService: RemoteServicing {
         }
 
         // terminal mode (mevcut davranış)
+        await startFeedEmission(id: id, raw: raw)
+    }
+
+    /// PTY feed emisyonu (scrollback seq=0 + canlı data). Terminal modunun gövdesi;
+    /// chat modu da çağırır — canlı terminal şeridi chat ekranında bu feed'den çizilir
+    /// (spec 2026-09-17). Feed chat İÇERİĞİ değildir; telefon ayrı şeritte gösterir.
+    private func startFeedEmission(id: TerminalID, raw: String) async {
         seqCounters[id] = 0
 
         // (a) scrollback (seq=0, otoriter cols/rows)

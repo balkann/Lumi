@@ -319,7 +319,8 @@ final class FakeTerminalServicing: TerminalServicing {
         await conn.injectInbound(type: "subscribe", payload: ["sessionId": sid, "mode": "chat"])
         try await conn.waitForSent(types: ["chat", "chat_append"])
 
-        #expect(await conn.count(type: "scrollback") == 0)  // chat mode: terminal göndermez
+        // Feed EK kanaldır; chat içeriği ham PTY'ye düşmez (spec 2026-09-17).
+        try await conn.waitForSent(types: ["scrollback"])
         svc.stop()
     }
 
@@ -356,9 +357,8 @@ final class FakeTerminalServicing: TerminalServicing {
                                 connection: conn, chatSource: FakeChatTranscriptSource(events: []))
         await svc.start()
         await conn.injectInbound(type: "subscribe", payload: ["sessionId": sid, "mode": "chat"])
-        // Yeni davranış: PTY'ye düşmez; boş chat + idle durumu yayınlar.
-        try await conn.waitForSent(types: ["chat", "chat_status"])
-        #expect(await conn.sentTypes().contains("scrollback") == false)
+        // Yeni davranış: PTY'ye düşmez; boş chat + idle durumu yayınlar. Feed EK kanaldır.
+        try await conn.waitForSent(types: ["chat", "chat_status", "scrollback"])
         svc.stop()
     }
 }

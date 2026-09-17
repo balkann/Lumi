@@ -5,7 +5,7 @@ import LumiTestSupport
 @testable import LumiRemote
 
 @Suite @MainActor struct RemoteServiceChatFallbackTests {
-    @Test func chatSubscribeWithoutClaudeSessionDoesNotFallToTerminal() async throws {
+    @Test func chatSubscribeWithoutClaudeSessionEmitsChatUnavailablePlusFeed() async throws {
         let conn = FakeRelayConnection()
         let term = FakeTerminalServicing()
         let hooks = FakeAgentHookServer()
@@ -19,9 +19,30 @@ import LumiTestSupport
         await svc.start()
         await conn.injectInbound(type: "subscribe", payload: ["sessionId": sid, "mode": "chat"])
         try await conn.waitForSent(types: ["chat_status"])
-        // Ham-PTY yolu ASLA kurulmaz:
-        #expect(await conn.sentTypes().contains("scrollback") == false)
-        #expect(await conn.sentTypes().contains("data") == false)
+        // Feed EK kanaldır; chat içeriği ham PTY'ye düşmez.
+        try await conn.waitForSent(types: ["scrollback"])
+        #expect(await conn.sentTypes().contains("chat"))
+        svc.stop()
+    }
+
+    @Test func chatSubscribeAlsoStreamsFeed() async throws {
+        let conn = FakeRelayConnection()
+        let term = FakeTerminalServicing()
+        let hooks = FakeAgentHookServer()
+        let uuid = UUID()
+        let id = TerminalID(raw: uuid)
+        term.metas.append(TerminalMeta(id: id, name: "T", repoPath: "/repo",
+            createdAt: Date(), claudeSessionID: "cs-1"))
+        let sid = id.description
+        let svc = RemoteService(paths: .testDefaults(), terminal: term, repos: FakeRepoService(),
+            connection: conn, chatSource: FakeChatTranscriptSource(events: []),
+            hookEvents: { hooks.events() })
+        await svc.start()
+        await conn.injectInbound(type: "subscribe", payload: ["sessionId": sid, "mode": "chat"])
+        // Chat kanalı kurulur VE feed kanalı da kurulur.
+        try await conn.waitForSent(types: ["scrollback", "chat_status"])
+        term.emitOutput(id, Data("token".utf8))
+        try await conn.waitForSent(types: ["data"])
         svc.stop()
     }
 
@@ -45,7 +66,7 @@ import LumiTestSupport
         await svc.start()
         await conn.injectInbound(type: "subscribe", payload: ["sessionId": sid, "mode": "chat"])
         try await conn.waitForCount(type: "chat", atLeast: 2)   // 1: boş, 2: locator sonrası snapshot
-        #expect(await conn.sentTypes().contains("scrollback") == false)
+        try await conn.waitForSent(types: ["scrollback"])
         svc.stop()
     }
 }
