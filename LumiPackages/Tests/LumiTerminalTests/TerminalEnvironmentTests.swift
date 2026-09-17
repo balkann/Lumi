@@ -94,4 +94,18 @@ final class TerminalEnvironmentTests: XCTestCase {
         XCTAssertEqual(env["DISABLE_UPDATE_PROMPT"], "true")
         XCTAssertEqual(env["DISABLE_AUTO_UPDATE"], "true")
     }
+
+    func testStripsInheritedClaudeSessionIdentity() {
+        // Lumi bir claude oturumu içinden başlatılırsa child claude alt-oturum
+        // sanıp transcript'i --session-id yoluna yazmıyordu; kimlik geçmemeli.
+        let base = ["CLAUDECODE": "1", "CLAUDE_CODE_SESSION_ID": "abc",
+                    "CLAUDE_CODE_CHILD_SESSION": "1", "CLAUDE_EFFORT": "high",
+                    "CLAUDE_CONFIG_DIR": "/keep/me"]
+        let env = TerminalEnvironment.childEnvironment(base: base)
+        XCTAssertNil(env["CLAUDECODE"])
+        XCTAssertNil(env["CLAUDE_CODE_SESSION_ID"])
+        XCTAssertNil(env["CLAUDE_CODE_CHILD_SESSION"])
+        XCTAssertNil(env["CLAUDE_EFFORT"])
+        XCTAssertEqual(env["CLAUDE_CONFIG_DIR"], "/keep/me")   // meşru ayar korunur
+    }
 }
