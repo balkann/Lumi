@@ -37,6 +37,14 @@ final class MainWindowController: NSObject {
 
     // MARK: - Kurulum
 
+    /// Arayüz ölçeği değiştiğinde içerik view'ı baştan kurulur (karar 57).
+    /// Pencerenin kendisine (frame, traffic light, gözlemciler) dokunulmaz.
+    func replaceContentView(_ contentView: NSView) {
+        guard let window else { return }
+        window.contentView = contentView
+        applyTrafficLightLayout()
+    }
+
     @discardableResult
     func install(
         contentView: NSView,

@@ -10,13 +10,13 @@ public enum AppCommands {
         // MARK: App
         AppCommand(
             id: .openSettings, title: "Settings…", menu: .app, key: ",",
-            referenceTitle: "Settings", referenceOrder: 12
+            referenceTitle: "Settings", referenceOrder: 15
         ),
         // Standart `NSApplication.terminate(_:)` selector'ına gider ama
         // kullanıcıya sunulan tabloda listelenir.
         AppCommand(
             id: .quit, title: "Quit Lumi", menu: .app, key: "q",
-            separatorBefore: true, referenceTitle: "Quit", referenceOrder: 13
+            separatorBefore: true, referenceTitle: "Quit", referenceOrder: 16
         ),
 
         // MARK: Shell
@@ -87,6 +87,20 @@ public enum AppCommands {
             id: .toggleFocusMode, title: "Toggle Focus Mode", menu: .view, key: "F",
             modifiers: [.command, .shift], separatorBefore: true,
             referenceTitle: "Focus Mode", referenceOrder: 11
+        ),
+        // Karar 57: tüm arayüzü ölçekler (Electron `zoomIn`/`zoomOut`/
+        // `resetZoom` paritesi) — yalnız terminal fontunu değil.
+        AppCommand(
+            id: .zoomIn, title: "Zoom In", menu: .view, key: "+",
+            separatorBefore: true, referenceTitle: "Zoom In", referenceOrder: 12
+        ),
+        AppCommand(
+            id: .zoomOut, title: "Zoom Out", menu: .view, key: "-",
+            referenceTitle: "Zoom Out", referenceOrder: 13
+        ),
+        AppCommand(
+            id: .resetZoom, title: "Actual Size", menu: .view, key: "0",
+            referenceTitle: "Actual Size", referenceOrder: 14
         ),
 
         // MARK: Window

@@ -100,10 +100,12 @@ final class TerminalFeatureAssembly: FeatureAssembly, ShellContributing {
         applyCursor(config)
     }
 
+    /// Karar 57: kullanıcının font boyutu ayarı arayüz ölçeğiyle ÇARPILIR —
+    /// SwiftTerm SwiftUI token'larını kullanmadığı için ölçek ona ayrıca iner.
     private func applyFont(_ config: AppConfig) {
         services.terminal.applyFont(LumiFonts.mono(
             family: config.terminalFontFamily,
-            size: CGFloat(config.terminalFontSize)
+            size: Theme.scaled(CGFloat(config.terminalFontSize))
         ))
     }
 

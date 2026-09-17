@@ -87,6 +87,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         shared.layout.onFocusModeChanged = { [weak self] active in
             self?.windowController.setTrafficLightsHidden(active)
         }
+        // Karar 57: ölçek → token çarpanı + arayüzün yeniden kurulması.
+        // Store `Theme`'i ve AppKit'i tanımaz; köprü burada.
+        shared.layout.onUIScaleChanged = { [weak self] scale in
+            self?.applyUIScale(scale)
+        }
+        applyUIScale(shared.layout.uiScale)
+    }
+
+    /// Ölçek değişiminin ÜÇ ayağı (karar 57):
+    /// 1. `Theme.uiScale` — punto/boşluk token'larının çarpanı.
+    /// 2. İçerik view'ının yeniden kurulması — SwiftUI static token okumalarını
+    ///    izlemediği için mevcut ağaç eski ölçekte donar; `NSHostingView`
+    ///    baştan kurulunca tüm body'ler yeni token'larla çalışır. Terminal
+    ///    NSView'ları `TerminalViewRegistry`'de retain edildiğinden PTY kopmaz,
+    ///    yalnız reparent olurlar.
+    /// 3. Terminal fontu — SwiftTerm SwiftUI token'larını kullanmaz, ölçek
+    ///    kullanıcının font boyutu ayarıyla ÇARPILARAK ayrıca uygulanır.
+    private func applyUIScale(_ scale: CGFloat) {
+        guard Theme.uiScale != scale else { return }
+        Theme.uiScale = scale
+        applyTerminalFont()
+        let content = RootViewFactory(composition: composition).makeContentView()
+        windowController.replaceContentView(content)
+        // Reparent sonrası canlı terminal view'ları yeni host'lara oturur.
+        composition.registry.viewProvider.refreshAttachedViews()
+    }
+
+    private func applyTerminalFont() {
+        let config = shared.settings.current
+        composition.registry.terminal.applyFont(LumiFonts.mono(
+            family: config.terminalFontFamily,
+            size: Theme.scaled(CGFloat(config.terminalFontSize))
+        ))
     }
 
     /// Fullscreen giriş/çıkışı terminal NSView'larını bayat/boş bırakabilir

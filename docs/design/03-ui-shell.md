@@ -51,6 +51,7 @@ Tablodaki kısayollar:
 | `toggleMaximizeTerminal` | **⌘⌃M** |
 | `toggleLeftSidebar` / `toggleRightSidebar` | ⌘B / ⌘⇧B |
 | `toggleFocusMode` | ⌘⇧F |
+| `zoomIn` / `zoomOut` / `resetZoom` | **⌘+ / ⌘− / ⌘0 — TÜM arayüzü ölçekler** (karar 57; `Theme.uiScale` token çarpanı, çizim ölçeği değil) |
 | `minimizeWindow` | ⌘M |
 | `cut`/`copy`/`paste`/`selectAll` | ⌘X/⌘C/⌘V/⌘A — platform standardı (`isSystemStandard`), terminal copy-paste için zorunlu; Shortcuts tablosunda **gösterilmez** |
 

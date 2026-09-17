@@ -32,6 +32,9 @@ public struct UIState: Sendable, Equatable {
     /// (migration için); yazımda overlay'e girmez, ham anahtar
     /// bilinmeyen-anahtar korumasıyla diskte aynen kalır.
     public var legacyGridColumns: GridLayout?
+    /// Karar 57 (additive): arayüz ölçeği (⌘+/⌘−/⌘0). nil = dosyada yok → %100.
+    /// Terminal font boyutu ayrı bir ayardır ve bu ölçekle ÇARPILIR.
+    public var uiScale: Double?
 
     public static let defaults = UIState(
         openTabs: [],
@@ -54,7 +57,8 @@ public struct UIState: Sendable, Equatable {
         resumeSessions: [ResumeSession] = [],
         activeRoute: String? = nil,
         panelLayout: PanelLayout? = nil,
-        legacyGridColumns: GridLayout? = nil
+        legacyGridColumns: GridLayout? = nil,
+        uiScale: Double? = nil
     ) {
         self.openTabs = openTabs
         self.activeTab = activeTab
@@ -67,6 +71,7 @@ public struct UIState: Sendable, Equatable {
         self.activeRoute = activeRoute
         self.panelLayout = panelLayout
         self.legacyGridColumns = legacyGridColumns
+        self.uiScale = uiScale
     }
 }
 

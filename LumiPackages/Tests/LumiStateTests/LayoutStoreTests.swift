@@ -28,6 +28,80 @@ final class LayoutStoreTests: XCTestCase {
         }
     }
 
+    // MARK: - Arayüz ölçeği (karar 57)
+
+    func testZoomStepsThroughTheClosedSet() {
+        XCTAssertEqual(store.uiScale, 1)
+
+        store.zoomIn()
+        XCTAssertEqual(store.uiScale, 1.1)
+        store.zoomIn()
+        XCTAssertEqual(store.uiScale, 1.25)
+        store.zoomOut()
+        store.zoomOut()
+        XCTAssertEqual(store.uiScale, 1)
+        store.zoomOut()
+        XCTAssertEqual(store.uiScale, 0.9)
+    }
+
+    /// Uçlarda sabitlenir — sonsuz büyüme/küçülme yok.
+    func testZoomClampsAtBothEnds() {
+        for _ in 0..<20 { store.zoomIn() }
+        XCTAssertEqual(store.uiScale, LayoutStore.uiScaleSteps.last)
+        for _ in 0..<40 { store.zoomOut() }
+        XCTAssertEqual(store.uiScale, LayoutStore.uiScaleSteps.first)
+    }
+
+    func testResetZoomReturnsToActualSize() {
+        store.zoomIn()
+        store.zoomIn()
+        store.resetZoom()
+        XCTAssertEqual(store.uiScale, 1)
+    }
+
+    /// Köprü HER değişimde ateşlenir (token çarpanı + arayüzün yeniden kurulması
+    /// buna bağlı), ama aynı değere ikinci kez geçişte ateşlenmez.
+    func testScaleChangeNotifiesBridgeOnlyOnRealChange() {
+        var received: [CGFloat] = []
+        store.onUIScaleChanged = { received.append($0) }
+
+        store.zoomIn()
+        store.resetZoom()
+        store.resetZoom() // zaten %100 — köprü tetiklenmez
+
+        XCTAssertEqual(received, [1.1, 1])
+    }
+
+    /// Karar 9: %100 varsayılanında additive anahtar diske YAZILMAZ.
+    func testScalePersistsOnlyWhenNotActualSize() async throws {
+        store.zoomIn()
+        try await waitForPersist()
+        var written = await config.uiState()
+        XCTAssertEqual(written.uiScale, 1.1)
+
+        store.resetZoom()
+        try await waitForPersist(minimumCount: 2)
+        written = await config.uiState()
+        XCTAssertNil(written.uiScale, "%100'de anahtar yazılmamalı")
+    }
+
+    /// Diskteki bozuk/ara değer en yakın basamağa çekilir — arayüz okunamaz
+    /// bir ölçekle açılmaz.
+    func testLoadSnapsStoredScaleToNearestStep() {
+        var state = WorkspaceFixtures.uiState()
+        state.uiScale = 1.19
+        store.load(state: state, openTabs: [])
+        XCTAssertEqual(store.uiScale, 1.25)
+
+        state.uiScale = -3
+        store.load(state: state, openTabs: [])
+        XCTAssertEqual(store.uiScale, 1)
+
+        state.uiScale = 99
+        store.load(state: state, openTabs: [])
+        XCTAssertEqual(store.uiScale, LayoutStore.uiScaleSteps.last)
+    }
+
     // MARK: - Yükleme / migration
 
     func testLoadAppliesSidebarsAndLayouts() {

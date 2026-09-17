@@ -197,7 +197,8 @@ final class ConfigCodecIntegrityTests: XCTestCase {
             .moving(.fileTree, to: .right, index: 0)
             .settingVisible(.right, true)
             .settingWidth(320, for: .left),
-        legacyGridColumns: nil
+        legacyGridColumns: nil,
+        uiScale: 1.25
     )
 }
 

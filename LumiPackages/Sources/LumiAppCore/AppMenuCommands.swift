@@ -69,6 +69,9 @@ enum AppMenuCommands {
         dispatcher.register(.toggleLeftSidebar) { shared.layout.toggleSlot(.left) }
         dispatcher.register(.toggleRightSidebar) { shared.layout.toggleSlot(.right) }
         dispatcher.register(.toggleFocusMode) { shared.layout.toggleFocusMode() }
+        dispatcher.register(.zoomIn) { shared.layout.zoomIn() }
+        dispatcher.register(.zoomOut) { shared.layout.zoomOut() }
+        dispatcher.register(.resetZoom) { shared.layout.resetZoom() }
         dispatcher.register(.openSettings, openSettings)
     }
 }

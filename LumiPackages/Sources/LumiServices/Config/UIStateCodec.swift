@@ -48,6 +48,10 @@ enum UIStateCodec {
             fallbackRightOpen: state.rightSidebarOpen
         )
         state.legacyGridColumns = GridLayoutCodec.decodeLegacyColumns(dict["gridColumns"])
+        // Karar 57 (additive): arayüz ölçeği. Yoksa nil → %100.
+        if let value = JSONValue.double(dict["uiScale"]) {
+            state.uiScale = value
+        }
         return state
     }
 
@@ -81,6 +85,11 @@ enum UIStateCodec {
         if let layout = state.panelLayout {
             overlay["panelLayout"] = PanelLayoutCodec.overlay(layout)
             overlay["visibleSlots"] = PanelLayoutCodec.visibleSlotsOverlay(layout)
+        }
+        // Karar 57 (additive): yalnız DOLU iken yazılır — %100'de eski
+        // dosyalarda olmayan bir anahtar üretilmez (karar 9).
+        if let scale = state.uiScale {
+            overlay["uiScale"] = scale
         }
         // legacyGridColumns YAZILMAZ: yalnız okuma yönlü migration girdisi;
         // ham `gridColumns` anahtarı merge'le diskte aynen kalır.

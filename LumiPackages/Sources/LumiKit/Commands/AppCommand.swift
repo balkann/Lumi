@@ -28,6 +28,9 @@ public extension CommandID {
     static let toggleLeftSidebar: CommandID = "toggleLeftSidebar"
     static let toggleRightSidebar: CommandID = "toggleRightSidebar"
     static let toggleFocusMode: CommandID = "toggleFocusMode"
+    static let zoomIn: CommandID = "zoomIn"
+    static let zoomOut: CommandID = "zoomOut"
+    static let resetZoom: CommandID = "resetZoom"
     static let minimizeWindow: CommandID = "minimizeWindow"
 }
 

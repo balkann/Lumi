@@ -72,30 +72,35 @@ public extension Theme {
         // MARK: - Fabrikalar
 
         /// Monospace (JetBrains Mono görsel kimliği) — metinlerin varsayılanı.
+        ///
+        /// Punto ÜÇ fabrikada da `Theme.scaled` üzerinden geçer (karar 57):
+        /// arayüz ölçeği tek noktadan iner, çağrı yerleri ölçeği bilmez.
         public static func mono(_ size: Size, weight: Font.Weight = .regular) -> Font {
-            .system(size: size.points, weight: weight, design: .monospaced)
+            .system(size: Theme.scaled(size.points), weight: weight, design: .monospaced)
         }
 
         /// Sistem yüzü — SF Symbol glyph'leri ve native kontroller.
         public static func ui(_ size: Size, weight: Font.Weight = .regular) -> Font {
-            .system(size: size.points, weight: weight)
+            .system(size: Theme.scaled(size.points), weight: weight)
         }
 
         /// Yuvarlak yüz — sayaç rozetleri gibi yumuşak öğeler.
         public static func rounded(_ size: Size, weight: Font.Weight = .regular) -> Font {
-            .system(size: size.points, weight: weight, design: .rounded)
+            .system(size: Theme.scaled(size.points), weight: weight, design: .rounded)
         }
 
         // MARK: - Semantik hazır fontlar
 
-        public static let caption = ui(.caption)
-        public static let captionMono = mono(.caption)
-        public static let label = ui(.label)
-        public static let labelMono = mono(.label)
-        public static let body = ui(.body)
-        public static let bodyMono = mono(.body)
-        public static let baseMono = mono(.base)
-        public static let title = ui(.title, weight: .semibold)
-        public static let titleMono = mono(.title, weight: .semibold)
+        // `var`: ölçek değiştiğinde yeniden hesaplanmaları gerekir (karar 57).
+        // `let` olsalardı ilk erişimdeki ölçekte donup kalırlardı.
+        public static var caption: Font { ui(.caption) }
+        public static var captionMono: Font { mono(.caption) }
+        public static var label: Font { ui(.label) }
+        public static var labelMono: Font { mono(.label) }
+        public static var body: Font { ui(.body) }
+        public static var bodyMono: Font { mono(.body) }
+        public static var baseMono: Font { mono(.base) }
+        public static var title: Font { ui(.title, weight: .semibold) }
+        public static var titleMono: Font { mono(.title, weight: .semibold) }
     }
 }

@@ -7,17 +7,17 @@ import CoreGraphics
 /// header view'ının içinde değil, kabuğun ortak metrik dosyasında dururlar.
 public enum TopBarMetrics {
     /// İnce bar (karar 30).
-    public static let height: CGFloat = 36
+    public static var height: CGFloat { Theme.scaled(36) }
     /// Traffic light ilk butonunun sol kenarı (Orca `TRAFFIC_LIGHT_X`).
-    public static let trafficLightLeading: CGFloat = 16
+    public static var trafficLightLeading: CGFloat { Theme.scaled(16) }
     /// İçeriğin başladığı x: 3 buton (16 + 2×20 + 12 = 68) + nefes payı.
-    public static let contentLeading: CGFloat = 80
+    public static var contentLeading: CGFloat { Theme.scaled(80) }
     /// Bar içi kontrol yüksekliği (ikon buton, chip, usage, grid).
-    public static let controlHeight: CGFloat = 26
+    public static var controlHeight: CGFloat { Theme.scaled(26) }
     /// Bar'ın sağ kenar payı.
-    public static let trailingPadding: CGFloat = 10
+    public static var trailingPadding: CGFloat { Theme.scaled(10) }
     /// Sol grup ile üretim bölgesi arasındaki en küçük boşluk.
-    public static let regionGap: CGFloat = 8
+    public static var regionGap: CGFloat { Theme.scaled(8) }
 }
 
 /// Panel yuvalarının genişlik default'u burada **tekrarlanmaz**: tek kaynak
