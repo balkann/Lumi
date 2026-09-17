@@ -38,12 +38,18 @@ struct MobileChatView: View {
                     withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
                 }
             }
+            let pending = model.prompts[sessionId]?.last(where: { $0.state == .pending })
+            if chatLiveStripVisible(working: model.turnStatus[sessionId]?.working ?? false,
+                                    hasPendingPrompt: pending != nil,
+                                    hasFeed: model.hasFeed(sessionId)) {
+                ChatLiveTerminalStrip(model: model, sessionId: sessionId)
+            }
             if let status = model.turnStatus[sessionId], status.working {
                 TurnStatusBar(status: status) {
                     model.sendInput(sessionId, Data([0x03]))
                 }
             }
-            if let pending = model.prompts[sessionId]?.last(where: { $0.state == .pending }) {
+            if let pending {
                 MobileChatPromptCard(
                     prompt: pending,
                     onApproval: { optionId in
