@@ -13,7 +13,8 @@ enum AppMenuCommands {
     static func register(
         in dispatcher: MenuActionDispatcher,
         shared: SharedStores,
-        openSettings: @escaping () -> Void
+        openSettings: @escaping () -> Void,
+        closeActiveProject: @escaping () -> Void
     ) {
         dispatcher.register(.newTerminal) {
             guard let active = shared.navigation.activeRepoPath else { return }
@@ -40,6 +41,10 @@ enum AppMenuCommands {
                 minimizedCount: minimizedCount
             )))
         }
+        // Karar 66: kaldırma `repos` + `workspaces`'i gerektirir; ikisi de
+        // `SharedStores`'ta DEĞİL (kabuk repo feature'ına bağlanmaz — karar 33).
+        // `openSettings` ile aynı desen: aksiyon dışarıdan enjekte edilir.
+        dispatcher.register(.closeProject) { closeActiveProject() }
         dispatcher.register(.openRepoSelector) {
             shared.dialogs.isRepoSelectorOpen = true
         }

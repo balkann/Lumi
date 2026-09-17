@@ -87,19 +87,33 @@ public struct CloseTabDialogOverlay: View {
 
     public init() {}
 
+    /// Karar 66: aynı dialog iki akışı taşır. Metin proje kaldırmada AÇIKÇA
+    /// farklıdır — kaldırma kalıcı listeye dokunur ve projenin TÜM
+    /// checkout'larını kapatır; "Close Tab" yazan bir buton bunu gizlerdi.
+    private var isProject: Bool { shell.dialogs.closeTabDialog?.isProject ?? false }
+    private var name: String { shell.dialogs.closeTabDialog?.repoName ?? "" }
+    private var minimizedCount: Int { shell.dialogs.closeTabDialog?.minimizedCount ?? 0 }
+
     public var body: some View {
         DialogAnchor()
             .confirmationDialog(
-                "Close \(shell.dialogs.closeTabDialog?.repoName ?? "")?",
+                isProject ? "Remove \(name) from Projects?" : "Close \(name)?",
                 isPresented: Binding(
                     get: { shell.dialogs.closeTabDialog != nil },
                     set: { if !$0 { shell.cancelCloseTab() } }
                 )
             ) {
-                Button("Close Tab", role: .destructive) { shell.confirmCloseTab() }
+                Button(
+                    isProject ? "Remove Project" : "Close Tab",
+                    role: .destructive
+                ) { shell.confirmCloseTab() }
                 Button("Cancel", role: .cancel) { shell.cancelCloseTab() }
             } message: {
-                Text("\(shell.dialogs.closeTabDialog?.minimizedCount ?? 0) minimized terminal will be killed.")
+                Text(
+                    isProject
+                        ? "\(minimizedCount) minimized terminal across this project's checkouts will be killed."
+                        : "\(minimizedCount) minimized terminal will be killed."
+                )
             }
     }
 }

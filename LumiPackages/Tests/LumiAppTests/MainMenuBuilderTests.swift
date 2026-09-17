@@ -51,7 +51,7 @@ final class MainMenuBuilderTests: XCTestCase {
         // New Terminal, Close Terminal, ─────, Go to Project…, ─────, Project 1…9
         XCTAssertEqual(
             shellMenu?.items.map { $0.isSeparatorItem ? "—" : $0.title },
-            ["New Terminal", "Close Terminal", "—", "Go to Project…", "—"]
+            ["New Terminal", "Close Terminal", "Close Project", "—", "Go to Project…", "—"]
                 + (1...9).map { "Project \($0)" }
         )
     }

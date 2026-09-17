@@ -14,6 +14,7 @@ import XCTest
 @MainActor
 final class AppMenuCommandsTests: XCTestCase {
     private var dispatcher: MenuActionDispatcher!
+    private var closeProjectCount = 0
     private var shared: SharedStores!
     private var terminalService: FakeTerminalService!
 
@@ -26,7 +27,13 @@ final class AppMenuCommandsTests: XCTestCase {
             toastAutoDismissAfter: 60
         )
         dispatcher = MenuActionDispatcher()
-        AppMenuCommands.register(in: dispatcher, shared: shared, openSettings: {})
+        closeProjectCount = 0
+        AppMenuCommands.register(
+            in: dispatcher,
+            shared: shared,
+            openSettings: {},
+            closeActiveProject: { [weak self] in self?.closeProjectCount += 1 }
+        )
         // Terminal listesi servis stream'inden akar: lifecycle başlamadan
         // spawn edilen terminal store'a düşmez.
         await shared.terminals.start()
@@ -141,5 +148,21 @@ final class AppMenuCommandsTests: XCTestCase {
 
         XCTAssertTrue(shared.navigation.openTabs.isEmpty)
         XCTAssertTrue(terminalService.killedIDs.isEmpty)
+    }
+
+    /// Karar 66: ⇧⌘W ayrı bir komuttur ve enjekte edilen aksiyonu çağırır —
+    /// kaldırma `repos`+`workspaces` gerektirir, `SharedStores`'ta yokturlar.
+    func testCloseProjectInvokesTheInjectedAction() {
+        dispatcher.perform(.closeProject, index: nil)
+        XCTAssertEqual(closeProjectCount, 1)
+    }
+
+    /// ⌘W ile ⇧⌘W AYRI komutlardır: ⌘W projeyi kaldırmaz.
+    func testCloseTerminalDoesNotRemoveTheProject() {
+        shared.navigation.openTab("/r/alpha")
+
+        dispatcher.perform(.closeTerminal, index: nil)
+
+        XCTAssertEqual(closeProjectCount, 0)
     }
 }

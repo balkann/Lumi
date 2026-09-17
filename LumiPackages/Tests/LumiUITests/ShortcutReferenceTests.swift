@@ -10,7 +10,7 @@ final class ShortcutReferenceTests: XCTestCase {
 
         // MainMenuBuilder'daki kullanıcıya görünür kısayol aksiyonları
         let expected: Set<String> = [
-            "New Terminal", "Close Terminal", "Go to Project", "Switch to Project N",
+            "New Terminal", "Close Terminal", "Close Project", "Go to Project", "Switch to Project N",
             "Focus Terminal N", "Previous Terminal", "Next Terminal",
             "Maximize Terminal", "Toggle Left Sidebar", "Toggle Right Sidebar",
             "Focus Mode", "Zoom In", "Zoom Out", "Actual Size",

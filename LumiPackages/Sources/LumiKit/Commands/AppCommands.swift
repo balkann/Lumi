@@ -16,13 +16,13 @@ public enum AppCommands {
         // MARK: App
         AppCommand(
             id: .openSettings, title: "Settings…", menu: .app, key: ",",
-            referenceTitle: "Settings", referenceOrder: 15
+            referenceTitle: "Settings", referenceOrder: 16
         ),
         // Standart `NSApplication.terminate(_:)` selector'ına gider ama
         // kullanıcıya sunulan tabloda listelenir.
         AppCommand(
             id: .quit, title: "Quit Lumi", menu: .app, key: "q",
-            separatorBefore: true, referenceTitle: "Quit", referenceOrder: 16
+            separatorBefore: true, referenceTitle: "Quit", referenceOrder: 17
         ),
 
         // MARK: Shell
@@ -35,9 +35,18 @@ public enum AppCommands {
             id: .closeTerminal, title: "Close Terminal", menu: .shell, key: "w",
             referenceTitle: "Close Terminal", referenceOrder: 2
         ),
+        // ⇧⌘W projeyi Projects'ten KALDIRIR (karar 66). ⌘W'ye değil ayrı bir
+        // korda bağlı olması bilinçli: ⌘W refleks bir tuştur ve kaldırma hem
+        // kalıcı kullanıcı verisine (`sidebarProjectPaths`) dokunur hem de
+        // projenin TÜM checkout'larını kapatır — kazara basılmamalı.
+        AppCommand(
+            id: .closeProject, title: "Close Project", menu: .shell, key: "W",
+            modifiers: [.command, .shift],
+            referenceTitle: "Close Project", referenceOrder: 3
+        ),
         AppCommand(
             id: .openRepoSelector, title: "Go to Project…", menu: .shell, key: "o",
-            separatorBefore: true, referenceTitle: "Go to Project", referenceOrder: 3
+            separatorBefore: true, referenceTitle: "Go to Project", referenceOrder: 4
         ),
         // ⌃1…⌃9 PROJELER arasında geçer (karar 65 — eskiden görünmeyen tab
         // listesine indeksliyordu). ⌘1…⌘9 ise aktif checkout içindeki terminali
@@ -47,7 +56,7 @@ public enum AppCommands {
             id: .switchToProjectAtIndex, title: "Project", menu: .shell, key: nil,
             modifiers: IndexShortcutStyle.default.repoModifiers,
             separatorBefore: true, indexRange: 1...9,
-            referenceTitle: "Switch to Project N", referenceOrder: 4
+            referenceTitle: "Switch to Project N", referenceOrder: 5
         ),
 
         // MARK: Edit (terminal copy-paste için ZORUNLU, design/03 §2)
@@ -63,53 +72,53 @@ public enum AppCommands {
         AppCommand(
             id: .focusNextTerminal, title: "Next Terminal", menu: .terminal,
             key: CommandKey.rightArrow, modifiers: [.command, .shift],
-            referenceTitle: "Next Terminal", referenceOrder: 7
+            referenceTitle: "Next Terminal", referenceOrder: 8
         ),
         AppCommand(
             id: .focusPreviousTerminal, title: "Previous Terminal", menu: .terminal,
             key: CommandKey.leftArrow, modifiers: [.command, .shift],
-            referenceTitle: "Previous Terminal", referenceOrder: 6
+            referenceTitle: "Previous Terminal", referenceOrder: 7
         ),
         AppCommand(
             id: .focusTerminalAtIndex, title: "Terminal", menu: .terminal, key: nil,
             modifiers: IndexShortcutStyle.default.terminalModifiers,
             separatorBefore: true, indexRange: 1...9,
-            referenceTitle: "Focus Terminal N", referenceOrder: 5
+            referenceTitle: "Focus Terminal N", referenceOrder: 6
         ),
         AppCommand(
             id: .toggleMaximizeTerminal, title: "Maximize Terminal", menu: .terminal,
             key: "m", modifiers: [.command, .control], separatorBefore: true,
-            referenceTitle: "Maximize Terminal", referenceOrder: 8
+            referenceTitle: "Maximize Terminal", referenceOrder: 9
         ),
 
         // MARK: View
         AppCommand(
             id: .toggleLeftSidebar, title: "Toggle Left Sidebar", menu: .view, key: "b",
-            referenceTitle: "Toggle Left Sidebar", referenceOrder: 9
+            referenceTitle: "Toggle Left Sidebar", referenceOrder: 10
         ),
         AppCommand(
             id: .toggleRightSidebar, title: "Toggle Right Sidebar", menu: .view, key: "B",
             modifiers: [.command, .shift],
-            referenceTitle: "Toggle Right Sidebar", referenceOrder: 10
+            referenceTitle: "Toggle Right Sidebar", referenceOrder: 11
         ),
         AppCommand(
             id: .toggleFocusMode, title: "Toggle Focus Mode", menu: .view, key: "F",
             modifiers: [.command, .shift], separatorBefore: true,
-            referenceTitle: "Focus Mode", referenceOrder: 11
+            referenceTitle: "Focus Mode", referenceOrder: 12
         ),
         // Karar 61: tüm arayüzü ölçekler (Electron `zoomIn`/`zoomOut`/
         // `resetZoom` paritesi) — yalnız terminal fontunu değil.
         AppCommand(
             id: .zoomIn, title: "Zoom In", menu: .view, key: "+",
-            separatorBefore: true, referenceTitle: "Zoom In", referenceOrder: 12
+            separatorBefore: true, referenceTitle: "Zoom In", referenceOrder: 13
         ),
         AppCommand(
             id: .zoomOut, title: "Zoom Out", menu: .view, key: "-",
-            referenceTitle: "Zoom Out", referenceOrder: 13
+            referenceTitle: "Zoom Out", referenceOrder: 14
         ),
         AppCommand(
             id: .resetZoom, title: "Actual Size", menu: .view, key: "0",
-            referenceTitle: "Actual Size", referenceOrder: 14
+            referenceTitle: "Actual Size", referenceOrder: 15
         ),
 
         // MARK: Window

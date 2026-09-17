@@ -24,6 +24,7 @@ public extension CommandID {
     static let focusPreviousTerminal: CommandID = "focusPreviousTerminal"
     static let focusTerminalAtIndex: CommandID = "focusTerminalAtIndex"
     static let switchToProjectAtIndex: CommandID = "switchToProjectAtIndex"
+    static let closeProject: CommandID = "closeProject"
     static let toggleMaximizeTerminal: CommandID = "toggleMaximizeTerminal"
     static let toggleLeftSidebar: CommandID = "toggleLeftSidebar"
     static let toggleRightSidebar: CommandID = "toggleRightSidebar"

@@ -7,11 +7,20 @@ public struct CloseTabDialogState: Equatable, Sendable {
     public let repoPath: String
     public let repoName: String
     public let minimizedCount: Int
+    /// Karar 66: onay bir PROJEYİ mi yoksa tek bir checkout'u mu kapatıyor.
+    /// Aynı dialog zinciri iki akışı da taşır; onay yalnız burada ayrışır.
+    public let isProject: Bool
 
-    public init(repoPath: String, repoName: String, minimizedCount: Int) {
+    public init(
+        repoPath: String,
+        repoName: String,
+        minimizedCount: Int,
+        isProject: Bool = false
+    ) {
         self.repoPath = repoPath
         self.repoName = repoName
         self.minimizedCount = minimizedCount
+        self.isProject = isProject
     }
 }
 
