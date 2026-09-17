@@ -47,8 +47,8 @@ Event akışını, mevcut wire tipleriyle uyumlu bir duruma katlar (Faz 2 wire'�
 ### D. `StreamJsonAgentSession` (LumiServices)
 `StreamingProcess`'i `BinaryLocating`'le bulunan claude + yukarıdaki bayraklarla spawn eder; `send(_ text: String)` kullanıcı mesajını NDJSON'a (`{"type":"user","message":{"role":"user","content":[{"type":"text","text":...}]}}`) çevirip stdin'e yazar; stdout satırlarını `StreamJsonEvent.decode` → `ChatJournal.reduce` zincirinden geçirir; journal snapshot/patch `AsyncStream`'ini dışa verir. Yaşam döngüsü: spawn → çalışıyor → child exit/terminate → journal `turnActive=false` + session `.ended`. Fake `StreamingProcess` ile test: scripted NDJSON beslenir, journal snapshot doğrulanır, `send`'in doğru NDJSON'u yazdığı doğrulanır.
 
-### E. `SessionKind` (`terminal | chat`) + chat oturum kaydı
-Chat oturumları terminal modelini (TerminalMeta/PTY) **kirletmeden** ayrı bir kayıtta tutulur (ör. `ChatSessionMeta`). Faz 1'de servis API'si: `createChatSession(repoPath:) -> ChatSessionMeta`, `listChatSessions()`, `closeChatSession(id:)`; in-memory (geçmiş claude transcript'inde kalıcı). `~/.lumi` formatlarına dokunulmaz — chat oturumları additive/ayrı; mevcut terminal persistence'ı değişmez.
+### E. `SessionKind` (`terminal | chat`) + chat oturum modeli
+Chat oturumları terminal modelini (TerminalMeta/PTY) **kirletmeden** ayrı tutulur: `SessionKind = terminal | chat` ve `ChatSessionMeta` (id = claude session-id, repoPath, createdAt). Faz 1'de tek-oturum actor'ı `StreamJsonAgentSession` (§D) bu modeli taşır; **çok-oturum yöneticisi (create/list/close) Faz 2'ye ertelenir** (UI/wire oturumları orada oluşturur — Faz 1'de tüketici yok, erken scaffolding yapılmaz). `~/.lumi` formatlarına dokunulmaz; geçmiş claude transcript'inde kalıcı.
 
 ## Veri akışı
 
@@ -80,5 +80,6 @@ kullanıcı metni ─send()→ NDJSON ─stdin→ claude(stream-json child)
 ## Kapsam dışı (sonraki fazlar)
 - Telefon/Mac UI (Faz 2/3).
 - Geçmiş transcript'ten seed + resume/restore (Faz 2/4).
+- Çok-oturum yöneticisi (create/list/close chat oturumu) — Faz 2.
 - Soru cevabı/izin (permission) protokolü, interrupt, subagent, model seçimi, attachment (Faz 2/4).
 - Relay değişmez (bu fazda zaten wire yok).
