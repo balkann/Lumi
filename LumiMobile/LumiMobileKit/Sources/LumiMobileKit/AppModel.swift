@@ -59,6 +59,12 @@ public final class AppModel {
 
     /// sessionId → chat mesajları (mode=chat aboneliği; orca native-chat).
     private var chatBySession: [String: [ChatMessage]] = [:]
+    /// Feed chunk'ı görülen oturumlar (şerit görünürlüğü) ve otoriter grid satır sayısı
+    /// (şeridin alt-bölge kırpması scrollback'in rows'una göre hesaplanır).
+    public private(set) var feedSeen: Set<String> = []
+    public private(set) var gridRows: [String: Int] = [:]
+
+    public func hasFeed(_ sessionId: String) -> Bool { feedSeen.contains(sessionId) }
     /// sessionId → son canlı turn status (Faz 2; chat_status frame'inden).
     public private(set) var turnStatus: [String: ChatTurnStatus] = [:]
     /// Faz 3: session başına aktif (pending) etkileşimli prompt'lar.
@@ -165,6 +171,8 @@ public final class AppModel {
 
         case .scrollback(let chunk), .data(let chunk):
             macOnline = true
+            feedSeen.insert(chunk.sessionId)
+            if let rows = chunk.rows { gridRows[chunk.sessionId] = rows }
             route(chunk)
 
         case .commandResult(let result):
@@ -245,6 +253,8 @@ public final class AppModel {
         }
         models = models.filter { liveIds.contains($0.key) }
         lastCommandError = lastCommandError.filter { liveIds.contains($0.key) }
+        feedSeen = feedSeen.filter { liveIds.contains($0) }
+        gridRows = gridRows.filter { liveIds.contains($0.key) }
         // Aktif oturum listede yoksa (silindi/kapandı) sink'i kapat.
         if let active = activeSessionId, !liveIds.contains(active) {
             terminalSinks[active]?.finish()
@@ -366,9 +376,18 @@ public final class AppModel {
 
     /// mode=chat aboneliği: activeSessionId ayarla + chat frame'i gönder.
     public func subscribeChat(_ sessionId: String) {
+        // Terminal aboneliğiyle aynı temizlik: eski oturumun sink'i sonlanmazsa
+        // geç gelen eski .data ona yield edilir (bkz. subscribe(_:)).
+        if let old = activeSessionId, old != sessionId {
+            terminalSinks[old]?.finish()
+            terminalSinks[old] = nil
+            replayBuffers[old] = nil
+        }
         activeSessionId = sessionId
         activeChatMode = true
         chatBySession[sessionId] = chatBySession[sessionId] ?? []
+        // Şerit mount olmadan gelen scrollback düşmesin (subscribe(_:) paritesi).
+        replayBuffers[sessionId] = []
         Task { await client.send(frame: PhoneProtocol.subscribeFrame(sessionId: sessionId, mode: "chat")) }
     }
 
