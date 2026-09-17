@@ -288,13 +288,24 @@ public struct SystemProcessRunner: ProcessRunning, EnvironmentProcessRunning {
                 }
 
                 DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + timeout) {
-                    guard process.isRunning, once.tryFire() else { return }
-                    process.terminate()
+                    // Süre dolduğunda SONUÇ HER HÂLDE verilir. Eskiden burada
+                    // `process.isRunning` kapısı vardı: süreç çıkmış ama
+                    // pipe'ların yazma ucunu elinde tutan bir TORUN (ör. OAuth
+                    // callback sunucusu) varsa EOF hiç gelmiyor, grup notify
+                    // etmiyor ve kapı da yandığı için continuation asla resume
+                    // edilmiyordu — çağıran süresiz asılırdı (Settings ▸
+                    // Accounts yeniden doğrulama tüm butonları kilitli
+                    // bırakıyordu).
+                    guard once.tryFire() else { return }
+                    // Alt süreçleri de sonlandırır; zaten çıkmış sürece
+                    // dokunmaz.
+                    box.cancel()
                     continuation.resume(returning: nil)
-                    // Handler'lar kapatılır ve grup dengelenir; kalan
-                    // `finishExit` terminationHandler'dan gelir.
+                    // Handler'lar kapatılır ve grup dengelenir (OnceFlag'ler
+                    // sayesinde terminationHandler sonradan gelse de zararsız).
                     finishStdout()
                     finishStderr()
+                    finishExit()
                 }
             }
         } onCancel: {

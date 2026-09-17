@@ -64,11 +64,14 @@ struct AccountsSettingsTab: SettingsTabContent {
             }
             .disabled(store.isBusy)
             .opacity(store.isBusy ? 0.5 : 1)
-            if store.activity == .adding {
+            if store.isSigningIn {
                 ProgressView().controlSize(.small)
                 Text("Finish the sign-in in your browser…")
                     .font(Theme.Typography.labelMono)
                     .foregroundStyle(Theme.textMuted)
+                // Cancel yeniden doğrulamada da görünür: tarayıcı akışı yarıda
+                // kalırsa `isBusy` login timeout'u dolana kadar bütün satırları
+                // kilitli tutuyor, kullanıcı hesap değiştiremiyordu.
                 LumiBrowseButton(icon: "xmark", label: "Cancel") {
                     Task { await store.cancelPendingLogin() }
                 }

@@ -576,3 +576,13 @@ Kullanıcı şikâyeti: sol/sağ panelin auto-reveal'ı çalışmıyor; ayrıca 
 Ek düzeltme: overlay artık alttan da `StatusBarMetrics.height` payı bırakır — açılan panel 24px durum barını (Settings dişlisi dahil) örtmüyor.
 
 - **Sınırlar.** `PointerPresence`/`PointerPresenceRule` (LumiUI/Support) → `PanelRevealOverlay.EdgeRevealZone`. `LayoutStore` auto-reveal durumu (karar 44) ve `ui-state` biçimi değişmedi.
+
+### 65. Login timeout'u kesin sınır, usage auto refresh varsayılan açık (2026-09-17)
+
+Kullanıcı şikâyeti: Settings ▸ Accounts'ta bir hesabın yenile (Re-authenticate) düğmesine basınca uygulama "loop'a giriyor" ve artık başka bir hesaba geçilemiyor.
+
+Sebep `SystemProcessRunner`'ın timeout yolundaydı. Sonuç ancak üç kapı birden (stdout EOF + stderr EOF + termination) kapanınca veriliyor; timeout ise yalnız `process.isRunning` iken devreye giriyordu. `claude auth login` OAuth callback'i için bir TORUN bırakıp kendisi çıktığında pipe'ların yazma ucu açık kalıyor, EOF hiç gelmiyor, süreç de "çalışmıyor" olduğu için timeout kapısı yanıyordu: continuation asla resume edilmiyor, `ClaudeAccountStore.activity` sonsuza dek `.reauthenticating`'de kalıyor ve `isBusy` bütün satırları — hesap geçişi dahil — kilitliyordu.
+
+- **Süre dolduğunda sonuç HER HÂLDE verilir.** `isRunning` kapısı kalktı; timeout `box.cancel()` (varsa alt süreçleri de öldürür) + `resume(nil)` + üç kapının da kapatılması demek. Yani 180 sn'lik login sınırı gerçekten bir üst sınır.
+- **Cancel yeniden doğrulamada da görünür** (`ClaudeAccountStore.isSigningIn`): kullanıcı timeout'u beklemek zorunda değil.
+- **`usageAutoRefresh.enabled` varsayılanı açık.** Karar 20'nin opt-in duruşu bırakıldı: elle yenilenmeyen gösterge bayat kalıyordu. Aralık varsayılanı 5 dk, idle-gate (karar 38) aynen korunur. `enabled` anahtarı dosyaya zaten yazılmış kurulumlarda kayıtlı değer kazanır — yeni varsayılan yalnız anahtarı olmayan config'lere uygulanır.

@@ -39,10 +39,14 @@ public struct UsageIndicators: Sendable, Equatable {
 }
 
 /// Kullanım göstergesinin otomatik tazelenmesi (`~/.lumi/config.json` →
-/// `usageAutoRefresh`). Opt-in (karar 20): kapalıyken hiçbir otomatik istek
-/// atılmaz. Açıkken `intervalMinutes`'te bir, YALNIZCA kullanıcı aktifse (son
-/// HID girdisinden bu yana aralıktan az süre geçmişse) tazelenir; Mac uykudayken
-/// process askıda olduğundan tetiklenmez.
+/// `usageAutoRefresh`). VARSAYILAN AÇIK: göstergenin elle yenilenmeden bayat
+/// kalması, göstergenin kendisini anlamsız kılıyordu. Kapatıldığında hiçbir
+/// otomatik istek atılmaz. Açıkken `intervalMinutes`'te bir, YALNIZCA kullanıcı
+/// aktifse (son HID girdisinden bu yana aralıktan az süre geçmişse) tazelenir;
+/// Mac uykudayken process askıda olduğundan tetiklenmez.
+///
+/// Not: `enabled` anahtarı dosyaya zaten yazılmış kurulumlarda kayıtlı değer
+/// kazanır — yeni varsayılan yalnız anahtarı olmayan config'lere uygulanır.
 ///
 /// **Persistence yalnız `ConfigCodec` üzerinden — karar 9.**
 public struct UsageAutoRefresh: Sendable, Equatable {
@@ -57,7 +61,7 @@ public struct UsageAutoRefresh: Sendable, Equatable {
     /// `UsageStore.refresh()`'ten geçer ve cache'i açıkça geçersizler.
     public static let allowedIntervals = [1, 5]
 
-    public static let defaults = UsageAutoRefresh(enabled: false, intervalMinutes: 5)
+    public static let defaults = UsageAutoRefresh(enabled: true, intervalMinutes: 5)
 
     /// Doğrulama sözleşmesi: izinli set dışındaki her değer (eski dosyalardaki
     /// `15`/`30` dahil) default'a clamp'lenir. Karar 9 ihlali DEĞİLDİR — bu tip zaten

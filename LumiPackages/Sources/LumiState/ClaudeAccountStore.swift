@@ -57,6 +57,10 @@ public final class ClaudeAccountStore {
         self.selection == selection
     }
 
+    /// Tarayıcıda bir oturum açma akışı sürüyor mu? Ekleme ve yeniden
+    /// doğrulama aynı akıştır — ikisinde de iptal sunulur.
+    public var isSigningIn: Bool { activity == .adding || isReauthenticating }
+
     // MARK: - Eylemler
 
     public func load() async {
@@ -69,7 +73,7 @@ public final class ClaudeAccountStore {
 
     /// Süren login'i iptal eder (tarayıcı açıldı ama kullanıcı vazgeçti).
     public func cancelPendingLogin() async {
-        guard activity == .adding || isReauthenticating else { return }
+        guard isSigningIn else { return }
         await service.cancelPendingLogin()
     }
 

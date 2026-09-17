@@ -219,7 +219,8 @@ final class ConfigServiceTests: XCTestCase {
         try writeFixture(realConfigFixture, to: paths.configFile)
         let config = await makeService().config()
         XCTAssertEqual(config.usageAutoRefresh, .defaults)
-        XCTAssertFalse(config.usageAutoRefresh.enabled)
+        // Anahtar yoksa varsayılan AÇIK'tır (gösterge bayat kalmasın).
+        XCTAssertTrue(config.usageAutoRefresh.enabled)
         XCTAssertEqual(config.usageAutoRefresh.intervalMinutes, 5)
     }
 
