@@ -36,17 +36,18 @@ public enum AppCommands {
             referenceTitle: "Close Terminal", referenceOrder: 2
         ),
         AppCommand(
-            id: .openRepoSelector, title: "Open Repo…", menu: .shell, key: "o",
-            separatorBefore: true, referenceTitle: "Open Repository", referenceOrder: 3
+            id: .openRepoSelector, title: "Go to Project…", menu: .shell, key: "o",
+            separatorBefore: true, referenceTitle: "Go to Project", referenceOrder: 3
         ),
-        // ⌃1…⌃9 repo TAB'ını değiştirir (Electron paritesi). ⌘1…⌘9 ise aktif
-        // repo içindeki terminali odaklar — ikisi ayrı eksendir (karar 59).
-        // Değiştiriciler ayardan takas edilebilir (karar 62).
+        // ⌃1…⌃9 PROJELER arasında geçer (karar 65 — eskiden görünmeyen tab
+        // listesine indeksliyordu). ⌘1…⌘9 ise aktif checkout içindeki terminali
+        // odaklar; ikisi ayrı eksendir (karar 59) ve değiştiriciler ayardan
+        // takas edilebilir (karar 62).
         AppCommand(
-            id: .switchToTabAtIndex, title: "Repository", menu: .shell, key: nil,
+            id: .switchToProjectAtIndex, title: "Project", menu: .shell, key: nil,
             modifiers: IndexShortcutStyle.default.repoModifiers,
             separatorBefore: true, indexRange: 1...9,
-            referenceTitle: "Switch to Tab N", referenceOrder: 4
+            referenceTitle: "Switch to Project N", referenceOrder: 4
         ),
 
         // MARK: Edit (terminal copy-paste için ZORUNLU, design/03 §2)
@@ -122,7 +123,7 @@ public enum AppCommands {
     public static func all(_ style: IndexShortcutStyle = .default) -> [AppCommand] {
         table.map { command in
             switch command.id {
-            case .switchToTabAtIndex: return command.withModifiers(style.repoModifiers)
+            case .switchToProjectAtIndex: return command.withModifiers(style.repoModifiers)
             case .focusTerminalAtIndex: return command.withModifiers(style.terminalModifiers)
             default: return command
             }

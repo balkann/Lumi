@@ -211,4 +211,71 @@ final class NavigationStoreTests: XCTestCase {
         XCTAssertEqual(store.activeRoute, .none)
         XCTAssertEqual(terminals.calls, [.focus(nil), .closeAll("/r/alpha")])
     }
+
+    // MARK: - Proje gezinmesi (karar 65)
+
+    private func wireProjects(_ projects: [String], checkouts: [String: [String]] = [:]) {
+        store.projectOrder = { projects }
+        store.projectCheckouts = { [$0] + (checkouts[$0] ?? []) }
+    }
+
+    /// Hiç kullanılmamış projede projenin KÖKÜ açılır.
+    func testCheckoutToOpenFallsBackToProjectRoot() {
+        wireProjects(["/r/alpha"], checkouts: ["/r/alpha": ["/r/alpha/wt"]])
+        XCTAssertEqual(store.checkoutToOpen(in: "/r/alpha"), "/r/alpha")
+    }
+
+    /// Bir checkout aktif olunca projesine karşı hatırlanır.
+    func testActivatingCheckoutRemembersItForItsProject() {
+        wireProjects(["/r/alpha"], checkouts: ["/r/alpha": ["/r/alpha/wt"]])
+
+        store.openTab("/r/alpha/wt")
+
+        XCTAssertEqual(store.lastCheckouts["/r/alpha"], "/r/alpha/wt")
+        XCTAssertEqual(store.checkoutToOpen(in: "/r/alpha"), "/r/alpha/wt")
+    }
+
+    /// Hatırlanan checkout projeden düşmüşse (worktree silinmiş) köke dönülür —
+    /// aksi hâlde kısayol var olmayan bir yola giderdi.
+    func testCheckoutToOpenIgnoresRememberedCheckoutThatLeftTheProject() {
+        wireProjects(["/r/alpha"], checkouts: ["/r/alpha": ["/r/alpha/wt"]])
+        store.openTab("/r/alpha/wt")
+
+        wireProjects(["/r/alpha"]) // worktree kayboldu
+
+        XCTAssertEqual(store.checkoutToOpen(in: "/r/alpha"), "/r/alpha")
+    }
+
+    /// Bir checkout'un hangi projeye ait olduğu köprüden çözülür; projenin
+    /// kendisi de kendi checkout'udur.
+    func testProjectPathContainingResolvesBothRootAndWorktree() {
+        wireProjects(["/r/alpha", "/r/beta"], checkouts: ["/r/alpha": ["/r/alpha/wt"]])
+
+        XCTAssertEqual(store.projectPath(containing: "/r/alpha"), "/r/alpha")
+        XCTAssertEqual(store.projectPath(containing: "/r/alpha/wt"), "/r/alpha")
+        XCTAssertNil(store.projectPath(containing: "/r/unknown"))
+    }
+
+    /// Köprü yoksa (proje feature'ı olmayan kompozisyon) proje gezinmesi
+    /// sessizce devre dışıdır — tab davranışı bozulmaz.
+    func testProjectNavigationIsInertWithoutBridge() {
+        store.openTab("/r/alpha")
+        store.openProject(at: 0)
+        XCTAssertEqual(store.activeRepoPath, "/r/alpha")
+        XCTAssertTrue(store.lastCheckouts.isEmpty)
+    }
+
+    /// Hatırlanan checkout diske iner ve geri okunur (additive, karar 9).
+    func testLastCheckoutsRoundTripThroughUIState() async throws {
+        wireProjects(["/r/alpha"], checkouts: ["/r/alpha": ["/r/alpha/wt"]])
+        store.openTab("/r/alpha/wt")
+        try await waitForPersist()
+
+        let written = await config.uiState()
+        XCTAssertEqual(written.lastCheckouts["/r/alpha"], "/r/alpha/wt")
+
+        let reloaded = NavigationStore(config: config, terminals: terminals)
+        reloaded.load(state: written, repos: [])
+        XCTAssertEqual(reloaded.lastCheckouts["/r/alpha"], "/r/alpha/wt")
+    }
 }

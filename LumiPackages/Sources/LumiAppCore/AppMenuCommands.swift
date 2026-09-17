@@ -51,11 +51,11 @@ enum AppMenuCommands {
             guard let active = shared.navigation.activeRepoPath else { return }
             shared.terminals.focusPrevious(in: active)
         }
-        dispatcher.register(.switchToTabAtIndex) { index in
+        // Karar 65: indeks PROJELERE vurur. Eskiden `openTabs`'a vuruyordu —
+        // kullanıcının hiçbir yerde GÖREMEDİĞİ bir listeye.
+        dispatcher.register(.switchToProjectAtIndex) { index in
             guard let index else { return }
-            let tabs = shared.navigation.openTabs
-            guard tabs.indices.contains(index - 1) else { return }
-            shared.navigation.setRoute(.repo(tabs[index - 1]))
+            shared.navigation.openProject(at: index - 1)
         }
         dispatcher.register(.focusTerminalAtIndex) { index in
             guard let index, let active = shared.navigation.activeRepoPath else { return }

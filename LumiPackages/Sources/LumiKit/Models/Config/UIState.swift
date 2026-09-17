@@ -38,6 +38,10 @@ public struct UIState: Sendable, Equatable {
     /// Karar 63 (additive): arayüz yazı tipi. nil = dosyada yok → `.system`
     /// (SF Mono, eski davranış). Terminal fontu AYRI bir ayardır.
     public var uiFontFamily: UIFontFamily?
+    /// Karar 65 (additive): proje yolu → o projede EN SON aktif olan checkout
+    /// yolu. İndeksli kısayol bir projeye atlarken hangi checkout'un açılacağını
+    /// buradan okur. Boşsa/proje yoksa projenin kendi kökü açılır.
+    public var lastCheckouts: [String: String]
 
     public static let defaults = UIState(
         openTabs: [],
@@ -62,7 +66,8 @@ public struct UIState: Sendable, Equatable {
         panelLayout: PanelLayout? = nil,
         legacyGridColumns: GridLayout? = nil,
         uiScale: Double? = nil,
-        uiFontFamily: UIFontFamily? = nil
+        uiFontFamily: UIFontFamily? = nil,
+        lastCheckouts: [String: String] = [:]
     ) {
         self.openTabs = openTabs
         self.activeTab = activeTab
@@ -77,6 +82,7 @@ public struct UIState: Sendable, Equatable {
         self.legacyGridColumns = legacyGridColumns
         self.uiScale = uiScale
         self.uiFontFamily = uiFontFamily
+        self.lastCheckouts = lastCheckouts
     }
 }
 

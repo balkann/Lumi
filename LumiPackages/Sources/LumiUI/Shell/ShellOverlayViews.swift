@@ -42,14 +42,17 @@ public struct RepoSelectorOverlay: View {
             Panel(variant: .modal) {
                 RepoSelectorView(
                     groups: shell.repos.groupedRepos,
-                    excludedRepoPaths: Set(shell.navigation.openTabs),
+                    // Karar 65: HİÇBİR ŞEY dışlanmaz. Eskiden açık tab'lar
+                    // dışlanıyordu, yani açtığın bir repo'ya ⌘O ile geri
+                    // dönemiyordun. Artık ⌘O hem ekler hem geçiş yapar.
+                    excludedRepoPaths: [],
                     collapsedGroups: Binding(
                         get: { shell.dialogs.collapsedRepoGroups },
                         set: { shell.dialogs.collapsedRepoGroups = $0 }
                     )
                 ) { repo in
                     shell.dialogs.isRepoSelectorOpen = false
-                    shell.navigation.openTab(repo.path)
+                    Task { await shell.goToProject(repo) }
                 }
             }
         }

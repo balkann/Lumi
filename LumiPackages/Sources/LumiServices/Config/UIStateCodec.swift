@@ -56,6 +56,12 @@ enum UIStateCodec {
         if let raw = dict["uiFontFamily"] as? String {
             state.uiFontFamily = UIFontFamily(rawValue: raw)
         }
+        // Karar 65 (additive): proje → son checkout. Yalnız String/String
+        // çiftleri alınır; bozuk girdiler sessizce atılır (karar 9: okuma
+        // asla düşmez, eksik alan varsayılana iner).
+        if let raw = dict["lastCheckouts"] as? [String: Any] {
+            state.lastCheckouts = raw.compactMapValues { $0 as? String }
+        }
         return state
     }
 
@@ -99,6 +105,10 @@ enum UIStateCodec {
         // dosyalarda olmayan bir anahtar üretilmez (karar 9).
         if let family = state.uiFontFamily {
             overlay["uiFontFamily"] = family.rawValue
+        }
+        // Karar 65 (additive): yalnız DOLU iken yazılır.
+        if !state.lastCheckouts.isEmpty {
+            overlay["lastCheckouts"] = state.lastCheckouts
         }
         // legacyGridColumns YAZILMAZ: yalnız okuma yönlü migration girdisi;
         // ham `gridColumns` anahtarı merge'le diskte aynen kalır.

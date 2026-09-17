@@ -172,6 +172,35 @@ public final class ShellContext {
         }
     }
 
+    /// Projects'ten çıkarma (karar 65): açık checkout'ları da KAPATIR.
+    ///
+    /// Projects tek gezinme evreni olduğu için, listeden çıkan bir projenin
+    /// açık kalan checkout'una ulaşmanın yolu kalmazdı — ne panelde görünür,
+    /// ne indeksli kısayolda, ne ⌘O'da. Açık terminalleri de serbest bırakır.
+    public func removeSidebarProject(_ project: Repo) async {
+        for checkout in [project.path] + workspaces.workspaces(for: project.path).map(\.path)
+        where navigation.openTabs.contains(checkout) {
+            navigation.closeTab(checkout)
+        }
+        await workspaces.removeProject(project)
+    }
+
+    /// ⌘O'nun hedefi (karar 65): projeye GİT.
+    ///
+    /// Projects listesinde yoksa önce eklenir — "açtığın şeyi Projects'te
+    /// görürsün" kuralı buradan gelir; eskiden ⌘O görünmeyen bir tab
+    /// yaratıyordu ve o repo'ya bir daha ⌘O ile dönülemiyordu (seçici açık
+    /// tab'ları dışlıyordu). Zaten ekliyse yalnız geçilir.
+    ///
+    /// Açılan checkout, o projede en son kullanılandır (`checkoutToOpen`);
+    /// hiç kullanılmamışsa projenin kendi kökü.
+    public func goToProject(_ project: Repo) async {
+        if !workspaces.sidebarProjectPaths.contains(project.path) {
+            _ = await workspaces.addProject(project)
+        }
+        navigation.openTab(navigation.checkoutToOpen(in: project.path))
+    }
+
     // MARK: - Projects paneli ajan satırları ve silme (karar 51)
 
     /// Sidebar ajan satırı: terminalin sekmesi açık değilse açılır, sonra

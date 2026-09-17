@@ -121,7 +121,7 @@ public struct ProjectsPanel: View {
             Button("Reveal in Finder") { shell.actions.revealPath(project.path) }
             Button("Copy Path") { Pasteboard.copy(project.path) }
             Divider()
-            Button("Remove from Projects") { Task { await shell.workspaces.removeProject(project) } }
+            Button("Remove from Projects") { Task { await shell.removeSidebarProject(project) } }
                 .disabled(shell.workspaces.isCreating && operationBelongs(to: project))
         }
     }

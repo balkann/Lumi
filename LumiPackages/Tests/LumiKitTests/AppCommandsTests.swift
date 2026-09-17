@@ -22,11 +22,11 @@ final class AppCommandsTests: XCTestCase {
     }
 
     /// Tüm kısayollar ⌘ taşır — TEK istisna indeksli ailelerden ⌃'ye düşenidir
-    /// (karar 59/58): varsayılanda repo tab geçişi, takas edilince terminal
+    /// (karar 59/58): varsayılanda proje geçişi, takas edilince terminal
     /// odağı. İstisna burada AÇIKÇA listelenir ki üçüncü bir ⌘'siz kısayol
     /// sessizce eklenemesin.
     func testEveryShortcutUsesCommandModifier() {
-        let controlOnly: Set<CommandID> = [.switchToTabAtIndex]
+        let controlOnly: Set<CommandID> = [.switchToProjectAtIndex]
         for command in AppCommands.all() {
             if controlOnly.contains(command.id) {
                 XCTAssertEqual(command.modifiers, [.control], "\(command.title) yalnız ⌃ taşımalı")
@@ -78,7 +78,7 @@ final class AppCommandsTests: XCTestCase {
         XCTAssertEqual(
             AppCommands.reference().map { $0.referenceTitle ?? $0.title },
             [
-                "New Terminal", "Close Terminal", "Open Repository", "Switch to Tab N",
+                "New Terminal", "Close Terminal", "Go to Project", "Switch to Project N",
                 "Focus Terminal N", "Previous Terminal", "Next Terminal",
                 "Maximize Terminal", "Toggle Left Sidebar", "Toggle Right Sidebar",
                 "Focus Mode", "Zoom In", "Zoom Out", "Actual Size",
@@ -106,8 +106,8 @@ final class AppCommandsTests: XCTestCase {
 
     /// İndeksli komut iki UÇ kombo ile ifade edilir ("⌘1 – ⌘9").
     func testIndexedCommandExposesRangeEndpoints() {
-        let tabSwitch = AppCommands.all().first { $0.id == .switchToTabAtIndex }
-        XCTAssertEqual(tabSwitch?.displayCombos, [["⌃", "1"], ["⌃", "9"]])
+        let projectSwitch = AppCommands.all().first { $0.id == .switchToProjectAtIndex }
+        XCTAssertEqual(projectSwitch?.displayCombos, [["⌃", "1"], ["⌃", "9"]])
         let terminalFocus = AppCommands.all().first { $0.id == .focusTerminalAtIndex }
         XCTAssertEqual(terminalFocus?.displayCombos, [["⌘", "1"], ["⌘", "9"]])
     }
@@ -117,8 +117,8 @@ final class AppCommandsTests: XCTestCase {
     /// Takas YALNIZ iki indeksli ailenin değiştiricilerini yer değiştirir.
     func testSwappedStyleExchangesIndexedModifiers() {
         let swapped = AppCommands.all(.repoOnCommand)
-        let tabSwitch = swapped.first { $0.id == .switchToTabAtIndex }
-        XCTAssertEqual(tabSwitch?.displayCombos, [["⌘", "1"], ["⌘", "9"]])
+        let projectSwitch = swapped.first { $0.id == .switchToProjectAtIndex }
+        XCTAssertEqual(projectSwitch?.displayCombos, [["⌘", "1"], ["⌘", "9"]])
         let terminalFocus = swapped.first { $0.id == .focusTerminalAtIndex }
         XCTAssertEqual(terminalFocus?.displayCombos, [["⌃", "1"], ["⌃", "9"]])
     }

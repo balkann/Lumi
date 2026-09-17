@@ -99,6 +99,7 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
         let uiState = await services.config.uiState()
         shared.loadWorkspace(state: uiState, repos: repoStore.repos)
 
+        wireProjectNavigation()
         wireActiveRepo()
         wireTabClosed()
         startFileTreeBridge()
@@ -140,6 +141,23 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
     // MARK: - Aktif repo
 
     /// Aktif repo değişimi: tek repo izlenir + git/tree yüklenir.
+    /// Karar 65: indeksli kısayolun ve ⌘O'nun gezdiği liste PROJELER'dir.
+    /// `NavigationStore` proje store'una bağımlı olmasın diye bağlantı iki
+    /// okuma closure'ıyla kurulur (bkz. `NavigationStore.projectOrder`).
+    ///
+    /// Checkout sırası panelle AYNI olmalı ki ileride bir "N. checkout"
+    /// kısayolu eklenirse görülenle tutarlı olsun: önce projenin kendi kökü,
+    /// sonra yönetilen workspace'ler.
+    private func wireProjectNavigation() {
+        shared.navigation.projectOrder = { [weak self] in
+            self?.workspaceStore.addedProjects.map(\.path) ?? []
+        }
+        shared.navigation.projectCheckouts = { [weak self] projectPath in
+            guard let self else { return [projectPath] }
+            return [projectPath] + workspaceStore.workspaces(for: projectPath).map(\.path)
+        }
+    }
+
     private func wireActiveRepo() {
         shared.navigation.onActiveRepoChanged = { [weak self] previous, current in
             guard let self else { return }

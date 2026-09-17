@@ -10,7 +10,7 @@ final class ShortcutReferenceTests: XCTestCase {
 
         // MainMenuBuilder'daki kullanıcıya görünür kısayol aksiyonları
         let expected: Set<String> = [
-            "New Terminal", "Close Terminal", "Open Repository", "Switch to Tab N",
+            "New Terminal", "Close Terminal", "Go to Project", "Switch to Project N",
             "Focus Terminal N", "Previous Terminal", "Next Terminal",
             "Maximize Terminal", "Toggle Left Sidebar", "Toggle Right Sidebar",
             "Focus Mode", "Zoom In", "Zoom Out", "Actual Size",
@@ -24,7 +24,7 @@ final class ShortcutReferenceTests: XCTestCase {
         // Repo tab geçişi ⌘'siz TEK kısayoldur (karar 59): ⌘1…⌘9 terminalde.
         for ref in ShortcutReference.list() {
             XCTAssertFalse(ref.combos.isEmpty, "\(ref.action) kombosuz")
-            let expectedModifier = ref.action == "Switch to Tab N" ? "⌃" : "⌘"
+            let expectedModifier = ref.action == "Switch to Project N" ? "⌃" : "⌘"
             for combo in ref.combos {
                 XCTAssertFalse(combo.isEmpty, "\(ref.action) boş kombo içeriyor")
                 XCTAssertTrue(
@@ -36,8 +36,8 @@ final class ShortcutReferenceTests: XCTestCase {
     }
 
     func testRangeShortcutHasTwoCombos() {
-        let tabN = ShortcutReference.list().first { $0.action == "Switch to Tab N" }
-        XCTAssertEqual(tabN?.combos.count, 2, "aralıklı kısayol iki kombo (⌃1 – ⌃9) olmalı")
+        let projectN = ShortcutReference.list().first { $0.action == "Switch to Project N" }
+        XCTAssertEqual(projectN?.combos.count, 2, "aralıklı kısayol iki kombo (⌃1 – ⌃9) olmalı")
     }
 
     /// Karar 62: tablo menüyle aynı düzenden türer — takas edilince satırların
@@ -46,7 +46,7 @@ final class ShortcutReferenceTests: XCTestCase {
         let swapped = ShortcutReference.list(style: .repoOnCommand)
         XCTAssertEqual(swapped.map(\.action), ShortcutReference.list().map(\.action))
         XCTAssertEqual(
-            swapped.first { $0.action == "Switch to Tab N" }?.combos,
+            swapped.first { $0.action == "Switch to Project N" }?.combos,
             [["⌘", "1"], ["⌘", "9"]]
         )
         XCTAssertEqual(
