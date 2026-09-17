@@ -34,7 +34,7 @@ import LumiTestSupport
         let svc = RemoteService(
             paths: .testDefaults(), terminal: term, repos: FakeRepoService(),
             connection: conn, chatSource: FakeChatTranscriptSource(events: []),
-            hookEvents: hooks.events(),
+            hookEvents: { hooks.events() },
             turnClock: { Date(timeIntervalSince1970: 100) }
         )
         await svc.start()
@@ -78,7 +78,7 @@ import LumiTestSupport
         let svc = RemoteService(
             paths: .testDefaults(), terminal: term, repos: FakeRepoService(),
             connection: conn, chatSource: FakeChatTranscriptSource(events: []),
-            hookEvents: hooks.events()
+            hookEvents: { hooks.events() }
         )
         await svc.start()
 
@@ -89,6 +89,47 @@ import LumiTestSupport
         try await conn.waitForNoSent(type: "chat_status", after: 0, for: .milliseconds(200))
         #expect(await conn.count(type: "chat_status") == 0)
 
+        svc.stop()
+    }
+}
+
+// MARK: - Restart dayanıklılığı (2026-09-17 cihaz bug'ı)
+
+/// stop()→start() sonrası hook olayları HÂLÂ işlenmeli. Eski kod init'te tek
+/// AsyncStream sakladığı için ikinci start ölü stream dinliyordu → turn-status
+/// ve prompt kartları o process'te sonsuza dek kesiliyordu.
+@Suite @MainActor struct RemoteServiceRestartTests {
+    @Test func hookEventsSurviveServiceRestart() async throws {
+        let conn = FakeRelayConnection()
+        let term = FakeTerminalServicing()
+        let hooks = FakeAgentHookServer()
+        let uuid = UUID()
+        term.metas.append(TerminalMeta(id: TerminalID(raw: uuid), name: "T", repoPath: "/repo",
+                                       createdAt: Date(), claudeSessionID: uuid.uuidString))
+        let sid = TerminalID(raw: uuid).description
+        let id = TerminalID(raw: uuid)
+        let svc = RemoteService(
+            paths: .testDefaults(), terminal: term, repos: FakeRepoService(),
+            connection: conn, chatSource: FakeChatTranscriptSource(events: []),
+            hookEvents: { hooks.events() })
+        await svc.start()
+        await conn.injectInbound(type: "subscribe", payload: ["sessionId": sid, "mode": "chat"])
+        try await conn.waitForSent(types: ["chat_status"])
+
+        // Restart: stop fire-and-forget → disconnected state'ini bekle, sonra start.
+        let states = svc.events()
+        svc.stop()
+        for await e in states { if case .stateChanged(.disconnected) = e { break } }
+        await svc.start()
+        await conn.injectInbound(type: "subscribe", payload: ["sessionId": sid, "mode": "chat"])
+        try await conn.waitForCount(type: "chat_status", atLeast: 2)
+
+        // Ölü-stream bug'ı: restart SONRASI hook olayı prompt üretmeli.
+        hooks.emit(AgentHookEvent(provider: .claude, terminalID: id, kind: .permissionRequest,
+                                  agentID: nil, teammateName: nil, toolName: "Bash", source: nil,
+                                  trigger: nil, isInterrupt: false, promptHead: nil,
+                                  runningBackgroundAgentIDs: nil, toolInput: "{}", toolUseID: "tr1"))
+        try await conn.waitForCount(type: "prompt", atLeast: 1)
         svc.stop()
     }
 }

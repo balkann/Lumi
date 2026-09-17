@@ -15,7 +15,7 @@ import LumiTestSupport
             repoPath: "/no/transcript/repo", createdAt: Date(), claudeSessionID: nil))
         let sid = TerminalID(raw: uuid).description
         let svc = RemoteService(paths: .testDefaults(), terminal: term, repos: FakeRepoService(),
-            connection: conn, chatSource: FakeChatTranscriptSource(events: []), hookEvents: hooks.events())
+            connection: conn, chatSource: FakeChatTranscriptSource(events: []), hookEvents: { hooks.events() })
         await svc.start()
         await conn.injectInbound(type: "subscribe", payload: ["sessionId": sid, "mode": "chat"])
         try await conn.waitForSent(types: ["chat_status"])
@@ -40,7 +40,7 @@ import LumiTestSupport
         ])
         let locator = FakeTranscriptLocating(returning: "found-session")
         let svc = RemoteService(paths: .testDefaults(), terminal: term, repos: FakeRepoService(),
-            connection: conn, chatSource: chat, hookEvents: hooks.events(),
+            connection: conn, chatSource: chat, hookEvents: { hooks.events() },
             transcriptLocator: locator)
         await svc.start()
         await conn.injectInbound(type: "subscribe", payload: ["sessionId": sid, "mode": "chat"])

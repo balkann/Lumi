@@ -34,7 +34,12 @@ public final class RemoteService: RemoteServicing {
     private var chatSubscriptions: [TerminalID: Task<Void, Never>] = [:]
 
     /// Faz 2: hook olay akışı + session başına turn-status reducer'ları.
-    private let hookEvents: AsyncStream<AgentHookEvent>
+    /// FACTORY olmak zorunda: AsyncStream tek geçişlidir — init'te sabit stream
+    /// saklanırsa stop()→start() döngüsünde ikinci start ölü stream dinler ve
+    /// hook olayları (turn-status + prompt kartları) o process'te sonsuza dek
+    /// kesilir (2026-09-17 cihaz teşhisi). Her start() taze stream alır
+    /// (terminal.events() ile aynı desen).
+    private let hookEvents: () -> AsyncStream<AgentHookEvent>
     private let turnClock: @Sendable () -> Date
     private var turnReducers: [TerminalID: TurnStatusReducer] = [:]
     /// Faz 3: session başına etkileşimli prompt journal'ı.
@@ -66,7 +71,7 @@ public final class RemoteService: RemoteServicing {
         connection: (any RelayConnecting)? = nil,
         chatSource: any ChatTranscriptSourcing,
         trust: any ClaudeWorkspaceTrusting = NoopClaudeWorkspaceTrust(),
-        hookEvents: AsyncStream<AgentHookEvent> = AsyncStream { _ in },
+        hookEvents: @escaping () -> AsyncStream<AgentHookEvent> = { AsyncStream { _ in } },
         turnClock: @escaping @Sendable () -> Date = { Date() },
         keystrokeScheduler: any KeystrokeScheduling = LiveKeystrokeScheduler(),
         transcriptLocator: any TranscriptLocating = NoopTranscriptLocating()
@@ -106,10 +111,13 @@ public final class RemoteService: RemoteServicing {
                 await self?.handleTerminalEvent(event)
             }
         }
-        hookTask = Task { [weak self, hookEvents] in
-            for await event in hookEvents {
+        let hookStream = hookEvents()
+        hookTask = Task { [weak self] in
+            rlog("hook stream dinleme BAŞLADI")
+            for await event in hookStream {
                 await self?.handleHookEvent(event)
             }
+            rlog("hook stream dinleme BİTTİ (iptal/finish)")
         }
         await connection.start(url: url, hello: ["role": "mac", "token": currentConfig.token])
         guard myEpoch == epoch else { return }
