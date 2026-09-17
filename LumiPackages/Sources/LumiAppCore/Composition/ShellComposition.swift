@@ -116,9 +116,13 @@ struct ShellComposition {
     private static func registerPanelRevealOverlay(into registries: ShellRegistries) {
         registries.overlays.register(OverlayDescriptor(
             id: .panelReveal,
+            // Karar 73: repo koşulu YOK. Sabit paneller de repo sormaz (bkz.
+            // `AppShellView`); overlay'e konan `activeRepoPath != nil` kapısı,
+            // Tasks/Remote route'unda ve hiç proje seçili değilken kenar
+            // hover'ını sessizce kapatıyordu. "Gösterilecek bir şey var mı?"
+            // sorusunun tek cevabı yuvanın çözümlenen öğeleridir.
             isPresented: { shell in
-                shell.activeRepoPath != nil
-                    && PanelRevealOverlay.slots.contains { shell.layout.canAutoReveal($0) }
+                PanelRevealOverlay.slots.contains { shell.layout.canAutoReveal($0) }
             },
             makeView: { [weak registries] in
                 guard let registries else { return AnyView(EmptyView()) }

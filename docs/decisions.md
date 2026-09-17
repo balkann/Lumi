@@ -681,3 +681,15 @@ Anahtar ham `String` olarak yazılır: `ProjectToolsTab` LumiState'te tanımlı,
 
 - **Sınırlar.** `UIState.projectToolsTab` + `UIStateCodec`, `LayoutStore.projectToolsTab`/`setProjectToolsTab`, `ProjectToolsPanel`. Sekmelerin kendi içerikleri ve `PanelLayout` değişmedi.
 
+### 73. Kenar hover'ı açık repo istemez (2026-09-17)
+
+Kullanıcı şikâyeti: hiç proje seçili değilken ya da Tasks/Remote sekmesindeyken paneller kenar hover'ıyla açılmıyor.
+
+Sebep: `panelReveal` overlay descriptor'ının kapısı `shell.activeRepoPath != nil && …` idi. `activeRepoPath`, route'un repo'su demektir (`NavigationStore.activeRepoPath` → `activeRoute.repoPath`); Tasks/Remote route'unda ve hiçbir proje açık değilken `nil`'dir, dolayısıyla overlay hiç sunulmuyordu.
+
+Bu koşul zaten asimetrikti: **sabit (docked) paneller repo sormaz** — `AppShellView` yuvaları koşulsuz çizer, ne gösterileceğine `PanelItemRegistry.resolved` karar verir (öğe yoksa hiçbir şey çizilmez). Overlay'in ayrı bir kapı taşıması için sebep yoktu.
+
+Karar: kapı kaldırıldı. Kenar şeridinin tek koşulu `LayoutStore.canAutoReveal` (tercih açık + yuva gizli + focus mode kapalı) ve yuvanın çözümlenen öğelerinin boş olmamasıdır. Pratikte: repo yokken sol kenar Tasks/Projects'i açar; sağ yuvanın tek öğesi (`projectTools`) repo istediği için repo yokken sağ kenarda şerit hiç doğmaz — sabit panelde de öyleydi.
+
+- **Sınırlar.** `ShellComposition.registerPanelRevealOverlay`'in `isPresented` predikatı. `PanelRevealOverlay`, `LayoutStore` ve panel öğelerinin `isAvailable` kuralları değişmedi. Test: `ShellToolbarCompositionTests.testPanelRevealOverlayIsPresentedWithoutAnActiveRepo`.
+

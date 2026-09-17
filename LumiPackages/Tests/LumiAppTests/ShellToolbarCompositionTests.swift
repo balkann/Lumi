@@ -71,6 +71,23 @@ final class ShellToolbarCompositionTests: XCTestCase {
         XCTAssertTrue(descriptor?.isPresented(fixture.context) ?? false)
     }
 
+    /// Karar 73: kenar hover'ı overlay'i AÇIK BİR REPO İSTEMEZ. Sabit paneller
+    /// de istemiyor; eski `activeRepoPath != nil` kapısı Tasks/Remote
+    /// route'unda ve hiç proje seçili değilken auto-reveal'ı sessizce
+    /// kapatıyordu. Tek koşul, yuvanın kenar hover'ına uygun olmasıdır.
+    func testPanelRevealOverlayIsPresentedWithoutAnActiveRepo() {
+        let descriptor = registries.overlays.all.first { $0.id == .panelReveal }
+        XCTAssertNotNil(descriptor, "panelReveal overlay'i kayıtlı değil")
+        XCTAssertNil(fixture.context.activeRepoPath)
+        XCTAssertFalse(descriptor?.isPresented(fixture.context) ?? true)
+
+        // Yuva gizli + tercih açık: repo olmasa da şerit çizilmeli.
+        fixture.context.layout.setSlotVisible(.left, false)
+        fixture.context.layout.setAutoReveal(.left, true)
+
+        XCTAssertTrue(descriptor?.isPresented(fixture.context) ?? false)
+    }
+
     // MARK: - Alt bar (karar 43)
 
     func testStatusBarRegions() {
