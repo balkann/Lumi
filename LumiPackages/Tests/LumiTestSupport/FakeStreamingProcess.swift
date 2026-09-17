@@ -4,14 +4,16 @@ import LumiKit
 /// Test için: verilen satırları `lines`'a yayan, yazılan stdin'i biriktiren
 /// sahte streaming süreç. `emitAll()` scripted satırları sırayla verir.
 public final class FakeStreamingProcess: StreamingProcessSpawning, @unchecked Sendable {
-    public private(set) var handles: [FakeStreamingHandle] = []
+    private let lock = NSLock()
+    private var _handles: [FakeStreamingHandle] = []
+    public var handles: [FakeStreamingHandle] { lock.lock(); defer { lock.unlock() }; return _handles }
     private let scriptedLines: [String]
     public init(scriptedLines: [String] = []) { self.scriptedLines = scriptedLines }
 
     public func spawn(executable: String, arguments: [String],
                       currentDirectory: String?, environment: [String: String]) -> any StreamingProcessHandle {
         let h = FakeStreamingHandle(scriptedLines: scriptedLines)
-        handles.append(h)
+        lock.lock(); _handles.append(h); lock.unlock()
         return h
     }
 }

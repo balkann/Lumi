@@ -43,15 +43,19 @@ private final class LiveHandle: StreamingProcessHandle, @unchecked Sendable {
     }
 
     private func ingest(_ chunk: Data) {
-        lock.lock(); defer { lock.unlock() }
+        var completed: [String] = []
+        lock.lock()
         buffer.append(chunk)
         while let nl = buffer.firstIndex(of: 0x0A) {
             let lineData = buffer[buffer.startIndex..<nl]
             buffer.removeSubrange(buffer.startIndex...nl)
             if let s = String(data: Data(lineData), encoding: .utf8) {
-                continuation.yield(s)
+                completed.append(s)
             }
         }
+        lock.unlock()
+        // yield kilit DIŞINDA: consumer resume'u kritik bölümü bloklamasın.
+        for s in completed { continuation.yield(s) }
     }
 
     func write(_ text: String) {
