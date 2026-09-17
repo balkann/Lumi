@@ -112,6 +112,21 @@ public struct ProjectsPanel: View {
     // MARK: - Proje satırı
 
     private func projectRow(_ project: Repo) -> some View {
+        HoverReader { isHovering in
+            projectRowContent(project, isHovering: isHovering)
+        }
+        .contextMenu {
+            Button("Create Workspace…") { shell.dialogs.present(.createWorkspace(projectPath: project.path)) }
+                .disabled(shell.workspaces.isCreating)
+            Button("Reveal in Finder") { shell.actions.revealPath(project.path) }
+            Button("Copy Path") { Pasteboard.copy(project.path) }
+            Divider()
+            Button("Remove from Projects") { Task { await shell.workspaces.removeProject(project) } }
+                .disabled(shell.workspaces.isCreating && operationBelongs(to: project))
+        }
+    }
+
+    private func projectRowContent(_ project: Repo, isHovering: Bool) -> some View {
         HStack(spacing: Theme.Spacing.sm) {
             Button {
                 if !collapsedProjects.insert(project.path).inserted { collapsedProjects.remove(project.path) }
@@ -134,23 +149,18 @@ public struct ProjectsPanel: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Toggle workspaces for \(project.name)")
             Spacer(minLength: 0)
+            // "+" şerit boyunca sürekli durmasın: satırın üstüne gelince
+            // belirir (WorkspaceRows'taki sekme kapatma ile aynı desen).
+            // Yer kaplamayı sürdürür ki başlık hover'da kaymasın.
             IconButton(systemName: "plus", label: "Create workspace for \(project.name)", size: .label, side: Theme.Spacing.xxl) {
                 shell.dialogs.present(.createWorkspace(projectPath: project.path))
             }
-            .disabled(shell.workspaces.isCreating)
+            .disabled(shell.workspaces.isCreating || !isHovering)
+            .opacity(isHovering ? 1 : 0)
         }
         .padding(.horizontal, Theme.Spacing.sm)
         .padding(.vertical, Theme.Spacing.xs)
         .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
-        .contextMenu {
-            Button("Create Workspace…") { shell.dialogs.present(.createWorkspace(projectPath: project.path)) }
-                .disabled(shell.workspaces.isCreating)
-            Button("Reveal in Finder") { shell.actions.revealPath(project.path) }
-            Button("Copy Path") { Pasteboard.copy(project.path) }
-            Divider()
-            Button("Remove from Projects") { Task { await shell.workspaces.removeProject(project) } }
-                .disabled(shell.workspaces.isCreating && operationBelongs(to: project))
-        }
     }
 }
 
