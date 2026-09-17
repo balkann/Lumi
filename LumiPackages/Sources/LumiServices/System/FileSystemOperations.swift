@@ -15,6 +15,7 @@ public struct FileSystemOperations: Sendable {
     private let guardian: RepoPathGuard
     private let trashItem: @Sendable (URL) throws -> Void
     private let reveal: @Sendable (URL) -> Void
+    private let openFile: @Sendable (URL) -> Void
 
     public init(
         allowedRoots: @escaping @Sendable () async -> [String] = { [NSHomeDirectory()] },
@@ -24,12 +25,14 @@ public struct FileSystemOperations: Sendable {
         },
         reveal: @escaping @Sendable (URL) -> Void = {
             NSWorkspace.shared.activateFileViewerSelecting([$0])
-        }
+        },
+        openFile: @escaping @Sendable (URL) -> Void = { NSWorkspace.shared.open($0) }
     ) {
         self.allowedRoots = allowedRoots
         self.guardian = pathGuard
         self.trashItem = trashItem
         self.reveal = reveal
+        self.openFile = openFile
     }
 
     public func trash(path: String) async throws {
@@ -52,6 +55,17 @@ public struct FileSystemOperations: Sendable {
             return
         }
         reveal(URL(fileURLWithPath: path))
+    }
+
+    /// Karar 57: `reveal` ile aynı sözleşme — guard ihlali sessiz no-op + log.
+    public func openWithDefaultApp(path: String) async {
+        do {
+            try await verify(path)
+        } catch {
+            fputs("[lumi-fs] açma reddedildi (bilinen kök dışı): \(path)\n", stderr)
+            return
+        }
+        openFile(URL(fileURLWithPath: path))
     }
 
     private func verify(_ path: String) async throws {

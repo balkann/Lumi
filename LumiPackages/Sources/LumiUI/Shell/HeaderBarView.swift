@@ -23,14 +23,17 @@ struct HeaderBarView: View {
     @Shell private var shell
 
     var body: some View {
+        // Karar 55: üç parça panellerle hizalıdır — sol parça sol panel, sağ
+        // parça sağ panel genişliğinde; orta parça kalanı alır ve içeriği
+        // (grid ayarı + New <Provider>) sağa yaslanır.
         HStack(spacing: 0) {
             region(.leading)
-            // Gezinme ile üretim arasındaki esneme payı. Tab şeridi zaten
-            // `maxWidth: .infinity` olduğu için bu Spacer minimumda kalır;
-            // şerit yokken (hiç öğe yoksa) üretim bölgesini sağa iter.
-            Spacer(minLength: TopBarMetrics.regionGap)
+                .frame(width: leadingWidth, alignment: .leading)
             region(.center)
+                .padding(.trailing, TopBarMetrics.regionGap)
+                .frame(maxWidth: .infinity, alignment: .trailing)
             region(.trailing)
+                .frame(width: trailingWidth, alignment: .trailing)
         }
         // Sol: traffic light alanı — içerik butonların sağından başlar
         .padding(.leading, TopBarMetrics.contentLeading)
@@ -43,6 +46,20 @@ struct HeaderBarView: View {
         .overlay(alignment: .bottom) {
             Theme.border.frame(height: 1)
         }
+    }
+
+    /// Yuva gizliyken `nil` (doğal genişlik) — hizalanacak panel yoktur.
+    private var leadingWidth: CGFloat? {
+        TopBarMetrics.leadingRegionWidth(leftPanelWidth: panelWidth(.left))
+    }
+
+    private var trailingWidth: CGFloat? {
+        TopBarMetrics.trailingRegionWidth(rightPanelWidth: panelWidth(.right))
+    }
+
+    private func panelWidth(_ slot: PanelSlot) -> CGFloat? {
+        guard shell.layout.isSlotVisible(slot) else { return nil }
+        return CGFloat(shell.layout.width(for: slot))
     }
 
     private func region(_ region: ToolbarRegion) -> some View {

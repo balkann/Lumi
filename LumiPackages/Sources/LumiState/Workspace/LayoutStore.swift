@@ -133,13 +133,21 @@ public final class LayoutStore {
             rightOpen: state.rightSidebarOpen
         )
 
-        let migratedOrder = panelLayout.migratingProjectsAfterSessions()
+        // Karar 55: sessions → tasks dönüşümü SIRA migration'ından ÖNCE koşar
+        // (sıra kuralı Tasks'ı çapa alır).
+        let migratedTasks = panelLayout.migratingSessionsToTasks()
+        if migratedTasks != panelLayout {
+            panelLayout = migratedTasks
+            persist()
+        }
+
+        let migratedOrder = panelLayout.migratingProjectsAfterTasks()
         if migratedOrder != panelLayout {
             panelLayout = migratedOrder
             persist()
         }
         if panelLayout.slot(of: .projects) == nil {
-            let insertionIndex = panelLayout.items(in: .left).firstIndex(of: .sessions).map { $0 + 1 } ?? 0
+            let insertionIndex = panelLayout.items(in: .left).firstIndex(of: .tasks).map { $0 + 1 } ?? 0
             panelLayout = panelLayout.moving(.projects, to: .left, index: insertionIndex)
             persist()
         }

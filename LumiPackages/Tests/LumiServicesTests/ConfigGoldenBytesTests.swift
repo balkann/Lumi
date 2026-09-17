@@ -77,6 +77,7 @@ final class ConfigGoldenBytesTests: XCTestCase {
             config.usageIndicators = UsageIndicators(claude: false, codex: true)
             config.computerAwakeMode = .auto
             config.agentHooksEnabled = false
+            config.terminalLinkActionsEnabled = false
         }
 
         let text = try String(contentsOf: paths.configFile, encoding: .utf8)
@@ -116,6 +117,7 @@ final class ConfigGoldenBytesTests: XCTestCase {
 
     private static let expectedConfigJSON = """
     {
+      "activeClaudeAccountId" : null,
       "additionalPaths" : [
         {
           "id" : "id-1",
@@ -132,6 +134,9 @@ final class ConfigGoldenBytesTests: XCTestCase {
       "agentHooksEnabled" : false,
       "aiProvider" : "codex",
       "autoMinimizeOnSend" : true,
+      "claudeAccounts" : [
+
+      ],
       "computerAwakeMode" : "auto",
       "indexShortcutStyle" : "repoOnControl",
       "maxTerminals" : 12,
@@ -156,6 +161,7 @@ final class ConfigGoldenBytesTests: XCTestCase {
       "terminalCursorStyle" : "bar",
       "terminalFontFamily" : "Menlo",
       "terminalFontSize" : 17,
+      "terminalLinkActionsEnabled" : false,
       "theme" : "light",
       "usageAutoRefresh" : {
         "enabled" : true,
@@ -190,7 +196,7 @@ final class ConfigGoldenBytesTests: XCTestCase {
 
           ],
           "left" : [
-            "sessions",
+            "tasks",
             "projects"
           ],
           "right" : [

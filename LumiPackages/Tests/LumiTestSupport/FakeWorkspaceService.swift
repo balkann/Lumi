@@ -10,6 +10,8 @@ public actor FakeWorkspaceService: WorkspaceServicing {
         public static func == (lhs: Self, rhs: Self) -> Bool {
             lhs.request.project == rhs.request.project && lhs.request.name == rhs.request.name
                 && lhs.request.branchName == rhs.request.branchName
+                && lhs.request.branchMode == rhs.request.branchMode
+                && lhs.request.baseBranch == rhs.request.baseBranch
                 && lhs.request.copyLibrary == rhs.request.copyLibrary
         }
     }
@@ -23,6 +25,8 @@ public actor FakeWorkspaceService: WorkspaceServicing {
     private var createDelay: Duration?
     private var _createCalls: [CreateCall] = []
     private var _copyCalls: [(String, String)] = []
+    private var branchOutcome: Result<[WorkspaceBranch], Error> = .success([])
+    private var _branchCalls: [(String, Int)] = []
 
     public init() {}
     public func setInspection(_ result: Result<WorkspaceSource, Error>, for path: String) { inspections[path] = result }
@@ -35,12 +39,18 @@ public actor FakeWorkspaceService: WorkspaceServicing {
     public func setCreateDelay(_ delay: Duration?) { createDelay = delay }
     public var createCalls: [CreateCall] { _createCalls }
     public var copyCalls: [(String, String)] { _copyCalls }
+    public func setBranches(_ result: Result<[WorkspaceBranch], Error>) { branchOutcome = result }
+    public var branchCalls: [(String, Int)] { _branchCalls }
 
     public func inspect(project: Repo) async throws -> WorkspaceSource {
         if let inspectionDelay { try? await Task.sleep(for: inspectionDelay) }
         if let result = inspections[project.path] ?? defaultInspection { return try result.get() }
         return WorkspaceSource(projectPath: project.path, scm: project.isGitRepo ? .git : .none,
             destinationDirectory: NSTemporaryDirectory())
+    }
+    public func branches(project: Repo, limit: Int) async throws -> [WorkspaceBranch] {
+        _branchCalls.append((project.path, limit))
+        return try branchOutcome.get()
     }
     public func create(_ request: WorkspaceCreateRequest) async throws -> WorkspaceCreateResult {
         _createCalls.append(CreateCall(request))

@@ -72,6 +72,9 @@ public protocol TerminalAppearanceControlling: AnyObject, Sendable {
     func applyFont(_ font: NSFont)
     /// Caret şekli + blink'i canlı tüm oturumlara uygular ve sonraki spawn'lara devreder.
     func applyCursor(shape: TerminalCursorShape, blink: Bool)
+    /// Karar 57: düz tıkla açılan link eylemleri. Kapalıyken düz tık terminale
+    /// aittir (seçim/caret); ⌘ / ⇧⌘ ile doğrudan açma etkilenmez.
+    func applyLinkActions(enabled: Bool)
 }
 
 /// Terminal servisinin tam yüzü. Geriye uyumluluk + "her ikisini de uygulayan"

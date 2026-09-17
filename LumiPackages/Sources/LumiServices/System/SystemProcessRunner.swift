@@ -8,7 +8,7 @@ import LumiKit
 /// child write'ta bloklanıp asla terminate olamazdı (klasik NSTask deadlock'u) —
 /// bu, büyük çıktı veren git komutlarında sahte "timeout" üretiyordu. Stdin de
 /// aynı sebepten `run()` SONRASI background'da yazılır.
-public struct SystemProcessRunner: ProcessRunning {
+public struct SystemProcessRunner: ProcessRunning, EnvironmentProcessRunning {
     public init() {}
 
     private final class OnceFlag: @unchecked Sendable {
@@ -30,6 +30,12 @@ public struct SystemProcessRunner: ProcessRunning {
         private let lock = NSLock()
         private var process: Process?
         private var isCancelled = false
+        /// Sonlandırmada alt süreçleri de öldürmeyi dener (en iyi çaba).
+        private let terminatesChildProcesses: Bool
+
+        init(terminatesChildProcesses: Bool = false) {
+            self.terminatesChildProcesses = terminatesChildProcesses
+        }
 
         /// Süreci kaydeder; çağrı ZATEN iptal edilmişse `false` döner
         /// (iptal launch ile yarıştığında child ortada kalmasın).
@@ -45,7 +51,23 @@ public struct SystemProcessRunner: ProcessRunning {
             isCancelled = true
             let process = self.process
             lock.unlock()
-            if process?.isRunning == true { process?.terminate() }
+            guard process?.isRunning == true else { return }
+            if terminatesChildProcesses, let pid = process?.processIdentifier {
+                Self.terminateChildren(of: pid)
+            }
+            process?.terminate()
+        }
+
+        /// `pkill -P <pid>`: çocuğun bıraktığı alt süreçler (ör. OAuth
+        /// callback sunucusu) ayakta kalmasın. Başarısızlığı yutulur —
+        /// sonlandırmanın kendisi bu adıma bağlı değildir.
+        private static func terminateChildren(of pid: pid_t) {
+            let pkill = Process()
+            pkill.executableURL = URL(fileURLWithPath: "/usr/bin/pkill")
+            pkill.arguments = ["-P", String(pid)]
+            pkill.standardOutput = FileHandle.nullDevice
+            pkill.standardError = FileHandle.nullDevice
+            try? pkill.run()
         }
     }
 
@@ -67,6 +89,22 @@ public struct SystemProcessRunner: ProcessRunning {
         }
     }
 
+    /// Ortamı değiştirilmiş çağrı (karar 56): `environment` sürecin TAM
+    /// ortamıdır — miras alınan `ProcessInfo` ortamı otomatik eklenmez, çağıran
+    /// neyi geçireceğini açıkça seçer.
+    public func run(
+        _ executable: String,
+        arguments: [String],
+        environment: [String: String],
+        options: ProcessLaunchOptions,
+        timeout: TimeInterval
+    ) async -> ProcessOutput? {
+        await run(
+            executable, arguments: arguments, currentDirectory: nil,
+            standardInput: nil, environment: environment, options: options, timeout: timeout
+        )
+    }
+
     /// Timeout veya başlatma hatasında nil döner; sessiz-fail sözleşmesi
     /// (fixProcessPath'in 5sn timeout semantiği).
     public func run(
@@ -76,11 +114,28 @@ public struct SystemProcessRunner: ProcessRunning {
         standardInput: Data?,
         timeout: TimeInterval
     ) async -> ProcessOutput? {
+        await run(
+            executable, arguments: arguments, currentDirectory: currentDirectory,
+            standardInput: standardInput, environment: nil, timeout: timeout
+        )
+    }
+
+    private func run(
+        _ executable: String,
+        arguments: [String],
+        currentDirectory: String?,
+        standardInput: Data?,
+        environment: [String: String]?,
+        options: ProcessLaunchOptions = .default,
+        timeout: TimeInterval
+    ) async -> ProcessOutput? {
         guard let raw = await runRaw(
             executable,
             arguments: arguments,
             currentDirectory: currentDirectory,
             standardInput: standardInput,
+            environment: environment,
+            options: options,
             timeout: timeout
         ) else { return nil }
         return ProcessOutput(
@@ -99,7 +154,22 @@ public struct SystemProcessRunner: ProcessRunning {
         standardInput: Data?,
         timeout: TimeInterval
     ) async -> RawProcessOutput? {
-        let box = ProcessBox()
+        await runRaw(
+            executable, arguments: arguments, currentDirectory: currentDirectory,
+            standardInput: standardInput, environment: nil, options: .default, timeout: timeout
+        )
+    }
+
+    private func runRaw(
+        _ executable: String,
+        arguments: [String],
+        currentDirectory: String?,
+        standardInput: Data?,
+        environment: [String: String]?,
+        options: ProcessLaunchOptions,
+        timeout: TimeInterval
+    ) async -> RawProcessOutput? {
+        let box = ProcessBox(terminatesChildProcesses: options.terminatesChildProcesses)
         return await withTaskCancellationHandler {
             await withCheckedContinuation { continuation in
                 let process = Process()
@@ -108,11 +178,17 @@ public struct SystemProcessRunner: ProcessRunning {
                 if let currentDirectory {
                     process.currentDirectoryURL = URL(fileURLWithPath: currentDirectory)
                 }
+                if let environment {
+                    process.environment = environment
+                }
                 let stdoutPipe = Pipe()
                 let stderrPipe = Pipe()
                 process.standardOutput = stdoutPipe
                 process.standardError = stderrPipe
-                let stdinPipe: Pipe? = standardInput.map { _ in Pipe() }
+                // stdin açık tutma: veri yazılmaz, pipe süreç bitene kadar
+                // açık kalır (karar 56 — tarayıcı auth callback'i).
+                let stdinPipe: Pipe? = (standardInput != nil || options.keepsStandardInputOpen)
+                    ? Pipe() : nil
                 if let stdinPipe {
                     process.standardInput = stdinPipe
                 }
@@ -148,12 +224,18 @@ public struct SystemProcessRunner: ProcessRunning {
                     group.leave()
                 }
 
+                @Sendable func checkEarlyTermination(_ collector: StreamCollector) {
+                    guard let predicate = options.shouldTerminateOnOutput else { return }
+                    guard predicate(String(decoding: collector.bytes, as: UTF8.self)) else { return }
+                    box.cancel()
+                }
                 stdoutPipe.fileHandleForReading.readabilityHandler = { handle in
                     let chunk = handle.availableData
                     if chunk.isEmpty {
                         finishStdout()
                     } else {
                         stdout.append(chunk)
+                        checkEarlyTermination(stdout)
                     }
                 }
                 stderrPipe.fileHandleForReading.readabilityHandler = { handle in
@@ -162,6 +244,7 @@ public struct SystemProcessRunner: ProcessRunning {
                         finishStderr()
                     } else {
                         stderr.append(chunk)
+                        checkEarlyTermination(stderr)
                     }
                 }
                 process.terminationHandler = { _ in

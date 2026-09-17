@@ -51,11 +51,23 @@ final class UnityLibraryCopierTests: XCTestCase {
         await XCTAssertThrowsErrorAsync(try await copier.copy(sourcePath: link.path, workspacePath: workspace.path))
     }
 
-    func testLockReasonUsesUnityLockfile() throws {
+    /// Karar 58: açık Unity artık kopyalamayı engellemez, yalnız uyarır.
+    func testOpenEditorWarnsButDoesNotBlockCopy() async throws {
         let source = try makeProject("source")
-        let lock = source.appendingPathComponent("Temp/UnityLockfile")
-        try Data().write(to: lock)
+        try Data().write(to: source.appendingPathComponent("Temp/UnityLockfile"))
+        XCTAssertNotNil(copier.activeEditorWarning(sourcePath: source.path))
+        XCTAssertNil(copier.blockedReason(sourcePath: source.path))
+        let workspace = try makeProject("workspace", library: false)
+        try Data("one".utf8).write(to: source.appendingPathComponent("Library/Cache/a"))
+        let skipped = try await copier.copy(sourcePath: source.path, workspacePath: workspace.path)
+        XCTAssertEqual(skipped, 0)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: workspace.appendingPathComponent("Library/Cache/a").path))
+    }
+
+    func testMissingLibraryIsStillBlocked() throws {
+        let source = try makeProject("source", library: false)
         XCTAssertNotNil(copier.blockedReason(sourcePath: source.path))
+        XCTAssertNil(copier.activeEditorWarning(sourcePath: source.path))
     }
 
     private func makeProject(_ name: String, library: Bool = true) throws -> URL {

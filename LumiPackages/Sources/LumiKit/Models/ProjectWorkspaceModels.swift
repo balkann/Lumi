@@ -43,12 +43,17 @@ public struct WorkspaceSource: Sendable, Equatable {
     public let isUnityProject: Bool
     public let hasLibrary: Bool
     public let libraryCopyBlockedReason: String?
+    /// Kopyalamayı engellemeyen ama sonucu etkileyebilecek durum (açık Unity
+    /// Editor'ü): kullanıcı yine de kopyalayabilir, Library yeniden üretilebilir
+    /// bir önbellektir (karar 58).
+    public let libraryCopyWarning: String?
 
     public init(
         projectPath: String, scm: WorkspaceSCM, branch: String = "", revision: String = "",
         repositorySpec: String? = nil, destinationDirectory: String,
         isUnityProject: Bool = false, hasLibrary: Bool = false,
-        libraryCopyBlockedReason: String? = nil
+        libraryCopyBlockedReason: String? = nil,
+        libraryCopyWarning: String? = nil
     ) {
         self.projectPath = projectPath
         self.scm = scm
@@ -59,11 +64,24 @@ public struct WorkspaceSource: Sendable, Equatable {
         self.isUnityProject = isUnityProject
         self.hasLibrary = hasLibrary
         self.libraryCopyBlockedReason = libraryCopyBlockedReason
+        self.libraryCopyWarning = libraryCopyWarning
     }
 
-    public func suggestedBranch(name: String) -> String {
-        let slug = WorkspaceName.slug(name)
-        return scm == .plastic ? "\(branch.isEmpty ? "/main" : branch)/\(slug)" : slug
+    /// Yeni dal adı önerisi. `base` verilirse yeni dal o dalın altında önerilir.
+    public func suggestedBranch(name: String, base: String? = nil) -> String {
+        fullBranch(leaf: WorkspaceName.slug(name), base: base)
+    }
+
+    /// Yaprak addan tam dal adı (karar 58). Plastic'te dal adı hiyerarşiyi
+    /// TAŞIR: `/main/sand-blocks/feature` dalı `/main/sand-blocks`'un çocuğudur
+    /// ve ara seviyeler kendiliğinden oluşmaz — bu yüzden hiyerarşi kullanıcının
+    /// yazdığı addan değil, seçilen taban daldan gelir. Git'te taban dal yalnız
+    /// başlangıç noktasıdır, dal adı olduğu gibi kullanılır.
+    public func fullBranch(leaf: String, base: String? = nil) -> String {
+        let name = leaf.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard scm == .plastic else { return name }
+        let parent = (base?.isEmpty == false ? base! : branch)
+        return "\(parent.isEmpty ? "/main" : parent)/\(name)"
     }
 }
 
@@ -76,22 +94,59 @@ public enum WorkspaceName {
     }
 }
 
+/// Workspace'in hangi dalda açılacağı (karar 58).
+public enum WorkspaceBranchMode: String, Sendable, Equatable, CaseIterable {
+    /// Projenin şu an bulunduğu dal.
+    case current
+    /// Sunucudaki mevcut bir dal (listeden seçilir veya elle yazılır).
+    case existing
+    /// Yeni dal; `baseBranch` verilmezse mevcut daldan çıkar.
+    case new
+
+    public var title: String {
+        switch self {
+        case .current: "Current branch"
+        case .existing: "Existing branch"
+        case .new: "New branch"
+        }
+    }
+}
+
+/// Dal listesi satırı (karar 58); liste en son değişen dal başta gelir.
+public struct WorkspaceBranch: Sendable, Equatable, Identifiable {
+    public let name: String
+
+    public init(name: String) { self.name = name }
+
+    public var id: String { name }
+}
+
 public struct WorkspaceCreateRequest: Sendable {
     public let project: Repo
     public let name: String
+    /// `.new` modunda yeni dalın adı, `.existing` modunda seçilen dal.
     public let branchName: String?
-    public let createNewBranch: Bool
+    public let branchMode: WorkspaceBranchMode
+    /// Yalnız `.new` modunda: yeni dalın çıkacağı dal (nil → mevcut dal).
+    public let baseBranch: String?
     public let copyLibrary: Bool
     public let knownProjectPaths: [String]
 
-    public init(project: Repo, name: String, branchName: String? = nil, createNewBranch: Bool = true, copyLibrary: Bool = false, knownProjectPaths: [String] = []) {
+    public init(
+        project: Repo, name: String, branchName: String? = nil,
+        branchMode: WorkspaceBranchMode = .new, baseBranch: String? = nil,
+        copyLibrary: Bool = false, knownProjectPaths: [String] = []
+    ) {
         self.project = project
         self.name = name
         self.branchName = branchName
-        self.createNewBranch = createNewBranch
+        self.branchMode = branchMode
+        self.baseBranch = baseBranch
         self.copyLibrary = copyLibrary
         self.knownProjectPaths = knownProjectPaths
     }
+
+    public var createNewBranch: Bool { branchMode == .new }
 }
 
 public struct WorkspaceCreateResult: Sendable, Equatable {

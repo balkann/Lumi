@@ -8,24 +8,36 @@ import LumiKit
 public struct UnityLibraryCopier: Sendable {
     public init() {}
 
+    /// Kopyalamayı gerçekten imkânsız kılan durum. Açık bir Unity Editor'ü
+    /// artık engel DEĞİL (karar 58): Library yeniden üretilebilir bir
+    /// önbellektir, o yüzden yalnız uyarılır (`activeEditorWarning`).
     public func blockedReason(sourcePath: String) -> String? {
+        isDirectory(URL(fileURLWithPath: sourcePath).appendingPathComponent("Library")) ? nil : "Library is unavailable"
+    }
+
+    /// Kaynak projede Unity açık görünüyorsa dönen açıklama; kopyalama yine de
+    /// yapılabilir, Unity ilk açılışta tutarsız kalan parçaları yeniden üretir.
+    public func activeEditorWarning(sourcePath: String) -> String? {
         let library = URL(fileURLWithPath: sourcePath).appendingPathComponent("Library")
-        guard isDirectory(library) else { return "Library is unavailable" }
+        guard isDirectory(library) else { return nil }
         let temp = URL(fileURLWithPath: sourcePath).appendingPathComponent("Temp")
         if FileManager.default.fileExists(atPath: temp.appendingPathComponent("UnityLockfile").path) {
-            return "A Unity lock file exists. Close the source Editor or turn off Copy Library."
+            return "Unity appears to be open (Temp/UnityLockfile). The copy still works; Unity reimports whatever is inconsistent."
         }
-        let lock = library.appendingPathComponent("UnityLockfile")
-        if FileManager.default.fileExists(atPath: lock.path) { return "Unity appears active (Library/UnityLockfile exists)" }
+        if FileManager.default.fileExists(atPath: library.appendingPathComponent("UnityLockfile").path) {
+            return "Unity appears to be open (Library/UnityLockfile). The copy still works; Unity reimports whatever is inconsistent."
+        }
         let instance = library.appendingPathComponent("EditorInstance.json")
         guard let data = try? Data(contentsOf: instance),
               let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
         let pid = (object["processID"] as? NSNumber)?.int32Value ?? (object["pid"] as? NSNumber)?.int32Value ?? 0
         guard pid > 0, kill(pid, 0) == 0 else { return nil }
-        return "Unity appears active (EditorInstance.json reports process \(pid))"
+        return "Unity appears to be open (process \(pid)). The copy still works; Unity reimports whatever is inconsistent."
     }
 
-    public func copy(sourcePath: String, workspacePath: String) async throws {
+    /// Atlanan dosya sayısını döndürür (Unity yazarken okunamayan dosyalar).
+    @discardableResult
+    public func copy(sourcePath: String, workspacePath: String) async throws -> Int {
         let fm = FileManager.default
         let sourceRoot = URL(fileURLWithPath: sourcePath).standardizedFileURL
         let workspaceRoot = URL(fileURLWithPath: workspacePath).standardizedFileURL
@@ -52,21 +64,27 @@ public struct UnityLibraryCopier: Sendable {
         do {
             try fm.createDirectory(at: staging, withIntermediateDirectories: false)
             ownsStaging = true
-            try await Task.detached(priority: .utility) {
+            let skipped = try await Task.detached(priority: .utility) {
                 try Self.copyDirectory(source: source, destination: staging)
             }.value
             guard !fm.fileExists(atPath: target.path) else {
                 throw WorkspaceFailure("Destination Library already exists")
             }
             try fm.moveItem(at: staging, to: target)
+            return skipped
         } catch {
             if ownsStaging { try? fm.removeItem(at: staging) }
             throw error
         }
     }
 
-    private static func copyDirectory(source: URL, destination: URL) throws {
+    /// Dizin ağacını kopyalar, atlanan dosya sayısını döndürür. Açık bir Unity
+    /// tek tük dosyayı kilitli/yarım bırakabilir; bunlar kopyayı iptal etmez
+    /// (karar 58) ama sessizce yutulmaz — sayı çağırana uyarı olarak döner.
+    /// Symlink hâlâ kesin hatadır: Library dışına çıkan bir bağ kopyalanmaz.
+    private static func copyDirectory(source: URL, destination: URL) throws -> Int {
         let fm = FileManager.default
+        var skipped = 0
         for item in try fm.contentsOfDirectory(at: source, includingPropertiesForKeys: [.isDirectoryKey, .isRegularFileKey, .isSymbolicLinkKey], options: []) {
             try autoreleasepool {
                 let values = try item.resourceValues(forKeys: [.isDirectoryKey, .isRegularFileKey, .isSymbolicLinkKey])
@@ -75,12 +93,14 @@ public struct UnityLibraryCopier: Sendable {
                     if item.lastPathComponent == "Temp" || item.lastPathComponent == "Logs" { return }
                     let child = destination.appendingPathComponent(item.lastPathComponent)
                     try fm.createDirectory(at: child, withIntermediateDirectories: false)
-                    try copyDirectory(source: item, destination: child)
+                    skipped += try copyDirectory(source: item, destination: child)
                 } else if values.isRegularFile == true {
-                    try fm.copyItem(at: item, to: destination.appendingPathComponent(item.lastPathComponent))
+                    do { try fm.copyItem(at: item, to: destination.appendingPathComponent(item.lastPathComponent)) }
+                    catch { skipped += 1 }
                 }
             }
         }
+        return skipped
     }
 
     private func isDirectory(_ url: URL) -> Bool {

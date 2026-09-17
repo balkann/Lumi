@@ -9,7 +9,7 @@ final class PanelLayoutTests: XCTestCase {
 
     func testDefaultsMatchTodaysShell() {
         let layout = PanelLayout.defaults
-        XCTAssertEqual(layout.items(in: .left), [.sessions, .projects])
+        XCTAssertEqual(layout.items(in: .left), [.tasks, .projects])
         XCTAssertEqual(layout.items(in: .right), [.projectTools])
         XCTAssertEqual(layout.items(in: .bottom), [])
         XCTAssertEqual(layout.visibleSlots, [.left], "sol açık, sağ kapalı (bugünkü default)")
@@ -30,17 +30,17 @@ final class PanelLayoutTests: XCTestCase {
         )
     }
 
-    func testMigratingProjectsAfterSessionsPreservesOtherLayoutMetadata() {
+    func testMigratingProjectsAfterTasksPreservesOtherLayoutMetadata() {
         let legacy = PanelLayout(
-            slots: [.left: [.projects, .fileTree, .sessions], .right: [.projectTools]],
+            slots: [.left: [.projects, .fileTree, .tasks], .right: [.projectTools]],
             visibleSlots: [.right],
             widths: [.left: 310, .right: 420],
             autoRevealSlots: [.left]
         )
 
-        let migrated = legacy.migratingProjectsAfterSessions()
+        let migrated = legacy.migratingProjectsAfterTasks()
 
-        XCTAssertEqual(migrated.items(in: .left), [.fileTree, .sessions, .projects])
+        XCTAssertEqual(migrated.items(in: .left), [.fileTree, .tasks, .projects])
         XCTAssertEqual(migrated.items(in: .right), [.projectTools])
         XCTAssertEqual(migrated.visibleSlots, [.right])
         XCTAssertEqual(migrated.width(for: .left), 310)
@@ -48,9 +48,52 @@ final class PanelLayoutTests: XCTestCase {
         XCTAssertEqual(migrated.autoRevealSlots, [.left])
     }
 
-    func testMigratingProjectsAfterSessionsLeavesProjectsMovedElsewhereAlone() {
+    func testMigratingProjectsAfterTasksLeavesProjectsMovedElsewhereAlone() {
         let layout = PanelLayout.defaults.moving(.projects, to: .right, index: 0)
-        XCTAssertEqual(layout.migratingProjectsAfterSessions(), layout)
+        XCTAssertEqual(layout.migratingProjectsAfterTasks(), layout)
+    }
+
+    // MARK: - Sessions → Tasks (karar 55)
+
+    func testMigratingSessionsToTasksReplacesLegacyItemInPlace() {
+        let legacy = PanelLayout(
+            slots: [.left: [PanelItemID("sessions"), .projects], .right: [.projectTools]],
+            visibleSlots: [.left],
+            widths: [.left: 310],
+            autoRevealSlots: [.left]
+        )
+
+        let migrated = legacy.migratingSessionsToTasks()
+
+        XCTAssertEqual(migrated.items(in: .left), [.tasks, .projects], "aynı sırada devralır")
+        XCTAssertEqual(migrated.visibleSlots, [.left])
+        XCTAssertEqual(migrated.width(for: .left), 310)
+        XCTAssertEqual(migrated.autoRevealSlots, [.left])
+    }
+
+    func testMigratingSessionsToTasksKeepsTheSlotTheUserMovedItTo() {
+        let legacy = PanelLayout(
+            slots: [.left: [.projects], .right: [.projectTools, PanelItemID("sessions")]],
+            visibleSlots: [.left],
+            widths: [:]
+        )
+        XCTAssertEqual(
+            legacy.migratingSessionsToTasks().items(in: .right),
+            [.projectTools, .tasks]
+        )
+    }
+
+    func testMigratingSessionsToTasksIsANoOpWithoutLegacyItem() {
+        XCTAssertEqual(PanelLayout.defaults.migratingSessionsToTasks(), PanelLayout.defaults)
+    }
+
+    func testMigratingSessionsToTasksLeavesAnExistingTasksItemAlone() {
+        let layout = PanelLayout(
+            slots: [.left: [.tasks, PanelItemID("sessions")]],
+            visibleSlots: [.left],
+            widths: [:]
+        )
+        XCTAssertEqual(layout.migratingSessionsToTasks(), layout)
     }
 
     // MARK: - Auto-reveal (karar 44)
@@ -80,42 +123,42 @@ final class PanelLayoutTests: XCTestCase {
     // MARK: - Taşıma (ana hedef)
 
     func testMovingItemLeftToRightRemovesItFromSource() {
-        let moved = PanelLayout.defaults.moving(.sessions, to: .right, index: 0)
+        let moved = PanelLayout.defaults.moving(.tasks, to: .right, index: 0)
         XCTAssertEqual(moved.items(in: .left), [.projects])
-        XCTAssertEqual(moved.items(in: .right), [.sessions, .projectTools])
-        XCTAssertEqual(moved.slot(of: .sessions), .right)
+        XCTAssertEqual(moved.items(in: .right), [.tasks, .projectTools])
+        XCTAssertEqual(moved.slot(of: .tasks), .right)
     }
 
     func testMovingWithoutIndexAppendsToEnd() {
-        let moved = PanelLayout.defaults.moving(.sessions, to: .right)
-        XCTAssertEqual(moved.items(in: .right), [.projectTools, .sessions])
+        let moved = PanelLayout.defaults.moving(.tasks, to: .right)
+        XCTAssertEqual(moved.items(in: .right), [.projectTools, .tasks])
     }
 
     func testMovingClampsOutOfRangeIndex() {
-        let high = PanelLayout.defaults.moving(.sessions, to: .right, index: 99)
-        XCTAssertEqual(high.items(in: .right), [.projectTools, .sessions])
-        let low = PanelLayout.defaults.moving(.sessions, to: .right, index: -5)
-        XCTAssertEqual(low.items(in: .right), [.sessions, .projectTools])
+        let high = PanelLayout.defaults.moving(.tasks, to: .right, index: 99)
+        XCTAssertEqual(high.items(in: .right), [.projectTools, .tasks])
+        let low = PanelLayout.defaults.moving(.tasks, to: .right, index: -5)
+        XCTAssertEqual(low.items(in: .right), [.tasks, .projectTools])
     }
 
     func testMovingWithinSameSlotReorders() {
         let layout = PanelLayout.defaults.moving(.projectTools, to: .left)
         let moved = layout.moving(.projectTools, to: .left, index: 0)
-        XCTAssertEqual(moved.items(in: .left), [.projectTools, .sessions, .projects])
+        XCTAssertEqual(moved.items(in: .left), [.projectTools, .tasks, .projects])
     }
 
     func testMovingNeverDuplicatesAcrossSlots() {
         let moved = PanelLayout.defaults
-            .moving(.sessions, to: .right)
-            .moving(.sessions, to: .bottom)
+            .moving(.tasks, to: .right)
+            .moving(.tasks, to: .bottom)
         XCTAssertEqual(moved.items(in: .left), [.projects])
         XCTAssertEqual(moved.items(in: .right), [.projectTools])
-        XCTAssertEqual(moved.items(in: .bottom), [.sessions])
+        XCTAssertEqual(moved.items(in: .bottom), [.tasks])
     }
 
     func testMutationsDoNotTouchTheSource() {
         let original = PanelLayout.defaults
-        _ = original.moving(.sessions, to: .right)
+        _ = original.moving(.tasks, to: .right)
         _ = original.settingVisible(.right, true)
         _ = original.settingWidth(400, for: .left)
         XCTAssertEqual(original, PanelLayout.defaults, "değer tipi mutasyonla değişmez")
@@ -149,6 +192,6 @@ final class PanelLayoutTests: XCTestCase {
         let layout = PanelLayout(slots: [:], visibleSlots: [], widths: [:])
         XCTAssertEqual(layout.width(for: .left), PanelLayout.defaultWidth)
         XCTAssertEqual(layout.items(in: .left), [])
-        XCTAssertNil(layout.slot(of: .sessions))
+        XCTAssertNil(layout.slot(of: .tasks))
     }
 }

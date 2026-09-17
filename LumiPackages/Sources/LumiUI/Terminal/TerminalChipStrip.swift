@@ -10,6 +10,10 @@ import SwiftUI
 ///
 /// Ölçüler değişmedi: 6pt aralık, 5pt köşe, 24pt şerit yüksekliği.
 struct TerminalChipStrip: View {
+    /// Chip başlığının üst sınırı: uzun terminal adları şeridi tek başına
+    /// doldurup diğerlerini itiyordu; sığmayan ad "…" ile kırpılır.
+    static let titleMaxWidth: CGFloat = 160
+
     /// Şeridin başındaki muted etiket (minimize şeridi için "Minimized:").
     var label: String?
     let items: [TerminalMeta]
@@ -44,6 +48,9 @@ struct TerminalChipStrip: View {
                 Text(meta.displayTitle)
                     .font(Theme.Typography.mono(.label))
                     .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(maxWidth: Self.titleMaxWidth, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .padding(.horizontal, Theme.Spacing.md)
             .padding(.vertical, 3)

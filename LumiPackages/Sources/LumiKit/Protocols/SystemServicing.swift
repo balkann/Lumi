@@ -40,5 +40,8 @@ public protocol SystemServicing: Sendable {
 
     func trash(path: String) async throws
     func revealInFinder(path: String)
+    /// Karar 57: bilinen kökün dışındaki dosyayı sistemin varsayılan
+    /// uygulamasında açar (aynı path guard'ı geçerlidir).
+    func openWithDefaultApp(path: String)
     @MainActor func chooseFolder() async -> String?
 }

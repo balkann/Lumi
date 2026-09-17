@@ -51,16 +51,16 @@ public struct UsageAutoRefresh: Sendable, Equatable {
     /// dışındaki değerler default'a düşer.
     public var intervalMinutes: Int
 
-    /// UI'da sunulan ve kabul edilen aralık seçenekleri (K38 kararı A,
-    /// design/05 §6.1). En küçük aralık, servis katmanındaki TTL cache'iyle
-    /// (`CachingUsageService`, ≥5 dk) hizalıdır: daha sık bir aralık cache'e
-    /// takılıp gerçek bir tazeleme üretmezdi.
-    public static let allowedIntervals = [5, 15, 30]
+    /// UI'da sunulan ve kabul edilen aralık seçenekleri (K38 kararı A;
+    /// karar 55 ile {5, 15, 30} → {1, 5}). 1 dk seçeneği TTL cache'ine (300 sn)
+    /// takılmaz: otomatik döngü de kullanıcının manuel yenilemesi gibi
+    /// `UsageStore.refresh()`'ten geçer ve cache'i açıkça geçersizler.
+    public static let allowedIntervals = [1, 5]
 
     public static let defaults = UsageAutoRefresh(enabled: false, intervalMinutes: 5)
 
     /// Doğrulama sözleşmesi: izinli set dışındaki her değer (eski dosyalardaki
-    /// `1` dahil) default'a clamp'lenir. Karar 9 ihlali DEĞİLDİR — bu tip zaten
+    /// `15`/`30` dahil) default'a clamp'lenir. Karar 9 ihlali DEĞİLDİR — bu tip zaten
     /// baştan beri doğrulayan bir init'e sahipti; yalnız izinli set daraldı.
     public init(enabled: Bool, intervalMinutes: Int) {
         self.enabled = enabled

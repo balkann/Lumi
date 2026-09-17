@@ -88,6 +88,18 @@ public final class FakeSystemService: SystemServicing, @unchecked Sendable {
         lock.withLock { revealedPaths.append(path) }
     }
 
+    /// Karar 57: varsayılan uygulamada açılan yollar.
+    public private(set) var openedPaths: [String] {
+        get { lock.withLock { _openedPaths } }
+        set { lock.withLock { _openedPaths = newValue } }
+    }
+
+    private var _openedPaths: [String] = []
+
+    public func openWithDefaultApp(path: String) {
+        lock.withLock { _openedPaths.append(path) }
+    }
+
     @MainActor
     public func chooseFolder() async -> String? {
         lock.withLock {

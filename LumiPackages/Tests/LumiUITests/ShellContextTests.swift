@@ -269,6 +269,8 @@ final class ShellContextTests: XCTestCase {
             onboarding: context.onboarding,
             usage: context.usage,
             deepSeek: context.deepSeek,
+            claudeAccounts: context.claudeAccounts,
+            terminalLinks: context.terminalLinks,
             computerAwake: context.computerAwake,
             resourceUsage: context.resourceUsage,
             viewProvider: context.viewProvider,

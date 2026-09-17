@@ -99,6 +99,15 @@ public final class UsageStore {
         await performFetch()
     }
 
+    /// Verinin KAYNAĞI değişti (karar 56: Claude hesabı switch'lendi).
+    /// Anti-spam aralığı burada uygulanmaz — ekrandaki yüzde artık başka bir
+    /// hesaba ait olduğu için beklemek yanlış bilgiyi korumak olurdu.
+    public func refreshAfterSourceChange() async {
+        guard isEnabled else { return }
+        await cache?.invalidateCache()
+        await performFetch()
+    }
+
     private func performFetch() async {
         isLoading = true
         hasLoadedOnce = true

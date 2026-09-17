@@ -37,6 +37,8 @@ struct ShellComposition {
         workspaceBoot: WorkspaceBootAssembly,
         statusBar: StatusBarFeatureAssembly,
         deepSeek: DeepSeekAssembly,
+        claudeAccounts: ClaudeAccountsAssembly,
+        terminalLinks: TerminalLinkActionsAssembly,
         contributors: [any ShellContributing]
     ) -> ShellComposition {
         let registries = makeRegistries(contributors: contributors)
@@ -60,12 +62,18 @@ struct ShellComposition {
             onboarding: workspaceBoot.onboarding,
             usage: usage.usageStores,
             deepSeek: deepSeek.deepSeek,
+            claudeAccounts: claudeAccounts.claudeAccounts,
+            terminalLinks: terminalLinks.makeStore(shared: shared, repo: repo),
             computerAwake: statusBar.computerAwake,
             resourceUsage: statusBar.resourceUsage,
             viewProvider: registry.viewProvider,
             highlighter: registry.highlighter,
             actions: makeActions(registry: registry, shared: shared, repo: repo)
         )
+        // Niyet → kabuk yürütmesi (sekme / FileViewer / Finder / tarayıcı).
+        context.terminalLinks.onIntent = { [weak context] intent in
+            context?.performTerminalLinkIntent(intent)
+        }
         return ShellComposition(registries: registries, context: context)
     }
 
@@ -123,6 +131,11 @@ struct ShellComposition {
             makeView: { AnyView(FileViewerOverlay()) }
         ))
         registries.overlays.register(OverlayDescriptor(
+            id: .repoSelector,
+            isPresented: { $0.dialogs.isRepoSelectorOpen },
+            makeView: { AnyView(RepoSelectorOverlay()) }
+        ))
+        registries.overlays.register(OverlayDescriptor(
             id: .settings,
             isPresented: { $0.dialogs.isSettingsOpen },
             makeView: { AnyView(SettingsOverlay()) }
@@ -165,7 +178,13 @@ struct ShellComposition {
                     await repo.repoStore.loadFileTree(repoPath)
                 }
             },
-            revealPath: { path in registry.system.revealInFinder(path: path) }
+            revealPath: { path in registry.system.revealInFinder(path: path) },
+            openURL: { url in
+                Task { @MainActor in
+                    shared.toasts.reporting { try registry.system.openExternal(url) }
+                }
+            },
+            openPath: { path in registry.system.openWithDefaultApp(path: path) }
         )
     }
 }

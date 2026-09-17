@@ -2,6 +2,9 @@ import Foundation
 
 public protocol WorkspaceServicing: Actor {
     func inspect(project: Repo) async throws -> WorkspaceSource
+    /// Projenin dalları, en son değişen başta (karar 58). Plastic'te sunucuya
+    /// gider (~1.5 sn), bu yüzden kısa süreli önbelleklenir.
+    func branches(project: Repo, limit: Int) async throws -> [WorkspaceBranch]
     func create(_ request: WorkspaceCreateRequest) async throws -> WorkspaceCreateResult
     func copyLibrary(sourcePath: String, workspacePath: String) async throws
     /// Yönetilen workspace'i SCM kaydından düşürür ve klasörünü kaldırır

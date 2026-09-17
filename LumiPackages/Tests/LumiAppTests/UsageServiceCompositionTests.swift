@@ -6,6 +6,10 @@ import LumiKit
 /// K38-A: üretim grafiğinde her kullanım servisi TTL cache dekoratörüyle
 /// sarılır (design/05 §cache "≥5 dk TTL"). Somut dekoratör tipini isimlemek
 /// yerine yeteneğine bakılır — dekoratör değişse de sözleşme aynı kalır.
+///
+/// Karar 55: en küçük otomatik aralık (1 dk) TTL'den kısadır ve bu bir çelişki
+/// DEĞİLDİR — döngü `UsageStore.refresh()`'ten geçip cache'i geçersizler.
+/// Kilitlenen sözleşme burada "cache boşaltılabilir olmalı"dır.
 @MainActor
 final class UsageServiceCompositionTests: XCTestCase {
     func testEveryProviderGetsACacheDecoratedUsageService() {
@@ -25,13 +29,4 @@ final class UsageServiceCompositionTests: XCTestCase {
         XCTAssertEqual(LiveServiceRegistry.usageCacheTTL, .seconds(300))
     }
 
-    /// TTL, en küçük otomatik tazeleme aralığından uzun OLMAMALI; olsaydı
-    /// otomatik döngü cache'e takılıp hiç tazelenmezdi.
-    func testCacheTTLIsNotLongerThanTheSmallestAutoRefreshInterval() throws {
-        let smallest = try XCTUnwrap(UsageAutoRefresh.allowedIntervals.min())
-        XCTAssertLessThanOrEqual(
-            LiveServiceRegistry.usageCacheTTL,
-            .seconds(smallest * 60)
-        )
-    }
 }

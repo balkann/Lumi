@@ -27,7 +27,7 @@ final class SettingsTabTests: XCTestCase {
     func testTabOrderIsTheDeclaredOne() {
         XCTAssertEqual(
             SettingsTab.allCases,
-            [.general, .agent, .terminal, .appearance, .notifications, .session, .usage, .shortcuts]
+            [.general, .agent, .accounts, .terminal, .appearance, .notifications, .session, .usage, .shortcuts]
         )
     }
 
@@ -36,6 +36,7 @@ final class SettingsTabTests: XCTestCase {
     func testEachTabContentDeclaresItsOwnTab() {
         XCTAssertEqual(GeneralSettingsTab.tab, .general)
         XCTAssertEqual(AgentSettingsTab.tab, .agent)
+        XCTAssertEqual(AccountsSettingsTab.tab, .accounts)
         XCTAssertEqual(TerminalSettingsTab.tab, .terminal)
         XCTAssertEqual(AppearanceSettingsTab.tab, .appearance)
         XCTAssertEqual(NotificationsSettingsTab.tab, .notifications)

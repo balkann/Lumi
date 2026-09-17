@@ -59,10 +59,10 @@ final class UsageAutoRefreshStoreTests: XCTestCase {
         store.stop()
     }
 
-    // MARK: - Aralık seti (K38-A: {5, 15, 30}, default 5)
+    // MARK: - Aralık seti (karar 55: {1, 5}, default 5)
 
     func testAllowedIntervalsMatchTheDesignRecord() {
-        XCTAssertEqual(UsageAutoRefresh.allowedIntervals, [5, 15, 30])
+        XCTAssertEqual(UsageAutoRefresh.allowedIntervals, [1, 5])
         XCTAssertEqual(UsageAutoRefresh.defaults.intervalMinutes, 5)
     }
 
@@ -76,7 +76,7 @@ final class UsageAutoRefreshStoreTests: XCTestCase {
     }
 
     func testIntervalClampsInvalidToDefault() {
-        for invalid in [0, 1, 2, 7, 31, -5] {
+        for invalid in [0, 2, 7, 15, 30, 31, -5] {
             XCTAssertEqual(
                 UsageAutoRefresh(enabled: true, intervalMinutes: invalid).intervalMinutes,
                 UsageAutoRefresh.defaults.intervalMinutes,
@@ -85,21 +85,26 @@ final class UsageAutoRefreshStoreTests: XCTestCase {
         }
     }
 
-    /// TTL cache'i (300 sn) ile hizalanma: en küçük aralık TTL'den KISA olamaz,
-    /// yoksa otomatik döngü cache'e takılıp boşa dönerdi (design/05 §cache).
-    func testSmallestIntervalIsNotShorterThanTheServiceCacheTTL() {
-        XCTAssertEqual(UsageAutoRefresh.allowedIntervals.min(), 5)
+    /// En küçük aralık `UsageStore`'un anti-spam kapısından (60 sn) kısa
+    /// OLAMAZ; olsaydı döngü kapıya takılıp boşa dönerdi.
+    func testSmallestIntervalIsNotShorterThanTheStoreRefreshGate() throws {
+        let smallest = try XCTUnwrap(UsageAutoRefresh.allowedIntervals.min())
+        XCTAssertGreaterThanOrEqual(
+            TimeInterval(smallest * 60),
+            UsageStore.minRefreshInterval
+        )
     }
 
-    /// Diskteki eski `intervalMinutes: 1` (K38 öncesi set) okumada 5'e clamp'lenir.
-    func testLegacyOneMinuteIntervalIsClampedOnRead() {
+    /// Diskteki eski `intervalMinutes: 15` (karar 55 öncesi set) okumada
+    /// default'a clamp'lenir.
+    func testLegacyFifteenMinuteIntervalIsClampedOnRead() {
         XCTAssertEqual(
-            UsageAutoRefresh(enabled: true, intervalMinutes: 1),
+            UsageAutoRefresh(enabled: true, intervalMinutes: 15),
             UsageAutoRefresh(enabled: true, intervalMinutes: 5)
         )
     }
 
-    /// Clamp gerçekten döngüyü de etkiler: `1` yazılsa bile idle-gate 5 dk'lık
+    /// Clamp gerçekten döngüyü de etkiler: `30` yazılsa bile idle-gate 5 dk'lık
     /// pencereyi kullanır (200 sn boşta olan kullanıcı hâlâ "aktif" sayılır).
     func testLoopUsesClampedIntervalForTheIdleGate() async {
         let service = FakeUsageService(outcome: .success(snapshot(percent: 11)))
@@ -107,11 +112,27 @@ final class UsageAutoRefreshStoreTests: XCTestCase {
         // 200 sn boşta: 1 dk (60 sn) penceresinde pasif, 5 dk (300 sn) penceresinde aktif.
         let activity = FakeActivityMonitor(idleSeconds: 200)
         let store = UsageAutoRefreshStore(stores: [usage], activity: activity)
-        store.update(UsageAutoRefresh(enabled: true, intervalMinutes: 1))
+        store.update(UsageAutoRefresh(enabled: true, intervalMinutes: 30))
 
         let didRefresh = await store.performTickIfActive()
 
         XCTAssertTrue(didRefresh, "aralık 5'e clamp'lendiği için kullanıcı aktif sayılır")
+        store.stop()
+    }
+
+    /// 1 dk aralığı gerçek bir tazeleme üretir: idle-gate 60 sn'lik pencereyi
+    /// kullanır ve döngü TTL cache'ini geçersizleyerek kaynağa gider.
+    func testOneMinuteIntervalRefreshesWhenTheUserIsActive() async {
+        let service = FakeUsageService(outcome: .success(snapshot(percent: 11)))
+        let usage = UsageStore(service: service, cache: service)
+        let store = UsageAutoRefreshStore(stores: [usage], activity: FakeActivityMonitor(idleSeconds: 10))
+        store.update(UsageAutoRefresh(enabled: true, intervalMinutes: 1))
+
+        let didRefresh = await store.performTickIfActive()
+
+        XCTAssertTrue(didRefresh)
+        let invalidations = await service.invalidateCount
+        XCTAssertEqual(invalidations, 1, "döngü cache'i geçersizler — 300 sn TTL'e takılmaz")
         store.stop()
     }
 }

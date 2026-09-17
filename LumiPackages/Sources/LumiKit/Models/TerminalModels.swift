@@ -138,4 +138,7 @@ public enum TerminalEvent: Sendable, Equatable {
     /// buna göre senkronlar — composition root'ta callback köprüsü yerine
     /// diğer tüm terminal sinyalleriyle aynı kanaldan akar (Faz 3.7).
     case viewFocused(TerminalID)
+    /// Karar 57: terminalde bir link/path tıklandı. Hedefin çözümlenmesi
+    /// (URL / workspace / dizin / dosya) ve eylemler store katmanındadır.
+    case linkActivated(TerminalLinkActivation)
 }

@@ -21,6 +21,8 @@ public enum LumiError: Error, LocalizedError, Sendable, Equatable {
     case sessionStartFailed(detail: String)
     /// Agent History oturumu dışa/içe aktarımı (karar 52) başarısız.
     case sessionTransferFailed(detail: String)
+    /// Claude hesap yönetimi (karar 56): login, seçim ya da kimlik yakalama.
+    case claudeAccountFailed(operation: String, detail: String)
     case underlying(domain: String, message: String)
 
     public var errorDescription: String? {
@@ -53,6 +55,8 @@ public enum LumiError: Error, LocalizedError, Sendable, Equatable {
             return "Could not start session: \(detail)"
         case .sessionTransferFailed(let detail):
             return "Session transfer failed: \(detail)"
+        case .claudeAccountFailed(let operation, let detail):
+            return "Claude account \(operation) failed: \(detail)"
         case .underlying(let domain, let message):
             return "\(domain): \(message)"
         }

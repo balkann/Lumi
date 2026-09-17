@@ -23,10 +23,11 @@ public struct GridSettingsToolbarItem: View {
     }
 }
 
-/// Birincil CTA (New <Provider>) + üretim ↔ durum ayracı.
+/// Birincil CTA (New <Provider>).
 ///
-/// Ayraç bu öğenin PARÇASIDIR: Gestalt ayrımı üretim grubunun sonunu işaret
-/// eder, dolayısıyla grup bar'dan düştüğünde ayraç da düşer.
+/// Karar 55: üretim ↔ durum ayracı (dikey çizgi + payı) kaldırıldı — bar üç
+/// parçaya bölündüğünden grubun sonunu artık bölge sınırı işaret ediyor,
+/// butonun sağındaki çizgi ve boşluk gereksizdi.
 public struct NewTerminalToolbarItem: View {
     @Shell private var shell
 
@@ -34,24 +35,16 @@ public struct NewTerminalToolbarItem: View {
 
     public var body: some View {
         if let repoPath = shell.activeRepoPath {
-            HStack(spacing: 0) {
-                NewTerminalButton(
-                    provider: shell.settings.current.aiProvider,
-                    onNewProvider: {
-                        shell.terminals.spawn(
-                            in: repoPath,
-                            command: shell.settings.current.aiProvider.launchCommand
-                        )
-                    },
-                    items: NewTerminalMenu.items(shell: shell, repoPath: repoPath)
-                )
-                .padding(.trailing, TopBarMetrics.trailingPadding)
-                Rectangle()
-                    .fill(Theme.border)
-                    .frame(width: Theme.Stroke.hairline, height: Theme.Spacing.xl)
-                    .padding(.trailing, TopBarMetrics.trailingPadding)
-                    .accessibilityHidden(true)
-            }
+            NewTerminalButton(
+                provider: shell.settings.current.aiProvider,
+                onNewProvider: {
+                    shell.terminals.spawn(
+                        in: repoPath,
+                        command: shell.settings.current.aiProvider.launchCommand
+                    )
+                },
+                items: NewTerminalMenu.items(shell: shell, repoPath: repoPath)
+            )
         }
     }
 }

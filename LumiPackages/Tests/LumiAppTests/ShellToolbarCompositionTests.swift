@@ -24,7 +24,8 @@ final class ShellToolbarCompositionTests: XCTestCase {
         // `AppComposition.live` ile AYNI katkıcı listesi.
         registries = ShellComposition.makeRegistries(
             contributors: [
-                TerminalFeatureAssembly(), RepoFeatureAssembly(), UsageFeatureAssembly(), StatusBarFeatureAssembly(),
+                TasksFeatureAssembly(), TerminalFeatureAssembly(), RepoFeatureAssembly(), UsageFeatureAssembly(),
+                StatusBarFeatureAssembly(), TerminalLinkActionsAssembly(),
             ]
         )
     }
@@ -53,6 +54,23 @@ final class ShellToolbarCompositionTests: XCTestCase {
         XCTAssertFalse(ids(.trailing).contains(.settings), "settings alt barda (karar 43)")
     }
 
+    // MARK: - Overlay'ler
+
+    /// Karar 57: link eylemi popover'ı yalnız açık bir istek varken çizilir.
+    func testTerminalLinkOverlayIsRegisteredAndGatedOnAnOpenRequest() async {
+        let descriptor = registries.overlays.all.first { $0.id == .terminalLinkActions }
+        XCTAssertNotNil(descriptor, "terminalLinkActions overlay'i kayıtlı değil")
+        XCTAssertEqual(descriptor?.alignment, .topLeading)
+        XCTAssertFalse(descriptor?.isPresented(fixture.context) ?? true)
+
+        await fixture.context.terminalLinks.handle(TerminalLinkActivation(
+            terminalID: TerminalID(), link: "/tmp/logs",
+            gesture: .actions, anchor: CGPoint(x: 4, y: 4)
+        ))
+
+        XCTAssertTrue(descriptor?.isPresented(fixture.context) ?? false)
+    }
+
     // MARK: - Alt bar (karar 43)
 
     func testStatusBarRegions() {
@@ -74,12 +92,13 @@ final class ShellToolbarCompositionTests: XCTestCase {
         ], "sıra AgentProvider.allCases sırasıdır (eski enabledProviders)")
     }
 
-    /// Gezinme grubu: hamburger → logo → tab şeridi.
+    /// Gezinme grubu: logo → hamburger (karar 55: tab şeridi kaldırıldı,
+    /// toggle ürün adının ardına alındı).
     func testLeadingRegionOrder() {
-        XCTAssertEqual(ids(.leading), [.panelToggle(.left), .logo, .repoTabs])
+        XCTAssertEqual(ids(.leading), [.logo, .panelToggle(.left)])
     }
 
-    /// Üretim grubu: grid ayarı → New <Provider> (+ ayraç, o öğenin parçası).
+    /// Üretim grubu: grid ayarı → New <Provider> (karar 55: ayraç kaldırıldı).
     func testCenterRegionOrder() {
         fixture.openRepo()
         XCTAssertEqual(ids(.center), [.gridSettings, .newTerminal])
@@ -108,11 +127,45 @@ final class ShellToolbarCompositionTests: XCTestCase {
         XCTAssertEqual(ids(.center), [.gridSettings, .newTerminal], "geri dönüşte geri gelir")
     }
 
+    // MARK: - Tasks/Remote route'ları (karar 55)
+
+    /// Route değişince orta bölge o route'un KENDİ öğesine döner: grid ayarı ve
+    /// CTA düşer, yerine route başlığı gelir.
+    func testTasksRouteReplacesTheProductionGroupWithItsOwnItem() {
+        fixture.openRepo()
+        XCTAssertEqual(ids(.center), [.gridSettings, .newTerminal])
+
+        fixture.context.navigation.setRoute(.content(TasksPanelSection.tasks.routeID))
+        XCTAssertEqual(ids(.center), [ToolbarItemID("route.tasks")])
+
+        fixture.context.navigation.setRoute(.content(TasksPanelSection.remote.routeID))
+        XCTAssertEqual(ids(.center), [ToolbarItemID("route.remote")], "her route yalnız kendi öğesini gösterir")
+    }
+
+    /// Panel satırından dönüş: bir projeye tıklamak repo route'unu geri açar.
+    func testOpeningARepoRestoresTheProductionGroup() {
+        fixture.context.navigation.setRoute(.content(TasksPanelSection.tasks.routeID))
+        XCTAssertEqual(ids(.center), [ToolbarItemID("route.tasks")])
+
+        fixture.openRepo()
+        XCTAssertEqual(ids(.center), [.gridSettings, .newTerminal])
+    }
+
+    func testEachSectionRegistersItsContentRoute() {
+        for section in TasksPanelSection.allCases {
+            XCTAssertEqual(
+                registries.routes.resolve(section.routeID)?.id,
+                section.routeID,
+                "\(section.rawValue) route'u kayıtlı olmalı (yoksa terminals'a düşerdi)"
+            )
+        }
+    }
+
     /// Kabuğun diğer öğeleri route'tan bağımsızdır (repo-dışı bir görünümde de
     /// gezinme ve global kontroller durur).
     func testShellItemsSurviveANonRepoRoute() {
         fixture.context.navigation.setRoute(.content(ContentRouteID("placeholder")))
-        XCTAssertEqual(ids(.leading), [.panelToggle(.left), .logo, .repoTabs])
+        XCTAssertEqual(ids(.leading), [.logo, .panelToggle(.left)])
         XCTAssertTrue(ids(.trailing).contains(.focusMode))
     }
 }
@@ -162,6 +215,10 @@ private struct ShellFixture {
             ),
             usage: [:],
             deepSeek: DeepSeekStore(service: FakeDeepSeekEnvironmentService(), toasts: toasts),
+            claudeAccounts: ClaudeAccountStore(service: FakeClaudeAccountService(), toasts: toasts),
+            terminalLinks: TerminalLinkActionStore(
+                terminals: shared.terminals, repos: repos, workspaces: ProjectWorkspaceStore(service: FakeWorkspaceService(), config: config, repos: repos, toasts: toasts)
+            ),
             computerAwake: ComputerAwakeStore(
                 terminals: shared.terminals, settings: shared.settings, assertion: FakeSleepAssertion()
             ),

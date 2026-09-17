@@ -44,6 +44,13 @@ enum AppConfigCodec {
         if let value = JSONValue.bool(dict["agentHooksEnabled"]) {
             config.agentHooksEnabled = value
         }
+        if let value = JSONValue.bool(dict["terminalLinkActionsEnabled"]) {
+            config.terminalLinkActionsEnabled = value
+        }
+        config.claudeAccounts = ClaudeAccountCodec.decodeList(dict["claudeAccounts"])
+        config.claudeAccountSelection = ClaudeAccountCodec.decodeSelection(
+            dict["activeClaudeAccountId"], accounts: config.claudeAccounts
+        )
         config.indexShortcutStyle = IndexShortcutStyle.normalized(
             dict["indexShortcutStyle"] as? String
         )
@@ -52,7 +59,7 @@ enum AppConfigCodec {
     }
 
     static func overlay(_ config: AppConfig) -> [String: Any] {
-        [
+        var overlay: [String: Any] = [
             "projectsRoot": config.projectsRoot,
             "additionalPaths": AdditionalPathCodec.overlayList(config.additionalPaths),
             "sidebarProjectPaths": config.sidebarProjectPaths,
@@ -69,9 +76,15 @@ enum AppConfigCodec {
             "usageIndicators": UsageIndicatorsCodec.overlay(config.usageIndicators),
             "computerAwakeMode": config.computerAwakeMode.rawValue,
             "agentHooksEnabled": config.agentHooksEnabled,
+            "terminalLinkActionsEnabled": config.terminalLinkActionsEnabled,
+            "claudeAccounts": ClaudeAccountCodec.overlayList(config.claudeAccounts),
             "indexShortcutStyle": config.indexShortcutStyle.rawValue,
             "workspaces": ProjectWorkspaceCodec.overlayList(config.workspaces),
         ]
+        // Sistem varsayılanı `null` olarak yazılır: anahtarı silmek, ham-dict
+        // merge'inde eski seçimi diskte bırakırdı (karar 9).
+        overlay["activeClaudeAccountId"] = config.claudeAccountSelection.accountID ?? NSNull()
+        return overlay
     }
 
     /// Alt bölüm sözlüğü; yoksa/yanlış tipliyse nil → alt codec default döner.

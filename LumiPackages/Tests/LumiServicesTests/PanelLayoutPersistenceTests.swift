@@ -41,10 +41,10 @@ final class PanelLayoutPersistenceTests: XCTestCase {
         let state = decode([
             "leftSidebarOpen": false,
             "rightSidebarOpen": true,
-            "panelLayout": ["slots": ["left": ["sessions"]], "widths": ["left": 300]],
+            "panelLayout": ["slots": ["left": ["tasks"]], "widths": ["left": 300]],
         ])
         XCTAssertEqual(state.panelLayout?.visibleSlots, [.right])
-        XCTAssertEqual(state.panelLayout?.items(in: .left), [.sessions])
+        XCTAssertEqual(state.panelLayout?.items(in: .left), [.tasks])
         XCTAssertEqual(state.panelLayout?.width(for: .left), 300)
         XCTAssertEqual(
             state.panelLayout?.items(in: .right),
@@ -65,10 +65,10 @@ final class PanelLayoutPersistenceTests: XCTestCase {
 
     func testUnknownSlotAndItemNamesAreIgnored() {
         let state = decode([
-            "panelLayout": ["slots": ["left": ["sessions", 42], "ufo": ["x"]], "widths": ["ufo": 100]],
+            "panelLayout": ["slots": ["left": ["tasks", 42], "ufo": ["x"]], "widths": ["ufo": 100]],
             "visibleSlots": ["left", "ufo"],
         ])
-        XCTAssertEqual(state.panelLayout?.items(in: .left), [.sessions], "string olmayan id atlanır")
+        XCTAssertEqual(state.panelLayout?.items(in: .left), [.tasks], "string olmayan id atlanır")
         XCTAssertEqual(state.panelLayout?.visibleSlots, [.left], "bilinmeyen yuva adı atlanır")
     }
 

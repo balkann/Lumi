@@ -2,21 +2,28 @@ import LumiKit
 import SwiftUI
 
 /// Kabuğun KENDİ toolbar öğeleri (Faz 6.4/6.6) — bir feature'a ait olmayanlar:
-/// panel yuvası toggle'ları, logo, repo tab şeridi, focus mode ve settings.
+/// panel yuvası toggle'ları, logo, focus mode ve settings.
 ///
 /// Descriptor'ların **kümesi** composition root'ta kaydedilir
 /// (`ShellComposition`); burada üretim fabrikası durur ki "panel toggle'ları
 /// `PanelSlot.allCases`'ten türer" kuralı view render etmeden test edilebilsin.
+///
+/// Karar 55: repo tab şeridi top bar'dan kalktı — projeler ve checkout'lar
+/// yalnız sol paneldeki Projects panelinden gezilir.
 public enum ShellToolbarItems {
     /// Bölge içi sıralar. Aralıklı numaralar: bir feature araya öğe
     /// sokabilsin diye (yeni öğe = yeni sayı, mevcutlar kaymaz).
     public enum Order {
-        public static let panelToggleLeading = 0
-        public static let logo = 10
-        public static let repoTabs = 20
+        public static let logo = 0
+        /// Karar 55: sol panel toggle'ı logo + ürün adının ARDINDA durur
+        /// (traffic light → logo → toggle).
+        public static let panelToggleLeading = 10
 
         public static let gridSettings = 0
         public static let newTerminal = 10
+        /// Repo-dışı bir route'un kendi başlığı (karar 55) — grid/CTA o
+        /// route'ta zaten görünmez, yani sıra çakışmaz.
+        public static let routeTitle = 20
 
         /// Usage göstergeleri en solda: `AgentProvider.allCases` sırasında,
         /// sağlayıcı başına 10 adım.
@@ -96,12 +103,6 @@ public enum ShellToolbarItems {
                 region: .leading,
                 order: Order.logo,
                 makeView: { AnyView(LogoToolbarItem()) }
-            ),
-            ToolbarItemDescriptor(
-                id: .repoTabs,
-                region: .leading,
-                order: Order.repoTabs,
-                makeView: { AnyView(RepoTabStrip()) }
             ),
             ToolbarItemDescriptor(
                 id: .focusMode,

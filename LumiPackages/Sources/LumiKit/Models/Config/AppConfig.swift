@@ -49,6 +49,18 @@ public struct AppConfig: Sendable, Equatable {
     /// ⌃1…⌃9 / ⌘1…⌘9 indeksli kısayolların hangi eksene bağlandığı (karar 62).
     /// Additive (karar 9): yoksa/geçersizse karar 59 düzeni (`repoOnControl`).
     public var indexShortcutStyle: IndexShortcutStyle
+    /// Terminalde bir link/path'e DÜZ tıklayınca eylem popover'ının açılması
+    /// (karar 57). Kapalıyken düz tık terminale aittir (seçim/caret) ve link
+    /// yalnız ⌘ / ⇧⌘ ile açılır. Additive (karar 9): yoksa açık.
+    public var terminalLinkActionsEnabled: Bool
+    /// Lumi'nin yönettiği Claude hesapları (karar 56). Kimlik bilgisi taşımaz —
+    /// yalnız kimlik kartı. Additive (karar 9): yoksa boş.
+    public var claudeAccounts: [ClaudeAccount]
+    /// Hangi Claude hesabının `~/.claude` yüzeyine materialize edildiği
+    /// (karar 56). Additive (karar 9): yoksa `systemDefault`.
+    public var claudeAccountSelection: ClaudeAccountSelection
+    /// Hangi Claude hesabının `~/.claude` yüzeyine materialize edildiği
+    /// (karar 56). Additive (karar 9): yoksa `systemDefault`.
     public var workspaces: [ProjectWorkspace]
 
     /// Terminal font boyutu için geçerli aralık — doğrulamanın TEK tanımı
@@ -79,6 +91,9 @@ public struct AppConfig: Sendable, Equatable {
         computerAwakeMode: .default,
         agentHooksEnabled: true,
         indexShortcutStyle: .default,
+        terminalLinkActionsEnabled: true,
+        claudeAccounts: [],
+        claudeAccountSelection: .systemDefault,
         workspaces: [],
         sidebarProjectPaths: []
     )
@@ -100,6 +115,9 @@ public struct AppConfig: Sendable, Equatable {
         computerAwakeMode: ComputerAwakeMode = .default,
         agentHooksEnabled: Bool = true,
         indexShortcutStyle: IndexShortcutStyle = .default,
+        terminalLinkActionsEnabled: Bool = true,
+        claudeAccounts: [ClaudeAccount] = [],
+        claudeAccountSelection: ClaudeAccountSelection = .systemDefault,
         workspaces: [ProjectWorkspace] = [],
         sidebarProjectPaths: [String] = []
     ) {
@@ -120,6 +138,9 @@ public struct AppConfig: Sendable, Equatable {
         self.computerAwakeMode = computerAwakeMode
         self.agentHooksEnabled = agentHooksEnabled
         self.indexShortcutStyle = indexShortcutStyle
+        self.terminalLinkActionsEnabled = terminalLinkActionsEnabled
+        self.claudeAccounts = claudeAccounts
+        self.claudeAccountSelection = claudeAccountSelection
         self.workspaces = workspaces
     }
 }

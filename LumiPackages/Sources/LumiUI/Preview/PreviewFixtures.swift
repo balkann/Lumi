@@ -53,6 +53,15 @@ public extension ShellContext {
             ),
             usage: [:],
             deepSeek: DeepSeekStore(service: PreviewDeepSeekEnvironmentService(), toasts: shared.toasts),
+            claudeAccounts: ClaudeAccountStore(
+                service: PreviewClaudeAccountService(), toasts: shared.toasts
+            ),
+            terminalLinks: TerminalLinkActionStore(
+                terminals: shared.terminals, repos: repos,
+                workspaces: ProjectWorkspaceStore(
+                    service: PreviewWorkspaceService(), config: config, repos: repos, toasts: shared.toasts
+                )
+            ),
             computerAwake: ComputerAwakeStore(
                 terminals: shared.terminals, settings: shared.settings, assertion: PreviewSleepAssertion()
             ),
@@ -98,6 +107,9 @@ private actor PreviewWorkspaceService: WorkspaceServicing {
     func inspect(project: Repo) async throws -> WorkspaceSource {
         WorkspaceSource(projectPath: project.path, scm: .git, branch: "main", revision: "abc123",
                         destinationDirectory: "/Users/preview/lumi/workspaces/\(project.name)")
+    }
+    func branches(project: Repo, limit: Int) async throws -> [WorkspaceBranch] {
+        [WorkspaceBranch(name: "main"), WorkspaceBranch(name: "feature/preview")]
     }
     func create(_ request: WorkspaceCreateRequest) async throws -> WorkspaceCreateResult {
         throw WorkspaceFailure("Creation is unavailable in previews.")
@@ -162,6 +174,7 @@ private final class PreviewTerminalService: TerminalServicing {
     func shutdown() {}
     func applyFont(_ font: NSFont) {}
     func applyCursor(shape: TerminalCursorShape, blink: Bool) {}
+    func applyLinkActions(enabled: Bool) {}
 }
 
 @MainActor
@@ -170,6 +183,34 @@ private final class PreviewSleepAssertion: SleepAsserting {
     func setPreventingSleep(_ prevent: Bool, reason: String) -> Bool {
         isPreventingSleep = prevent
         return true
+    }
+}
+
+/// İki hesaplı, ikincisi aktif bir liste — Settings ▸ Accounts önizlemesi
+/// boş görünmesin (karar 56).
+private struct PreviewClaudeAccountService: ClaudeAccountServicing {
+    private static let snapshot = ClaudeAccountsSnapshot(
+        accounts: [
+            ClaudeAccount(
+                id: "personal", email: "dev@example.com", organizationName: "Personal",
+                createdAt: .distantPast, updatedAt: .distantPast, lastAuthenticatedAt: .distantPast
+            ),
+            ClaudeAccount(
+                id: "work", email: "dev@company.com", organizationName: "Company",
+                createdAt: .distantPast, updatedAt: .distantPast, lastAuthenticatedAt: .distantPast
+            ),
+        ],
+        selection: .account("work")
+    )
+
+    func accounts() async -> ClaudeAccountsSnapshot { Self.snapshot }
+    func syncActiveSelection() async {}
+    func addAccount() async throws -> ClaudeAccountsSnapshot { Self.snapshot }
+    func cancelPendingLogin() async {}
+    func reauthenticate(accountID: String) async throws -> ClaudeAccountsSnapshot { Self.snapshot }
+    func removeAccount(accountID: String) async throws -> ClaudeAccountsSnapshot { Self.snapshot }
+    func select(_ selection: ClaudeAccountSelection) async throws -> ClaudeAccountsSnapshot {
+        ClaudeAccountsSnapshot(accounts: Self.snapshot.accounts, selection: selection)
     }
 }
 
@@ -402,6 +443,18 @@ public extension UsageStore {
     }
 }
 
+public extension ClaudeAccountStore {
+    /// İki hesaplı, ikincisi aktif bir store (karar 56 preview'ları).
+    @MainActor
+    static var preview: ClaudeAccountStore {
+        let store = ClaudeAccountStore(
+            service: PreviewClaudeAccountService(), toasts: ToastStore()
+        )
+        Task { await store.load() }
+        return store
+    }
+}
+
 public extension RepoStore.RepoGroup {
     /// İki gruplu örnek repo listesi (dropdown preview'ı).
     static var previewGroups: [RepoStore.RepoGroup] {
@@ -433,6 +486,7 @@ private struct PreviewSessionStarterService: SessionStarterServicing {
 private struct PreviewSystemService: SystemServicing {
     func runChecks(selectedProvider: AgentProvider) async -> [SystemCheckResult] { [] }
     func fixProcessPath() async {}
+    func openWithDefaultApp(path: String) {}
     func openExternal(_ url: URL) throws {}
     func trash(path: String) async throws {}
     func revealInFinder(path: String) {}

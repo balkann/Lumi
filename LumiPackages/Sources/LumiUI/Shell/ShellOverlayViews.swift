@@ -29,6 +29,33 @@ public struct FileViewerOverlay: View {
     }
 }
 
+/// Repo seçici (karar 55). Eskiden top bar tab şeridindeki (+) butonunun
+/// popover'ıydı; şerit kalkınca modal overlay'e taşındı. Seçim aktif tab'ı
+/// açar, açık tab'lar listede gizlenir.
+public struct RepoSelectorOverlay: View {
+    @Shell private var shell
+
+    public init() {}
+
+    public var body: some View {
+        ModalOverlay(onDismiss: { shell.dialogs.isRepoSelectorOpen = false }) {
+            Panel(variant: .modal) {
+                RepoSelectorView(
+                    groups: shell.repos.groupedRepos,
+                    excludedRepoPaths: Set(shell.navigation.openTabs),
+                    collapsedGroups: Binding(
+                        get: { shell.dialogs.collapsedRepoGroups },
+                        set: { shell.dialogs.collapsedRepoGroups = $0 }
+                    )
+                ) { repo in
+                    shell.dialogs.isRepoSelectorOpen = false
+                    shell.navigation.openTab(repo.path)
+                }
+            }
+        }
+    }
+}
+
 public struct SettingsOverlay: View {
     public init() {}
 

@@ -15,6 +15,10 @@ public struct LumiPaths: Sendable {
 
     public var configFile: URL { configDir.appendingPathComponent("config.json") }
     public var uiStateFile: URL { configDir.appendingPathComponent("ui-state.json") }
+    /// Yönetilen Claude hesaplarının auth kökü (karar 56). Hesap başına
+    /// `<id>/auth/` altında yalnız `oauth-account.json` durur; token'lar
+    /// Keychain'dedir.
+    public var claudeAccountsDir: URL { configDir.appendingPathComponent("claude-accounts") }
 
     public init(
         mode: Mode,

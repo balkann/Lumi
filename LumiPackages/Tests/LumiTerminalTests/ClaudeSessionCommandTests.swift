@@ -82,6 +82,38 @@ final class ClaudeSessionCommandTests: XCTestCase {
         XCTAssertEqual(result.sessionID, "aaaabbbb-cccc-dddd-eeee-ffff00001111")
     }
 
+    /// Agent History'nin "Resume Session" eylemi ID'yi tek tırnakla gönderir;
+    /// tırnak yüzünden ID çıkarılamazsa terminal çıkışta persist edilmez ve
+    /// resume edilen sohbet bir sonraki açılışta geri gelmez.
+    func testExtractsIDFromSingleQuotedResumeFlag() {
+        let command = "claude --resume 'aaaabbbb-cccc-dddd-eeee-ffff00001111'"
+
+        let result = prepare(command)
+
+        XCTAssertEqual(result.command, command)
+        XCTAssertEqual(result.sessionID, "aaaabbbb-cccc-dddd-eeee-ffff00001111")
+    }
+
+    func testExtractsIDFromDoubleQuotedResumeFlag() {
+        let command = "claude --resume \"aaaabbbb-cccc-dddd-eeee-ffff00001111\" || claude"
+
+        let result = prepare(command)
+
+        XCTAssertEqual(result.command, command)
+        XCTAssertEqual(result.sessionID, "aaaabbbb-cccc-dddd-eeee-ffff00001111")
+    }
+
+    /// Tırnaklar eşleşmiyorsa ID güvenilmezdir: komut yine de dokunulmadan
+    /// geçer (oturum flag'i var), ama ID uydurulmaz.
+    func testMismatchedQuotesYieldNoSessionID() {
+        let command = "claude --resume 'aaaabbbb-cccc-dddd-eeee-ffff00001111\""
+
+        let result = prepare(command)
+
+        XCTAssertEqual(result.command, command)
+        XCTAssertNil(result.sessionID)
+    }
+
     func testContinueFlagLeavesCommandUntouchedWithoutID() {
         // -c/--continue oturumu CWD'den seçer; ID bilinemez → enjeksiyon da yapılmaz
         let result = prepare("claude -c")

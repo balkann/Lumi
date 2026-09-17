@@ -72,7 +72,11 @@ struct LumiToggleRow<Trailing: View>: View {
                     Text(hint)
                         .font(Theme.Typography.labelMono)
                         .foregroundStyle(Theme.textMuted)
+                        // Bkz. `LumiSectionTitle`: sarma genişliği yuvarlanınca
+                        // son harf alt satıra düşmesin.
+                        .fixedSize(horizontal: false, vertical: true)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 Spacer(minLength: 0)
                 LumiToggleSwitch(isOn: $isOn, label: title)
             }
