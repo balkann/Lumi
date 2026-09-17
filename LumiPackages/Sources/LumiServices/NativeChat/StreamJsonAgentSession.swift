@@ -1,6 +1,5 @@
 import Foundation
 import LumiKit
-import LumiWire
 
 /// Bir chat oturumu: claude'u stream-json child olarak çalıştırır, çıktısını
 /// journal'a katlar, kullanıcı mesajını stdin'e yazar (spec §D). PTY yok.
@@ -15,6 +14,7 @@ public actor StreamJsonAgentSession {
     private var handle: (any StreamingProcessHandle)?
     private var readTask: Task<Void, Never>?
     private var snapshotContinuations: [AsyncStream<ChatJournalState>.Continuation] = []
+    private var finished = false
 
     public init(sessionID: String, repoPath: String, environment: [String: String],
                 spawner: any StreamingProcessSpawning, binaryLocator: any BinaryLocating) {
@@ -36,6 +36,7 @@ public actor StreamJsonAgentSession {
         readTask = Task { [weak self] in
             guard let self else { return }
             for await line in h.lines {
+                if Task.isCancelled { break }
                 await self.ingest(line)
             }
             await self.finishSnapshots()
@@ -50,6 +51,7 @@ public actor StreamJsonAgentSession {
     private func finishSnapshots() {
         for c in snapshotContinuations { c.finish() }
         snapshotContinuations.removeAll()
+        finished = true
     }
 
     public func send(_ text: String) async {
@@ -63,7 +65,11 @@ public actor StreamJsonAgentSession {
     public func snapshots() -> AsyncStream<ChatJournalState> {
         AsyncStream { continuation in
             continuation.yield(journal.state)   // mevcut durum
-            snapshotContinuations.append(continuation)
+            if finished {
+                continuation.finish()
+            } else {
+                snapshotContinuations.append(continuation)
+            }
         }
     }
 
