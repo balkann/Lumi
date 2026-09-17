@@ -62,6 +62,10 @@ enum UIStateCodec {
         if let raw = dict["lastCheckouts"] as? [String: Any] {
             state.lastCheckouts = raw.compactMapValues { $0 as? String }
         }
+        // karar 72 (additive): sağ panelin seçili sekmesi. Yoksa nil → Explorer.
+        if let raw = dict["projectToolsTab"] as? String {
+            state.projectToolsTab = raw
+        }
         return state
     }
 
@@ -109,6 +113,11 @@ enum UIStateCodec {
         // Karar 65 (additive): yalnız DOLU iken yazılır.
         if !state.lastCheckouts.isEmpty {
             overlay["lastCheckouts"] = state.lastCheckouts
+        }
+        // karar 72 (additive): yalnız DOLU iken yazılır — varsayılan sekmede
+        // eski dosyalarda olmayan bir anahtar üretilmez (karar 9).
+        if let tab = state.projectToolsTab {
+            overlay["projectToolsTab"] = tab
         }
         // legacyGridColumns YAZILMAZ: yalnız okuma yönlü migration girdisi;
         // ham `gridColumns` anahtarı merge'le diskte aynen kalır.

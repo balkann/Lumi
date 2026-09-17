@@ -222,7 +222,8 @@ final class ConfigCodecIntegrityTests: XCTestCase {
         legacyGridColumns: nil,
         uiScale: 1.25,
         uiFontFamily: .jetBrainsMono,
-        lastCheckouts: ["/r/alpha": "/r/alpha/wt"]
+        lastCheckouts: ["/r/alpha": "/r/alpha/wt"],
+        projectToolsTab: "agentHistory"
     )
 }
 

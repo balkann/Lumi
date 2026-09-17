@@ -667,3 +667,17 @@ Not: karar 69 (hover'ın imleç yoklamasına dayanması) geçerliliğini korur �
 
 - **Sınırlar.** `ShellComposition.registerPanelRevealOverlay`, `PanelRevealOverlay.init(registries:)`. `LayoutStore`, `PanelLayout`, `ui-state` biçimi, `OverlayRegistry` ve hover sensörü değişmedi.
 
+### 72. Sağ panelin seçili sekmesi yerleşim durumudur (2026-09-17)
+
+Kullanıcı şikâyeti: sağ panelde Source Control sekmesine geçiliyor, panel kapatılıp açılınca yine Explorer açılıyor.
+
+Sebep: seçim `ProjectToolsPanel`'in `@State`'indeydi. Panel gizlenince (ya da kenar hover'ıyla açılan geçici panel kapanınca) view yok oluyor, SwiftUI state'i de onunla gidiyordu — panel "sıfırdan" kuruluyordu. Auto-reveal çalışır hâle gelince (karar 71) bu her hover'da tekrarlanır oldu.
+
+Karar: seçim `LayoutStore.projectToolsTab`'a taşındı — yuva görünürlüğü/genişliği gibi yerleşim durumudur — ve `ui-state.json`'a **additive** `projectToolsTab` anahtarıyla iner (karar 9: varsayılan sekmede anahtar hiç yazılmaz, bilinmeyen değer okumada Explorer'a düşer). Böylece sekme uygulama yeniden başlatıldığında da korunur.
+
+Sekmenin var olup olmadığı yine bağlamdan türer: kayıtlı sekme o projede yoksa (Source Control'süz proje) panel Explorer gösterir; bu türetme view'da yapılır, kayıtlı tercih SİLİNMEZ — Git'li bir projeye dönünce Source Control geri gelir. Eski `onChange` düzeltmeleri (sekmeyi zorla Explorer'a çeken iki `onChange`) bu türetme sayesinde kaldırıldı.
+
+Anahtar ham `String` olarak yazılır: `ProjectToolsTab` LumiState'te tanımlı, `UIState` ise LumiKit'te — modül yönü bozulmadı.
+
+- **Sınırlar.** `UIState.projectToolsTab` + `UIStateCodec`, `LayoutStore.projectToolsTab`/`setProjectToolsTab`, `ProjectToolsPanel`. Sekmelerin kendi içerikleri ve `PanelLayout` değişmedi.
+

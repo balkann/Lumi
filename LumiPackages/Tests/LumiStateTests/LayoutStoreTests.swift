@@ -146,6 +146,39 @@ final class LayoutStoreTests: XCTestCase {
         XCTAssertNil(written.uiFontFamily, "varsayılan yüzde anahtar yazılmamalı")
     }
 
+    // MARK: - Sağ panel sekmesi (karar 72)
+
+    /// Seçim view'ın `@State`'indeyken panel her kapanışta Explorer'a
+    /// dönüyordu; artık yerleşim durumudur ve yeniden yüklenince korunur.
+    func testProjectToolsTabLoadsAndDefaultsToExplorer() {
+        var state = WorkspaceFixtures.uiState()
+        state.projectToolsTab = nil
+        store.load(state: state, openTabs: [])
+        XCTAssertEqual(store.projectToolsTab, .explorer)
+
+        state.projectToolsTab = "sourceControl"
+        store.load(state: state, openTabs: [])
+        XCTAssertEqual(store.projectToolsTab, .sourceControl)
+
+        // Bilinmeyen değer varsayılana iner (karar 9: okuma asla düşmez).
+        state.projectToolsTab = "yokBoyleSekme"
+        store.load(state: state, openTabs: [])
+        XCTAssertEqual(store.projectToolsTab, .explorer)
+    }
+
+    /// Karar 9: varsayılan sekmede additive anahtar diske YAZILMAZ.
+    func testProjectToolsTabPersistsOnlyWhenNotExplorer() async throws {
+        store.setProjectToolsTab(.agentHistory)
+        try await waitForPersist()
+        var written = await config.uiState()
+        XCTAssertEqual(written.projectToolsTab, "agentHistory")
+
+        store.setProjectToolsTab(.explorer)
+        try await waitForPersist(minimumCount: 2)
+        written = await config.uiState()
+        XCTAssertNil(written.projectToolsTab, "varsayılan sekmede anahtar yazılmamalı")
+    }
+
     // MARK: - Yükleme / migration
 
     func testLoadAppliesSidebarsAndLayouts() {

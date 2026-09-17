@@ -17,17 +17,21 @@ public struct LayoutSnapshot: Equatable, Sendable {
     /// Karar 63: arayüz yazı tipi. `.system`'de `nil` yazılır (uiScale ile aynı
     /// gerekçe).
     public var uiFontFamily: UIFontFamily?
+    /// karar 72: sağ panelin seçili sekmesi. Varsayılan sekmede `nil` yazılır.
+    public var projectToolsTab: ProjectToolsTab?
 
     public init(
         panelLayout: PanelLayout,
         projectGridLayouts: [String: GridLayout],
         uiScale: Double? = nil,
-        uiFontFamily: UIFontFamily? = nil
+        uiFontFamily: UIFontFamily? = nil,
+        projectToolsTab: ProjectToolsTab? = nil
     ) {
         self.panelLayout = panelLayout
         self.projectGridLayouts = projectGridLayouts
         self.uiScale = uiScale
         self.uiFontFamily = uiFontFamily
+        self.projectToolsTab = projectToolsTab
     }
 
     /// Karar 9 projeksiyonu — eski bool alanı.
@@ -72,6 +76,12 @@ public final class LayoutStore {
     /// Karar 63: arayüz yazı tipi (Settings ▸ Appearance). Varsayılan `.system`
     /// = SF Mono, yani karar 63 öncesi davranış.
     public private(set) var uiFontFamily: UIFontFamily = .system
+
+    /// karar 72: sağ panelin (Project Tools) seçili sekmesi. Seçim view'ın
+    /// `@State`'indeyken panel her kapanışta — özellikle kenar hover'ıyla
+    /// açılan geçici panelde — Explorer'a dönüyordu; yuvanın kendisi gibi
+    /// yerleşim durumudur ve `ui-state`'e iner.
+    public private(set) var projectToolsTab: ProjectToolsTab = .explorer
 
     /// Kapalı basamak kümesi — Electron'un çarpansal zoom'u yerine bilinen
     /// değerler: diske yalnız bunlar iner, uçlarda sabitlenir.
@@ -122,6 +132,8 @@ public final class LayoutStore {
         // Karar 63: anahtar yoksa/bozuksa `.system` — eski davranış.
         uiFontFamily = state.uiFontFamily ?? .system
         onUIFontFamilyChanged?(uiFontFamily)
+        // karar 72: anahtar yoksa/bozuksa Explorer.
+        projectToolsTab = state.projectToolsTab.flatMap(ProjectToolsTab.init(rawValue:)) ?? .explorer
         projectGridLayouts = state.projectGridLayouts
         if projectGridLayouts.isEmpty, let legacy = state.legacyGridColumns {
             for tab in openTabs {
@@ -316,8 +328,19 @@ public final class LayoutStore {
             // %100 varsayılanında nil: additive anahtar dosyada görünmez.
             uiScale: uiScale == 1 ? nil : Double(uiScale),
             // `.system` varsayılanında nil: aynı gerekçe.
-            uiFontFamily: uiFontFamily == .system ? nil : uiFontFamily
+            uiFontFamily: uiFontFamily == .system ? nil : uiFontFamily,
+            // Explorer varsayılanında nil: aynı gerekçe.
+            projectToolsTab: projectToolsTab == .explorer ? nil : projectToolsTab
         )
+    }
+
+    // MARK: - Sağ panel sekmesi (karar 72)
+
+    /// Idempotent; yalnız değişimde diske iner.
+    public func setProjectToolsTab(_ tab: ProjectToolsTab) {
+        guard tab != projectToolsTab else { return }
+        projectToolsTab = tab
+        persist()
     }
 
     // MARK: - Arayüz ölçeği (karar 61)
@@ -374,6 +397,7 @@ public final class LayoutStore {
                 state.projectGridLayouts = snapshot.projectGridLayouts
                 state.uiScale = snapshot.uiScale
                 state.uiFontFamily = snapshot.uiFontFamily
+                state.projectToolsTab = snapshot.projectToolsTab?.rawValue
             }
         }
     }
