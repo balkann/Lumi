@@ -152,10 +152,18 @@ public enum TerminalLinkResolver {
     }
 
     /// `.`/`..` sadeleştirmesi + sondaki `/` temizliği. Sembolik link ÇÖZÜLMEZ:
-    /// kullanıcıya gösterilen yol, terminalde yazan yolla aynı kalmalı.
+    /// kullanıcıya gösterilen yol, terminalde yazan yolla aynı kalmalı —
+    /// `standardizingPath`'in var olan `/private/...` yollarından `/private`'ı
+    /// atması da bu yüzden geri alınır (Claude'un yazdığı `/private/tmp/...`
+    /// yolları popover başlığında kısalıyordu).
     private static func standardized(_ path: String) -> String {
-        let standardized = (path as NSString).standardizingPath
+        var standardized = (path as NSString).standardizingPath
+        if path.hasPrefix(privatePrefix), !standardized.hasPrefix(privatePrefix) {
+            standardized = privatePrefix.dropLast() + standardized
+        }
         guard standardized.count > 1, standardized.hasSuffix("/") else { return standardized }
         return String(standardized.dropLast())
     }
+
+    private static let privatePrefix = "/private/"
 }

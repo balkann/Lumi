@@ -4,12 +4,13 @@ import LumiKit
 
 /// `context:delete-file` / `reveal-in-file-manager` karşılıkları.
 ///
-/// **Path guard (design/02 §8 sapmasının kapatılması, refactor 3.9):** çöpe
-/// atma ve Finder'da gösterme yalnız BİLİNEN köklerin (projectsRoot +
-/// additionalPaths) altındaki path'lerde çalışır. Guard `RepoPathGuard` ile
+/// **Path guard (design/02 §8 sapmasının kapatılması, refactor 3.9; daralt:
+/// karar 67):** yalnız ÇÖPE ATMA bilinen köklere (projectsRoot +
+/// additionalPaths + workspaces) kapalıdır. Guard `RepoPathGuard` ile
 /// paylaşılır (git tarafıyla tek kural). Kök listesi boşsa (henüz
-/// yapılandırılmamış ilk açılış) ev dizinine düşülür — aksi halde tüm
-/// operasyonlar sessizce kilitlenirdi.
+/// yapılandırılmamış ilk açılış) ev dizinine düşülür — aksi halde silme
+/// tamamen kilitlenirdi. Finder'da gösterme ve varsayılan uygulamada açma
+/// yıkıcı olmadığı için guard'ın dışındadır.
 public struct FileSystemOperations: Sendable {
     private let allowedRoots: @Sendable () async -> [String]
     private let guardian: RepoPathGuard
@@ -44,27 +45,18 @@ public struct FileSystemOperations: Sendable {
         }
     }
 
-    /// Senkron sözleşme (`SystemServicing.revealInFinder`) korunur; guard
-    /// ihlalinde sessizce no-op + log (kullanıcı akışında bir hata diyaloğu
-    /// yoktur, ama iz bırakılır).
+    /// Kök guard'ı YOKTUR (karar 67): Finder'da gösterme yıkıcı değildir ve
+    /// terminalde tıklanan yol (ör. `/private/tmp/...`) neredeyse hiçbir zaman
+    /// projectsRoot altında olmaz — guard bu eylemi sessizce öldürüyordu.
     public func revealInFinder(path: String) async {
-        do {
-            try await verify(path)
-        } catch {
-            fputs("[lumi-fs] reveal reddedildi (bilinen kök dışı): \(path)\n", stderr)
-            return
-        }
+        guard !path.isEmpty else { return }
         reveal(URL(fileURLWithPath: path))
     }
 
-    /// Karar 57: `reveal` ile aynı sözleşme — guard ihlali sessiz no-op + log.
+    /// Karar 57 + 67: `reveal` ile aynı sözleşme. Çalıştırılabilir türlerin
+    /// elenmesi çağıran katmanda (`TerminalLinkSafety`) kalır.
     public func openWithDefaultApp(path: String) async {
-        do {
-            try await verify(path)
-        } catch {
-            fputs("[lumi-fs] açma reddedildi (bilinen kök dışı): \(path)\n", stderr)
-            return
-        }
+        guard !path.isEmpty else { return }
         openFile(URL(fileURLWithPath: path))
     }
 

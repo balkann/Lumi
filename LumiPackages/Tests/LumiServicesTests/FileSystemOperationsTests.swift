@@ -4,8 +4,8 @@ import XCTest
 
 @testable import LumiServices
 
-/// Refactor 3.9 (design/02 §8 sapmasının kapatılması): trash/reveal artık
-/// bilinen kökler dışında çalışmaz.
+/// Refactor 3.9 (design/02 §8 sapmasının kapatılması) + karar 67: çöpe atma
+/// bilinen kökler dışında çalışmaz; reveal/open guard'ın dışındadır.
 final class FileSystemOperationsTests: XCTestCase {
     private final class Recorder: @unchecked Sendable {
         private let lock = NSLock()
@@ -96,15 +96,17 @@ final class FileSystemOperationsTests: XCTestCase {
         }
     }
 
-    func testRevealIsSilentNoOpOutsideKnownRoots() async {
+    /// Karar 67: Finder'da gösterme kök guard'ının DIŞINDADIR — terminalde
+    /// tıklanan yol (Claude'un `/private/tmp/...` scratchpad'i gibi) neredeyse
+    /// hiçbir zaman projectsRoot altında olmaz.
+    func testRevealWorksOutsideKnownRoots() async {
         let revealed = Recorder()
         let operations = makeOperations(roots: ["/tmp/lumi-roots"], revealed: revealed)
 
-        await operations.revealInFinder(path: "/etc")
-        XCTAssertTrue(revealed.captured.isEmpty)
-
+        await operations.revealInFinder(path: "/private/tmp/claude-502/b_side.png")
         await operations.revealInFinder(path: "/tmp/lumi-roots/a.txt")
-        XCTAssertEqual(revealed.captured.count, 1)
+
+        XCTAssertEqual(revealed.captured.count, 2)
     }
 
     func testEmptyRootListFallsBackToHomeDirectory() async throws {

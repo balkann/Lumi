@@ -100,6 +100,17 @@ final class TerminalLinkResolverTests: XCTestCase {
         )
     }
 
+    /// Karar 67: `standardizingPath` var olan `/private/...` yollarından
+    /// `/private`'ı atıyordu; popover başlığı terminaldeki metinle aynı kalmalı.
+    func testPrivatePrefixIsPreserved() {
+        let path = "/private/tmp/claude-502/scratchpad/b_side.png"
+        XCTAssertEqual(resolve(path, files: [path]), .file(path: path))
+        XCTAssertEqual(
+            resolve("/private/tmp/./claude-502/x/../scratchpad", directories: ["/private/tmp/claude-502/scratchpad"]),
+            .directory(path: "/private/tmp/claude-502/scratchpad")
+        )
+    }
+
     func testEnclosingRootRejectsSiblingPrefixes() {
         XCTAssertNil(TerminalLinkResolver.enclosingRoot(
             of: "/Users/dev/projector/App.swift", in: ["/Users/dev/proj"]

@@ -43,7 +43,7 @@ Tüm servisler tek hata modeli kullanır (Swift'te typed `Result`/`Error`). Mevc
 - Terminal exit'inde çıkış kodu ≠ 0 ve ≠ SIGHUP ise toast ("Terminal exited with code N"); `statusMachine.onExit(code:)` artık gerçekten çağrılır.
 - `PromptQueueStore` enjeksiyon hatasını yutmaz: aynı terminal için **3.** ardışık başarısızlıkta bir kez toast (`injectFailureToastThreshold`) — her denemede basmak kullanıcıyı boğardı.
 - `ConfigService` parse/yazım hatası `ConfigEvent.loadFailed` / `.writeFailed` yayar (yalnız console değil).
-- `FileSystemOperations` (trash/reveal) `RepoPathGuard` ile izinli kök listesine (projectsRoot + additionalPaths, symlink çözülerek) kapatıldı; dışarısı reddedilir ve görünür hata döner.
+- `FileSystemOperations` (trash/reveal) `RepoPathGuard` ile izinli kök listesine (projectsRoot + additionalPaths, symlink çözülerek) kapatıldı; dışarısı reddedilir ve görünür hata döner. **(Karar 67 ile daraltıldı: guard yalnız çöpe atmada geçerlidir; reveal/open guard'ın dışındadır.)**
 
 ### 6. Commit diff lazy-load
 Commit seçilince yalnızca dosya listesi yüklenir; diff içeriği dosyaya tıklanınca alınır. `getCommitDiff`'in N+1 `git show` problemi (`12-git-vcs.md`) tasarımla çözülür; UX değişikliği kabul edildi.
@@ -601,3 +601,15 @@ Karar: hover'ın **tek gerçek kaynağı** doğrulama tik'idir. `PointerPresence
 Maliyet bilinçlidir: tik yalnız auto-reveal'e uygun **gizli** bir yuva varken, yani overlay canlıyken vardır (en fazla iki timer, her biri 0,1 sn'de iki `CGPoint` karşılaştırması). Alternatif — `TerminalEventMonitor`'ın `.mouseMoved` yutmasını SwiftTerm tracking area'sını daraltarak kaldırmak — SwiftTerm iç davranışına bağımlı olduğu için seçilmedi; terminalin alt-buffer fare köprüsü (karar 37/57) aynen kalır.
 
 - **Sınırlar.** `PointerPresence` (LumiUI/Support), `AppearanceSettingsTab` ipucu. `LayoutStore`, `PanelLayout`, `ui-state` biçimi ve `PointerPresenceRule` değişmedi.
+
+### 67. Terminal link eylemlerinde kök guard'ı yalnız çöpe atmada kalır (2026-09-17)
+
+Kullanıcı şikâyeti: terminalde `/private/tmp/...` ile başlayan bir yola tıklayınca popover açılıyor ama hiçbir eylem çalışmıyor.
+
+Sebep `/private` değildi: `FileSystemOperations.revealInFinder` / `openWithDefaultApp`, karar 5'in uygulama notuyla (refactor 3.9) `RepoPathGuard`'a bağlanmıştı ve izinli kök listesi `projectsRoot + additionalPaths + workspaces`'ten ibaretti. Terminalde tıklanan yolların çoğu (Claude'un yazdığı `/private/tmp/claude-*/…` scratchpad dosyaları, `/var/folders/...` geçici çıktıları, sistem log'ları) bu köklerin dışındadır → çağrı reddedilip yalnız stderr'a log düşüyordu. Yani karar 57'nin "kök dışındaki dosya → **Open with default app** / **Open in Finder**" vaadi pratikte hiçbir zaman çalışmıyordu.
+
+Karar: guard **yıkıcı** işleme, yani `trash`'e özeldir. Finder'da gösterme ve varsayılan uygulamada açma guard'ın dışındadır; kullanıcı kendi terminalinde gördüğü bir yola bilerek tıklıyor ve iki eylem de dosyayı değiştirmiyor. Terminalden gelen metnin güvenilmezliğine karşı koruma yerinde kalır: çalıştırılabilir türlerde (`.command`, `.sh`, `.app`…) "Open with default app" hiç önerilmez (`TerminalLinkSafety`, karar 57) ve URL şema whitelist'i değişmedi.
+
+Ek düzeltme (görsel): `TerminalLinkResolver.standardized` `NSString.standardizingPath` kullanıyor; bu API var olan `/private/...` yollarından `/private`'ı atıyor ve popover başlığı terminalde yazan metinden farklı çıkıyordu. Ön ek artık geri konur — "gösterilen yol, terminalde yazan yolla aynı kalmalı" kuralı `/private` için de geçerli. (İşlevsel etkisi yoktu: `RepoPathGuard` iki tarafı da `resolvingSymlinksInPath()` ile eşitliyor.)
+
+- **Sınırlar.** `FileSystemOperations` (guard yalnız `trash`'te), `TerminalLinkResolver.standardized`. `RepoPathGuard`, git tarafı, `LiveServiceRegistry`'nin kök listesi ve karar 57'nin jest/çözümleme tablosu değişmedi.
