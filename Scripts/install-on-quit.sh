@@ -21,6 +21,16 @@
 # Sen sadece ⌘Q yapıp Lumi'yi tekrar açılmış bulursun; oturumların resume edilir.
 set -euo pipefail
 
+# launchd'nin ortamı dardır ve HOME GELMEYEBİLİR; `set -u` ile script daha ilk
+# satırda ölür. Üstelik plist stderr'i bir yere yazmıyorsa bu ölüm SESSİZDİR —
+# agent "kayıtlı ama çalışmıyor" görünür, sebebi hiçbir yerde yazmaz. Yaşandı.
+# Kurulum modu HOME'u plist'e açıkça geçirir (EnvironmentVariables), buradaki
+# yedek de doğrudan passwd kaydından okur.
+if [ -z "${HOME:-}" ]; then
+  HOME="$(/usr/bin/dscl . -read "/Users/$(/usr/bin/id -un)" NFSHomeDirectory 2>/dev/null | /usr/bin/awk '{print $2}')"
+  export HOME
+fi
+
 LABEL="com.lumi.install-once"
 STATE_DIR="$HOME/.lumi-installer"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
@@ -94,7 +104,8 @@ if [ "${1:-}" = "--watch" ]; then
     echo "$(date) KURULUM BAŞARISIZ"
   fi
 
-  echo "$(date) izleyici bitiyor, LaunchAgent kaldırılıyor"
+  echo "$(date) izleyici bitiyor, sahne ve LaunchAgent kaldırılıyor"
+  rm -rf "$STATE_DIR/pending"
   unload_agent
   exit 0
 fi
@@ -106,6 +117,7 @@ for arg in "$@"; do
     --skip-build) SKIP_BUILD=1 ;;
     --cancel)
       unload_agent
+      rm -rf "$STATE_DIR/pending"
       echo "✓ Bekleyen izleyici iptal edildi (kurulum yapılmadı)."
       exit 0
       ;;
@@ -134,6 +146,23 @@ mkdir -p "$STATE_DIR" "$HOME/Library/LaunchAgents"
 # Önceki bir bekleyiş varsa değiştir (idempotent).
 unload_agent
 
+# SAHNELEME — repo Desktop/Documents/Downloads gibi TCC korumalı bir dizinde
+# olabilir ve launchd oradan OKUYAMAZ ("Operation not permitted"; yaşandı,
+# hata yalnız StandardErrorPath sayesinde görünür oldu). Bu yüzden hem
+# izleyici script'i hem de kurulacak bundle, KULLANICI olarak (erişimi var)
+# korumasız `~/.lumi-installer` altına kopyalanır; agent yalnız oraya bakar.
+#
+# Yan faydası: bekleme sürerken repo'da build alman, dal değiştirmen ya da
+# klasörü taşıman kurulacak sürümü DEĞİŞTİRMEZ — ne sahnelendiyse o kurulur.
+WATCHER="$STATE_DIR/watch-and-install.sh"
+STAGED="$STATE_DIR/pending/Lumi.app"
+
+cp "$SELF" "$WATCHER"
+chmod +x "$WATCHER"
+rm -rf "$STATE_DIR/pending"
+mkdir -p "$STATE_DIR/pending"
+ditto "$SRC" "$STAGED"
+
 cat > "$PLIST" <<PLIST_EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -144,14 +173,27 @@ cat > "$PLIST" <<PLIST_EOF
   <key>ProgramArguments</key>
   <array>
     <string>/bin/bash</string>
-    <string>$SELF</string>
+    <string>$WATCHER</string>
     <string>--watch</string>
-    <string>$SRC</string>
+    <string>$STAGED</string>
   </array>
   <key>RunAtLoad</key>
   <true/>
   <key>KeepAlive</key>
   <false/>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key>
+    <string>$HOME</string>
+    <key>PATH</key>
+    <string>/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+  <!-- İzleyici kendi log'unu `exec` ile açar, ama O SATIRA VARAMADAN ölürse
+       (ör. eksik değişken) hata hiçbir yere düşmezdi. Bunlar o boşluğu kapatır. -->
+  <key>StandardOutPath</key>
+  <string>$STATE_DIR/launchd.log</string>
+  <key>StandardErrorPath</key>
+  <string>$STATE_DIR/launchd.log</string>
 </dict>
 </plist>
 PLIST_EOF
@@ -160,11 +202,29 @@ plutil -lint "$PLIST" >/dev/null
 launchctl bootstrap "gui/$(id -u)" "$PLIST"
 
 # "Kuruldu" varsayma, ÖLÇ: agent gerçekten koşuyor mu?
-# Burada da pipe YOK — yukarıdaki SIGPIPE tuzağı `launchctl print | grep -q`
-# için de geçerli (çıktısı uzun) ve doğrulamanın kendisi yanlış negatif verirdi.
-AGENT_STATE="$(launchctl print "gui/$(id -u)/$LABEL" 2>/dev/null || true)"
-case "$AGENT_STATE" in
-  *"state = running"*|*"state = waiting"*)
+#
+# İki incelik:
+#  1. Pipe YOK — `launchctl print | grep -q` kalıbı, yukarıdaki `ps` ile aynı
+#     SIGPIPE tuzağına düşer ve doğrulamanın KENDİSİ yanlış negatif verir.
+#  2. BEKLEMEK gerekir: `bootstrap` döndüğünde launchd job'ı henüz spawn
+#     etmemiş olabilir; hemen bakılırsa "not running" görünür. Yaşandı.
+agent_alive() {
+  local state
+  state="$(launchctl print "gui/$(id -u)/$LABEL" 2>/dev/null || true)"
+  case "$state" in
+    *"state = running"*|*"state = waiting"*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+AGENT_OK=0
+for _ in $(seq 1 25); do
+  if agent_alive; then AGENT_OK=1; break; fi
+  sleep 0.2
+done
+
+case "$AGENT_OK" in
+  1)
     echo "✓ İzleyici hazır — Lumi'den ⌘Q ile çık, kurulum kendiliğinden yapılıp uygulama yeniden açılacak."
     echo "  Günlük: $LOG"
     echo "  İptal : Scripts/install-on-quit.sh --cancel"
