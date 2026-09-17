@@ -143,7 +143,9 @@ public final class ProjectWorkspaceStore {
     /// Dal listesini yükler (karar 58). `selectProject` inceleme biter bitmez
     /// arka planda çağırır; UI'daki ikinci çağrı liste doluysa no-op olur.
     /// Servis kısa süreli önbellekliyor, tekrar çağırmak ucuzdur.
-    public func loadBranches(limit: Int = 20) async {
+    /// `limit = 0` → tüm dallar (karar 58): listede arama olduğu için son N
+    /// ile sınırlamanın anlamı kalmadı.
+    public func loadBranches(limit: Int = 0) async {
         guard !isLoadingBranches, branches.isEmpty,
               let path = selectedProjectPath, let project = repos.repo(at: path) else { return }
         branchGeneration += 1

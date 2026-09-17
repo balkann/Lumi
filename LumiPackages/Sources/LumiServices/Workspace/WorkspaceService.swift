@@ -14,7 +14,10 @@ public actor WorkspaceService: WorkspaceServicing {
     /// aynı dialog içinde her açılışta yeniden sorulmasın.
     private var branchCache: [String: (fetchedAt: Date, branches: [WorkspaceBranch])] = [:]
     public static let branchCacheTTL: TimeInterval = 60
-    public static let defaultBranchLimit = 20
+    /// `0` → sınırsız: tüm dallar çekilir. Ölçüm (word-puzzle, 126 dal):
+    /// tam liste ~2,3 sn, son 20 ~1,6 sn — aradaki fark, listede aranabilmenin
+    /// yanında önemsiz (karar 58).
+    public static let defaultBranchLimit = 0
 
     public init(
         runner: any ProcessRunning = SystemProcessRunner(),
@@ -58,7 +61,7 @@ public actor WorkspaceService: WorkspaceServicing {
     /// Karar 58. Git'te `for-each-ref` (yerel, anlık), Plastic'te `cm find`
     /// (sunucu, ~1.5 sn). Sonuç `branchCacheTTL` boyunca saklanır.
     public func branches(project: Repo, limit: Int = WorkspaceService.defaultBranchLimit) async throws -> [WorkspaceBranch] {
-        let count = max(1, min(limit, 200))
+        let count = limit <= 0 ? 0 : min(limit, Self.branchHardCap)
         let source = try await inspect(project: project)
         let key = "\(source.projectPath)#\(count)"
         if let cached = branchCache[key], Date().timeIntervalSince(cached.fetchedAt) < Self.branchCacheTTL {
@@ -68,7 +71,8 @@ public actor WorkspaceService: WorkspaceServicing {
         switch source.scm {
         case .git:
             let output = try await command("/usr/bin/git", [
-                "for-each-ref", "--sort=-committerdate", "--count=\(count)",
+                "for-each-ref", "--sort=-committerdate",
+            ] + (count > 0 ? ["--count=\(count)"] : []) + [
                 "--format=%(refname:short)", "refs/heads",
             ], at: source.projectPath)
             names = output.split(separator: "\n").map(String.init)
@@ -93,6 +97,9 @@ public actor WorkspaceService: WorkspaceServicing {
     /// ~1.6 sn, ağ yavaşken payı olsun diye 30 sn.
     public static let branchQueryTimeout: TimeInterval = 30
 
+    /// Sınırsız istense bile arayüz sonsuz satır çizmesin.
+    static let branchHardCap = 5000
+
     /// Son changeset'lerden dal çıkarırken taranan changeset sayısı: dal
     /// başına ortalama ~25 changeset düşüyor (word-puzzle ölçümü: 500
     /// changeset → 30 ayrı dal). Sorgunun maliyeti limitten bağımsız (~1,4 sn).
@@ -109,31 +116,37 @@ public actor WorkspaceService: WorkspaceServicing {
     /// dallarını da çekip iki listeyi tarihe göre birleştiriyoruz: aktif
     /// dallar + henüz changeset'i olmayan yeni dallar.
     private func plasticBranches(cm: String, at path: String, count: Int) async throws -> [String] {
-        let scan = min(max(count * Self.changesetScanFactor, Self.changesetScanRange.lowerBound), Self.changesetScanRange.upperBound)
-        async let created = plasticBranchRows(cm: cm, at: path, query: "branches order by date desc limit \(count)", field: "name")
+        let scan = count <= 0
+            ? Self.changesetScanRange.upperBound
+            : min(max(count * Self.changesetScanFactor, Self.changesetScanRange.lowerBound), Self.changesetScanRange.upperBound)
+        let limitClause = count > 0 ? " limit \(count)" : ""
+        async let created = plasticBranchRows(cm: cm, at: path, query: "branches order by date desc\(limitClause)", field: "name")
         async let active = plasticBranchRows(cm: cm, at: path, query: "changesets order by date desc limit \(scan)", field: "branch")
         var latest: [String: String] = [:]
         for (name, date) in try await created + active where latest[name].map({ $0 < date }) ?? true {
             latest[name] = date
         }
-        return latest
+        let ordered = latest
             .sorted { $0.value == $1.value ? $0.key < $1.key : $0.value > $1.value }
-            .prefix(count)
             .map(\.key)
+        return count > 0 ? Array(ordered.prefix(count)) : ordered
     }
 
-    /// `{ad}{tab}{tarih}` satırları. Tarih sıralanabilir olsun diye
-    /// `--dateformat` sabitlenir (yerel biçim makineye göre değişiyor).
+    /// `<tarih>|<ad>` satırları. `{tab}` dal nesnesinde geçerli bir alan
+    /// değil ("The field tab is not valid for the specified object type"),
+    /// bu yüzden ayraç "|"; tarih başa alınır ki İLK "|" ayırsın (dal adında
+    /// "|" bulunabilir, sabit biçimli tarihte bulunamaz). Tarih sıralanabilir
+    /// olsun diye `--dateformat` sabitlenir (yerel biçim makineye göre değişir).
     private func plasticBranchRows(cm: String, at path: String, query: String, field: String) async throws -> [(String, String)] {
         let output = try await command(cm, [
-            "find", query, "--format={\(field)}{tab}{date}",
+            "find", query, "--format={date}|{\(field)}",
             "--dateformat=yyyy-MM-dd HH:mm:ss", "--nototal",
         ], at: path, timeout: Self.branchQueryTimeout)
         return output.split(separator: "\n").compactMap { line in
-            let parts = line.split(separator: "\t", maxSplits: 1).map(String.init)
+            let parts = line.split(separator: "|", maxSplits: 1).map(String.init)
             guard parts.count == 2 else { return nil }
-            let name = parts[0].trimmingCharacters(in: .whitespacesAndNewlines)
-            return name.isEmpty ? nil : (name, parts[1])
+            let name = parts[1].trimmingCharacters(in: .whitespacesAndNewlines)
+            return name.isEmpty ? nil : (name, parts[0])
         }
     }
 

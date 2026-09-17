@@ -126,6 +126,17 @@ final class PlasticWorkspaceCreationTests: XCTestCase {
         XCTAssertEqual(queries.sorted(), ["branches order by date desc limit 3", "changesets order by date desc limit 200"])
     }
 
+    /// Karar 58: limit 0 → tüm dallar, sorguda `limit` cümlesi olmaz.
+    func testUnlimitedBranchListingDropsTheLimitClause() async throws {
+        let runner = PlasticCreationRunner(source: root.appendingPathComponent("source").path)
+        let service = WorkspaceService(runner: runner, locator: FakeBinaryLocator(paths: ["cm": "/fake/cm"]), workspaceRoot: root.appendingPathComponent("workspaces"))
+        let project = Repo(name: "Game", path: root.appendingPathComponent("source").path, isGitRepo: false, source: .standalone)
+        let listed = try await service.branches(project: project, limit: 0)
+        XCTAssertEqual(listed.map(\.name), ["/main/release", "/main/new-idea", "/main/other", "/main"])
+        let queries = await runner.findQueries
+        XCTAssertEqual(queries.sorted(), ["branches order by date desc", "changesets order by date desc limit 2000"])
+    }
+
     func testRejectsQuoteInBranchPathBeforeAnyCommand() async throws {
         let runner = PlasticCreationRunner(source: root.appendingPathComponent("source").path)
         let service = WorkspaceService(runner: runner, locator: FakeBinaryLocator(paths: ["cm": "/fake/cm"]), workspaceRoot: root.appendingPathComponent("workspaces"))
@@ -166,9 +177,9 @@ private actor PlasticCreationRunner: ProcessRunning {
             let query = arguments.count > 1 ? arguments[1] : ""
             findQueries.append(query)
             // Dal OLUŞTURMA tarihleri: /main/release eski ama hâlâ aktif.
-            let created = "/main/new-idea\t2026-09-16 10:00:00\n/main/other\t2026-09-10 10:00:00\n/main/release\t2026-01-01 10:00:00"
+            let created = "2026-09-16 10:00:00|/main/new-idea\n2026-09-10 10:00:00|/main/other\n2026-01-01 10:00:00|/main/release"
             // Son changeset'ler: dalların gerçek aktivite tarihi.
-            let active = "/main/release\t2026-09-17 09:00:00\n/main/other\t2026-09-12 08:00:00\n/main\t2026-09-11 08:00:00"
+            let active = "2026-09-17 09:00:00|/main/release\n2026-09-12 08:00:00|/main/other\n2026-09-11 08:00:00|/main"
             if query.hasPrefix("branches") { return ProcessOutput(exitCode: 0, stdout: created, stderr: "") }
             if query.hasPrefix("changesets order by") { return ProcessOutput(exitCode: 0, stdout: active, stderr: "") }
             return ProcessOutput(exitCode: 0, stdout: "99", stderr: "")

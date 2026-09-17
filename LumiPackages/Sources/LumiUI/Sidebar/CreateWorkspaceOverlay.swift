@@ -192,7 +192,7 @@ public struct CreateWorkspaceOverlay: View {
             case .existing:
                 branchList(placeholder: "Select a branch")
                 LumiTextInput(text: binding(\.existingBranch), placeholder: "or type a branch path")
-                hint("Not in the list? The list shows the \(Self.branchListLimit) most recently updated branches.")
+                hint("The list shows every branch, most recently updated first; type in the field to search.")
             case .new:
                 // Taban önce: yeni dalın adı Plastic'te onun altında oluşur.
                 field("Base branch") {
@@ -201,8 +201,7 @@ public struct CreateWorkspaceOverlay: View {
                         selection: binding(\.baseBranch),
                         placeholder: "Current branch",
                         onOpen: loadBranches,
-                        emptyNote: branchNote,
-                        isLoading: shell.workspaces.isLoadingBranches
+                        emptyNote: branchNote
                     )
                 }
                 field("Branch name") {
@@ -221,7 +220,7 @@ public struct CreateWorkspaceOverlay: View {
         // dallara bakacağını söylüyor ve Plastic sorgusu ~1,5 sn sürüyor.
         .task(id: prefetchKey) {
             guard shell.workspaces.branchMode != .current else { return }
-            await shell.workspaces.loadBranches(limit: Self.branchListLimit)
+            await shell.workspaces.loadBranches()
         }
     }
 
@@ -242,8 +241,7 @@ public struct CreateWorkspaceOverlay: View {
             selection: binding(\.existingBranch),
             placeholder: placeholder,
             onOpen: loadBranches,
-            emptyNote: branchNote,
-            isLoading: shell.workspaces.isLoadingBranches
+            emptyNote: branchNote
         )
     }
 
@@ -280,10 +278,8 @@ public struct CreateWorkspaceOverlay: View {
     }
 
     private func loadBranches() {
-        Task { await shell.workspaces.loadBranches(limit: Self.branchListLimit) }
+        Task { await shell.workspaces.loadBranches() }
     }
-
-    private static let branchListLimit = 20
 
     private func hint(_ text: String) -> some View {
         Text(text)
