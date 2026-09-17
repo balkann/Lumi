@@ -425,3 +425,7 @@ Kullanıcı isteği: kendi Claude/Codex oturumlarını ekip arkadaşlarına gön
 - **Bilinen sınır (kabul edildi):** macOS Mission Control'ün "Switch to Desktop N" varsayılanı da ⌃1…⌃9'dur ve sistem symbolic hotkey'leri `NSMenuItem` kısayollarından ÖNCE yakalanır — Lumi ön plandayken bile. Kullanıcının masaüstü sayısı kadarı (ör. ⌃1–⌃3) Lumi'ye ulaşmayabilir; çözüm yalnız System Settings ▸ Keyboard ▸ Mission Control'den o kısayolları kapatmaktır. Lumi bunu uygulama içinden telafi etmez (CGEventTap + Accessibility izni bilinçli olarak kapsam dışı). Terminal tarafında kayıp yalnız **⌃6**'dır (SwiftTerm `0x1E` = vim `^^`); ⌃1–5, ⌃7–9 SwiftTerm'de zaten hiçbir bayt üretmez.
 - **⌘W Electron paritesine döndü:** aktif terminal varsa onu kapatır; **yoksa aktif repo tab'ını** kapatır (rewrite'ta sessizce hiçbir şey yapıyordu). Tab kapanışı `NavigationStore.requestCloseTab` guard'ından geçer — minimize terminali olan tab onay dialogu açar. Hiç tab da yoksa komut no-op'tur; pencere hiçbir durumda kapanmaz.
 
+### 56. Kişisel build ayarları (2026-09-16)
+
+- **Kişisel build ayarları:** `Scripts/make-app.sh` repo'da kalır (CI `release.yml` hem sürüm doğrulaması hem notarize build için ona bağlıdır), ama varsa `Scripts/make-app.local.sh`'ı source eder ve kurulumdan sonra tanımlıysa `post_install` fonksiyonunu çağırır. Yerel dosya `.gitignore`'dadır; yokken script aynen davranır, CI etkilenmez.
+

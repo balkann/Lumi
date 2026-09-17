@@ -24,3 +24,6 @@ build/
 *.ipa
 dist/
 /.idea
+
+# Kişisel build ayarları — commit edilmez
+Scripts/make-app.local.sh
