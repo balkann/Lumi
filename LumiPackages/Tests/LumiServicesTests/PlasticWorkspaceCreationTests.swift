@@ -118,10 +118,12 @@ final class PlasticWorkspaceCreationTests: XCTestCase {
         let project = Repo(name: "Game", path: root.appendingPathComponent("source").path, isGitRepo: false, source: .standalone)
         let first = try await service.branches(project: project, limit: 3)
         let second = try await service.branches(project: project, limit: 3)
-        XCTAssertEqual(first.map(\.name), ["/main", "/main/release", "/main/other"])
+        // Aktiviteye göre sıralı: eski açılmış ama dün işlenmiş /main/release
+        // başta, henüz changeset'i olmayan yeni dal da listede.
+        XCTAssertEqual(first.map(\.name), ["/main/release", "/main/new-idea", "/main/other"])
         XCTAssertEqual(second, first)
         let queries = await runner.findQueries
-        XCTAssertEqual(queries, ["branches order by date desc limit 3"])
+        XCTAssertEqual(queries.sorted(), ["branches order by date desc limit 3", "changesets order by date desc limit 200"])
     }
 
     func testRejectsQuoteInBranchPathBeforeAnyCommand() async throws {
@@ -161,9 +163,15 @@ private actor PlasticCreationRunner: ProcessRunning {
         case "getworkspacefrompath": return ProcessOutput(exitCode: 0, stdout: "\(source)\tregular\tstatic", stderr: "")
         case "status": return ProcessOutput(exitCode: 0, stdout: "STATUS|42|game|team@cloud", stderr: "")
         case "find":
-            findQueries.append(arguments.count > 1 ? arguments[1] : "")
-            let isBranchList = arguments.dropFirst().first?.hasPrefix("branches") == true
-            return ProcessOutput(exitCode: 0, stdout: isBranchList ? "/main\n/main/release\n/main/other" : "99", stderr: "")
+            let query = arguments.count > 1 ? arguments[1] : ""
+            findQueries.append(query)
+            // Dal OLUŞTURMA tarihleri: /main/release eski ama hâlâ aktif.
+            let created = "/main/new-idea\t2026-09-16 10:00:00\n/main/other\t2026-09-10 10:00:00\n/main/release\t2026-01-01 10:00:00"
+            // Son changeset'ler: dalların gerçek aktivite tarihi.
+            let active = "/main/release\t2026-09-17 09:00:00\n/main/other\t2026-09-12 08:00:00\n/main\t2026-09-11 08:00:00"
+            if query.hasPrefix("branches") { return ProcessOutput(exitCode: 0, stdout: created, stderr: "") }
+            if query.hasPrefix("changesets order by") { return ProcessOutput(exitCode: 0, stdout: active, stderr: "") }
+            return ProcessOutput(exitCode: 0, stdout: "99", stderr: "")
         case "branch", "workspace", "switch":
             mutations.append(Call(args: arguments, cwd: currentDirectory))
             if arguments.first == "workspace", arguments.count >= 4 {

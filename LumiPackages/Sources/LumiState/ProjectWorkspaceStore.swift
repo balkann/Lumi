@@ -127,6 +127,12 @@ public final class ProjectWorkspaceStore {
             // Plastic'te varsayılan mevcut dalda kalmak; Git aynı dalı ikinci
             // worktree'de checkout edemediği için yeni dal açar.
             branchMode = inspected.scm == .plastic ? .current : .new
+            // Karar 58: dal listesi dropdown açılınca değil, SCM belli olur
+            // olmaz arka planda çekilir — Plastic sorgusu ~1,5 sn sürüyor ve
+            // kullanıcı listeye baktığında beklemesin.
+            if inspected.scm != .none {
+                Task { [weak self] in await self?.loadBranches() }
+            }
         } catch {
             guard generation == inspectionGeneration else { return }
             errorMessage = error.localizedDescription
@@ -134,9 +140,9 @@ public final class ProjectWorkspaceStore {
         if generation == inspectionGeneration { isInspecting = false }
     }
 
-    /// Dal listesini tembel yükler (karar 58): Plastic'te sorgu sunucuya gidiyor
-    /// (~1,5 sn), dialog her açıldığında değil kullanıcı listeye baktığında
-    /// koşsun. Servis kısa süreli önbellekliyor, tekrar çağırmak ucuzdur.
+    /// Dal listesini yükler (karar 58). `selectProject` inceleme biter bitmez
+    /// arka planda çağırır; UI'daki ikinci çağrı liste doluysa no-op olur.
+    /// Servis kısa süreli önbellekliyor, tekrar çağırmak ucuzdur.
     public func loadBranches(limit: Int = 20) async {
         guard !isLoadingBranches, branches.isEmpty,
               let path = selectedProjectPath, let project = repos.repo(at: path) else { return }

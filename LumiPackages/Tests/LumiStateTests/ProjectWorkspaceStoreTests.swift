@@ -125,6 +125,19 @@ final class ProjectWorkspaceStoreTests: XCTestCase {
         XCTAssertTrue(store.branches.isEmpty)
     }
 
+    /// Karar 58: liste dropdown'a tıklanınca değil, proje incelenir incelenmez
+    /// çekilir; Plastic sorgusu ~1,5 sn sürüyor ve kullanıcı beklemesin.
+    func testSelectingProjectPrefetchesBranchesWithoutAnExplicitLoad() async {
+        await service.setBranches(.success([WorkspaceBranch(name: "/main")]))
+        await store.selectProject(project)
+        for _ in 0..<50 where store.branches.isEmpty {
+            await Task.yield()
+        }
+        XCTAssertEqual(store.branches.map(\.name), ["/main"])
+        let branchCalls = await service.branchCalls
+        XCTAssertEqual(branchCalls.count, 1)
+    }
+
     func testBranchListFailureIsReportedWithoutBlockingCreation() async {
         await service.setBranches(.failure(WorkspaceFailure("cm unavailable")))
         await store.selectProject(project)

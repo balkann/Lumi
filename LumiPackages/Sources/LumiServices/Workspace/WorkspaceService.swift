@@ -76,11 +76,7 @@ public actor WorkspaceService: WorkspaceServicing {
             guard let cm = await locator.locate("cm") else {
                 throw WorkspaceFailure("Plastic SCM cm CLI is unavailable, so branches cannot be listed.")
             }
-            let output = try await command(cm, [
-                "find", "branches order by date desc limit \(count)",
-                "--format={name}", "--nototal",
-            ], at: source.projectPath, timeout: Self.branchQueryTimeout)
-            names = output.split(separator: "\n").map(String.init)
+            names = try await plasticBranches(cm: cm, at: source.projectPath, count: count)
         case .none:
             names = []
         }
@@ -96,6 +92,50 @@ public actor WorkspaceService: WorkspaceServicing {
     /// `cm find` .NET çalışma zamanını ayağa kaldırıp sunucuya gidiyor; ölçüm
     /// ~1.6 sn, ağ yavaşken payı olsun diye 30 sn.
     public static let branchQueryTimeout: TimeInterval = 30
+
+    /// Son changeset'lerden dal çıkarırken taranan changeset sayısı: dal
+    /// başına ortalama ~25 changeset düşüyor (word-puzzle ölçümü: 500
+    /// changeset → 30 ayrı dal). Sorgunun maliyeti limitten bağımsız (~1,4 sn).
+    static let changesetScanFactor = 25
+    static let changesetScanRange = 200...2000
+
+    /// Plastic dal listesi (karar 58).
+    ///
+    /// `branch` nesnesinin `date` alanı OLUŞTURMA tarihidir ve `order by`
+    /// yalnız `date`/`branchname` kabul ediyor; bu yüzden tek başına
+    /// "son N dal" sorgusu, eski açılmış ama hâlâ işlenen dalları
+    /// (ör. `/main/sand-blocks/release`) kaçırıyordu. Git'teki
+    /// `--sort=-committerdate` semantiğini yakalamak için son changeset'lerin
+    /// dallarını da çekip iki listeyi tarihe göre birleştiriyoruz: aktif
+    /// dallar + henüz changeset'i olmayan yeni dallar.
+    private func plasticBranches(cm: String, at path: String, count: Int) async throws -> [String] {
+        let scan = min(max(count * Self.changesetScanFactor, Self.changesetScanRange.lowerBound), Self.changesetScanRange.upperBound)
+        async let created = plasticBranchRows(cm: cm, at: path, query: "branches order by date desc limit \(count)", field: "name")
+        async let active = plasticBranchRows(cm: cm, at: path, query: "changesets order by date desc limit \(scan)", field: "branch")
+        var latest: [String: String] = [:]
+        for (name, date) in try await created + active where latest[name].map({ $0 < date }) ?? true {
+            latest[name] = date
+        }
+        return latest
+            .sorted { $0.value == $1.value ? $0.key < $1.key : $0.value > $1.value }
+            .prefix(count)
+            .map(\.key)
+    }
+
+    /// `{ad}{tab}{tarih}` satırları. Tarih sıralanabilir olsun diye
+    /// `--dateformat` sabitlenir (yerel biçim makineye göre değişiyor).
+    private func plasticBranchRows(cm: String, at path: String, query: String, field: String) async throws -> [(String, String)] {
+        let output = try await command(cm, [
+            "find", query, "--format={\(field)}{tab}{date}",
+            "--dateformat=yyyy-MM-dd HH:mm:ss", "--nototal",
+        ], at: path, timeout: Self.branchQueryTimeout)
+        return output.split(separator: "\n").compactMap { line in
+            let parts = line.split(separator: "\t", maxSplits: 1).map(String.init)
+            guard parts.count == 2 else { return nil }
+            let name = parts[0].trimmingCharacters(in: .whitespacesAndNewlines)
+            return name.isEmpty ? nil : (name, parts[1])
+        }
+    }
 
     public func create(_ request: WorkspaceCreateRequest) async throws -> WorkspaceCreateResult {
         await acquire()
