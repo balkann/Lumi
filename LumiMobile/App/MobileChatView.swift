@@ -16,54 +16,57 @@ struct MobileChatView: View {
     private var turns: [FoldedTurn] { foldChatMessages(model.chatMessages(sessionId)) }
 
     var body: some View {
-        VStack(spacing: 0) {
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 10) {
-                        if turns.isEmpty {
-                            Text("Sohbet yükleniyor…")
-                                .foregroundStyle(.secondary)
-                                .frame(maxWidth: .infinity)
-                                .padding(.top, 40)
+        GeometryReader { geo in
+            VStack(spacing: 0) {
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 10) {
+                            if turns.isEmpty {
+                                Text("Sohbet yükleniyor…")
+                                    .foregroundStyle(.secondary)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.top, 40)
+                            }
+                            ForEach(turns) { turn in
+                                MobileChatMessageView(turn: turn).id(turn.id)
+                            }
+                            Color.clear.frame(height: 1).id("bottom")
                         }
-                        ForEach(turns) { turn in
-                            MobileChatMessageView(turn: turn).id(turn.id)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                    }
+                    .onChange(of: turns.count) { _, _ in
+                        withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
+                    }
+                }
+                let pending = model.prompts[sessionId]?.last(where: { $0.state == .pending })
+                if chatLiveStripVisible(working: model.turnStatus[sessionId]?.working ?? false,
+                                        hasPendingPrompt: pending != nil,
+                                        hasFeed: model.hasFeed(sessionId)) {
+                    ChatLiveTerminalStrip(model: model, sessionId: sessionId)
+                }
+                if let status = model.turnStatus[sessionId], status.working {
+                    TurnStatusBar(status: status) {
+                        model.sendInput(sessionId, Data([0x03]))
+                    }
+                }
+                if let pending {
+                    MobileChatPromptCard(
+                        prompt: pending,
+                        maxHeight: geo.size.height * 0.45,
+                        onApproval: { optionId in
+                            model.respondPrompt(sessionId, itemId: pending.itemId, revision: pending.revision, optionId: optionId)
+                        },
+                        onQuestion: { selections in
+                            model.respondPromptSelections(sessionId, itemId: pending.itemId, revision: pending.revision, selections: selections)
                         }
-                        Color.clear.frame(height: 1).id("bottom")
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
+                    )
+                    // Her pending prompt için taze @State (seçim/free-text/sending sızmasın);
+                    // art arda farklı prompt'larda bayat seçim/takılı buton olmaz.
+                    .id(pending.itemId)
                 }
-                .onChange(of: turns.count) { _, _ in
-                    withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
-                }
+                composer
             }
-            let pending = model.prompts[sessionId]?.last(where: { $0.state == .pending })
-            if chatLiveStripVisible(working: model.turnStatus[sessionId]?.working ?? false,
-                                    hasPendingPrompt: pending != nil,
-                                    hasFeed: model.hasFeed(sessionId)) {
-                ChatLiveTerminalStrip(model: model, sessionId: sessionId)
-            }
-            if let status = model.turnStatus[sessionId], status.working {
-                TurnStatusBar(status: status) {
-                    model.sendInput(sessionId, Data([0x03]))
-                }
-            }
-            if let pending {
-                MobileChatPromptCard(
-                    prompt: pending,
-                    onApproval: { optionId in
-                        model.respondPrompt(sessionId, itemId: pending.itemId, revision: pending.revision, optionId: optionId)
-                    },
-                    onQuestion: { selections in
-                        model.respondPromptSelections(sessionId, itemId: pending.itemId, revision: pending.revision, selections: selections)
-                    }
-                )
-                // Her pending prompt için taze @State (seçim/free-text/sending sızmasın);
-                // art arda farklı prompt'larda bayat seçim/takılı buton olmaz.
-                .id(pending.itemId)
-            }
-            composer
         }
         .padding(.bottom, keyboard.height)
         .ignoresSafeArea(.keyboard, edges: .bottom)

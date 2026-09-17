@@ -460,11 +460,11 @@ Test yok (saf UI); teslim kriteri iOS build yeşil + mevcut Kit testleri yeşil 
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(maxHeight: UIScreen.main.bounds.height * 0.45)
+            .frame(maxHeight: maxHeight)  // MobileChatView'dan GeometryReader ile gelir (~ekranın %45'i; UIScreen.main deprecated)
             .fixedSize(horizontal: false, vertical: true)
 ```
 
-Notlar: `.fixedSize(horizontal: false, vertical: true)` kısa içerikte kartın gereksiz 45% yer kaplamasını önler (ScrollView içeriği kadar küçülür, sınırı aşınca scroll). Dosyanın başına `import UIKit` gerekmiyor (SwiftUI zaten UIScreen'i getirir; derleme hatası olursa ekle). Padding (`.padding(.horizontal, 12).padding(.vertical, 8)`) ScrollView'ın DIŞINDA, mevcut yerinde kalır. Soru metni (`prompt.title` / `q.question`) hiçbir yerde `lineLimit` almaz; mevcut `detail`'ın `lineLimit(2)`'si korunur.
+Notlar: `.fixedSize(horizontal: false, vertical: true)` kısa içerikte kartın gereksiz 45% yer kaplamasını önler (ScrollView içeriği kadar küçülür, sınırı aşınca scroll). `maxHeight` parametresi `MobileChatView`'daki `GeometryReader`'dan `geo.size.height * 0.45` olarak gelir — `UIScreen.main` iOS 16+ deprecated olduğundan kullanılmaz. Padding (`.padding(.horizontal, 12).padding(.vertical, 8)`) ScrollView'ın DIŞINDA, mevcut yerinde kalır. Soru metni (`prompt.title` / `q.question`) hiçbir yerde `lineLimit` almaz; mevcut `detail`'ın `lineLimit(2)`'si korunur.
 
 - [ ] **Step 3: Build doğrula**
 

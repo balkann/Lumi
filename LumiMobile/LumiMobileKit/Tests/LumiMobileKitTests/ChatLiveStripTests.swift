@@ -43,6 +43,25 @@ final class ChatLiveStripTests: XCTestCase {
         XCTAssertEqual(model.gridRows["s1"], 40)
     }
 
+    func testReplayBufferIsCappedWhileStripUnmounted() async {
+        let (model, _) = makeModel()
+        model.subscribeChat("s1")
+        // Sink bağlı değil (şerit unmount): cap+10 chunk gelir, tampon cap'te kalır
+        // ve EN YENİ chunk'lar korunur (tail-drop değil head-drop).
+        let cap = 2048
+        for i in 0..<(cap + 10) {
+            model.handle(.data(TerminalChunk(sessionId: "s1", seq: i, bytes: Data("\(i)".utf8))))
+        }
+        var got: [TerminalChunk] = []
+        for await chunk in model.terminalStream("s1") {
+            got.append(chunk)
+            if got.count == cap { break }
+        }
+        XCTAssertEqual(got.count, cap)
+        XCTAssertEqual(got.first?.seq, 10)          // en eski 10 düştü
+        XCTAssertEqual(got.last?.seq, cap + 9)      // en yeniler korunmuş
+    }
+
     func testSubscribeChatCleansPreviousSessionFeed() async {
         let (model, _) = makeModel()
         model.subscribeChat("s1")

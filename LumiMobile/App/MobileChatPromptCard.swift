@@ -7,6 +7,7 @@ import LumiWire
 /// toggle+Submit; allowOther free-text. Gruplu çok-soru (questions.count>1) = Faz 3.1 Task 8.
 struct MobileChatPromptCard: View {
     let prompt: ChatPrompt
+    let maxHeight: CGFloat
     let onApproval: (String) -> Void                                   // optionId
     let onQuestion: ([(indices: [Int], other: String?)]) -> Void       // tek soru: [ (indices, other) ]
     @State private var sending = false
@@ -42,7 +43,7 @@ struct MobileChatPromptCard: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(maxHeight: UIScreen.main.bounds.height * 0.45)
+            .frame(maxHeight: maxHeight)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 12).padding(.vertical, 8)
             .background(Color(uiColor: .systemBackground))

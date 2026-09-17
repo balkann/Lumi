@@ -14,13 +14,14 @@ struct ChatLiveTerminalStrip: View {
 
     @State private var buffer = TerminalFeedBuffer()
 
+    private static let lineHeight: CGFloat = UIFont.monospacedSystemFont(
+        ofSize: UIFont.systemFontSize, weight: .regular).lineHeight
+
     /// Grid yüksekliği yaklaşıklaması: rows × mono satır yüksekliği. Birkaç
     /// puntoluk sapma kabul — kırpma alttan hizalı olduğu için içerik kaybolmaz.
     private var gridHeight: CGFloat {
         let rows = model.gridRows[sessionId] ?? 24
-        let lineHeight = UIFont.monospacedSystemFont(
-            ofSize: UIFont.systemFontSize, weight: .regular).lineHeight
-        return max(Self.stripHeight, CGFloat(rows) * lineHeight + 4)
+        return max(Self.stripHeight, CGFloat(rows) * Self.lineHeight + 4)
     }
 
     var body: some View {
@@ -31,7 +32,7 @@ struct ChatLiveTerminalStrip: View {
                 .frame(height: gridHeight)
         }
         .frame(maxWidth: .infinity)
-        .frame(height: Self.stripHeight, alignment: .bottom)
+        .frame(height: Self.stripHeight)
         .clipped()
         .overlay(alignment: .top) { Divider() }
         .overlay(alignment: .bottom) { Divider() }

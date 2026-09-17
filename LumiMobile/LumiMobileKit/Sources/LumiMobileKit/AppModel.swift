@@ -54,6 +54,9 @@ public final class AppModel {
     /// Aktif oturum için, view stream'e bağlanmadan önce gelen chunk'ların replay tamponu.
     /// View `terminalStream` çağırınca önce bunlar sırayla replay edilir, sonra canlı akış.
     private var replayBuffers: [String: [TerminalChunk]] = [:]
+    /// Şerit unmount'ken (sink yok) sınırsız bellek birikimini önler. En eski
+    /// chunk'lar düşer; claude TUI sık full-repaint yaptığı için orta-akış replayı kabul edilir.
+    private static let replayBufferCap = 2048
 
     // MARK: Chat durumu (mode=chat; orca native-chat)
 
@@ -272,7 +275,13 @@ public final class AppModel {
         if let sink = terminalSinks[chunk.sessionId] {
             sink.yield(chunk)
         } else if chunk.sessionId == activeSessionId {
-            replayBuffers[chunk.sessionId, default: []].append(chunk)
+            var buf = replayBuffers[chunk.sessionId, default: []]
+            buf.append(chunk)
+            // Cap: şerit unmount'ken (sink yok) feed sınırsız birikmesin — en eski
+            // chunk düşer. Orta-akıştan replay TUI'de kısa süreli bozuk çizim
+            // yapabilir; claude TUI sık full-repaint yaptığı için kabul edilir.
+            if buf.count > Self.replayBufferCap { buf.removeFirst(buf.count - Self.replayBufferCap) }
+            replayBuffers[chunk.sessionId] = buf
         }
         // Aktif olmayan/abonesiz oturumun chunk'ı düşürülür (istenmeyen veri).
     }
