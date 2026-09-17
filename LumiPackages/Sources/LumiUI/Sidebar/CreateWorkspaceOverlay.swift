@@ -6,7 +6,6 @@ public struct CreateWorkspaceOverlay: View {
     @Shell private var shell
     let projectPath: String?
     @State private var selectedProject: Repo?
-    @State private var isAdvancedExpanded = false
     @State private var formHeight: CGFloat = 1
 
     public init(projectPath: String? = nil) { self.projectPath = projectPath }
@@ -38,7 +37,7 @@ public struct CreateWorkspaceOverlay: View {
                             .onPreferenceChange(WorkspaceFormHeight.self) { height in
                                 Task { @MainActor in formHeight = height }
                             }
-                            .frame(height: min(formHeight, max(100, min(680, geometry.size.height - Theme.Spacing.xxxl * 2) - 180)))
+                            .frame(height: min(formHeight, max(Self.minFormHeight, min(Self.maxFormHeight, geometry.size.height - Theme.Spacing.xxxl * 2) - Self.chromeHeight)))
                         } else {
                             Text("Project is no longer available.")
                                 .font(Theme.Typography.bodyMono)
@@ -57,6 +56,14 @@ public struct CreateWorkspaceOverlay: View {
             }
         }
     }
+
+    /// Modal yüksekliği: form kendi boyunca sığıyorsa scroll yok. Tavan
+    /// 680'di ve Cancel/Create butonları pencerede yer varken bile şeridin
+    /// altında kalıyordu; başlık + proje seçici + paddingler için ayrılan pay
+    /// da ölçüldü (32*2 padding + ~46 başlık + ~56 seçici + aralıklar).
+    private static let maxFormHeight: CGFloat = 860
+    private static let minFormHeight: CGFloat = 100
+    private static let chromeHeight: CGFloat = 150
 
     private var header: some View {
         HStack {
@@ -120,7 +127,7 @@ public struct CreateWorkspaceOverlay: View {
             if let source = shell.workspaces.source, source.scm != .none {
                 branchSection(source).disabled(shell.workspaces.lastCreated != nil)
             }
-            advanced.disabled(shell.workspaces.lastCreated != nil)
+            destination
             if let message = shell.workspaces.errorMessage {
                 Text(message).font(Theme.Typography.labelMono).foregroundStyle(Theme.error)
             }
@@ -288,23 +295,16 @@ public struct CreateWorkspaceOverlay: View {
             .fixedSize(horizontal: false, vertical: true)
     }
 
-    private var advanced: some View {
+    /// Eskiden "Advanced" disclosure'ıydı; içinde yalnız taban revizyon ve tek
+    /// cümlelik açıklama vardı, açılıp kapanmaya değmiyordu (kullanıcı isteği).
+    private var destination: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
             Text("Destination: \(shell.workspaces.destinationPath)")
                 .font(Theme.Typography.labelMono).foregroundStyle(Theme.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
-            DisclosureGroup("Advanced", isExpanded: $isAdvancedExpanded) {
-                VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                    if let source = shell.workspaces.source, !source.revision.isEmpty {
-                        Text("Base: \(source.revision)")
-                            .font(Theme.Typography.labelMono).foregroundStyle(Theme.textMuted)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    hint(shell.workspaces.branchMode == .new
-                        ? "Starts from the selected base branch's latest commit or changeset. Uncommitted changes are not copied."
-                        : "Checks out the selected branch in a separate workspace. Uncommitted changes are not copied.")
-                }
-            }
+            hint(shell.workspaces.branchMode == .new
+                ? "Starts from the selected base branch's latest commit or changeset. Uncommitted changes are not copied."
+                : "Checks out the selected branch in a separate workspace. Uncommitted changes are not copied.")
         }
     }
 
