@@ -8,15 +8,19 @@ import SwiftUI
 ///
 /// 1. **Hiç açılmama:** şerit bir terminalin üstündeyken `TerminalEventMonitor`
 ///    `.mouseMoved`'ı yutuyor (`shouldConsumeHover`), SwiftUI hover'ı hiç
-///    görmüyordu. Tracking area'lar `mouseEntered/Exited`'ı ayrı üretir; event
-///    monitöründen bağımsızdır.
+///    görmüyordu. DİKKAT: tracking area'lar da kurtarmaz — AppKit
+///    `mouseEntered/Exited`'ı `.mouseMoved` dispatch'i SIRASINDA üretir, local
+///    monitor `nil` döndürünce crossing event'i de hiç doğmaz (deneyle
+///    doğrulandı). Bu yüzden tek gerçek kaynak, imleç konumunu doğrudan okuyan
+///    doğrulama tik'idir; tracking area yalnız anında tepki için durur.
 /// 2. **Popover açılınca kapanma:** `NSPopover` / `DropdownPanel` ayrı bir
 ///    pencere açar, SwiftUI "fare çıktı" der. Sensör, ana pencereye BAĞLI
 ///    (child) pencerelerin içini de "içeride" sayar.
-/// 3. **Fare çıktığı hâlde kapanmama:** kaçan `mouseExited` (pencere
-///    değişimi, hızlı çıkış, view yeniden kurulumu) tek başına bırakılmaz;
-///    içerideyken düşük frekanslı bir doğrulama tik'i fiziksel imleç konumunu
-///    okur ve gerçekten dışarıdaysa kapatır.
+/// 3. **Kaçan giriş/çıkış:** `mouseEntered` (overlay imlecin altında doğduğunda,
+///    ör. panel gizlenir gizlenmez) ve `mouseExited` (pencere değişimi, hızlı
+///    çıkış, view yeniden kurulumu) tek başına bırakılmaz; view pencerede
+///    olduğu SÜRECE dönen düşük frekanslı bir doğrulama tik'i fiziksel imleç
+///    konumunu okur ve iki yönü de düzeltir.
 ///
 /// Sensör tıklama yutmaz: `hitTest` daima `nil` döner — altındaki terminal ya
 /// da içerik davranışı değişmez.
@@ -60,8 +64,11 @@ enum PointerPresenceRule {
 private final class PointerPresenceView: NSView {
     var onChange: ((Bool) -> Void)?
 
-    /// Kaçan `mouseExited`'a karşı doğrulama aralığı. Yalnız fare İÇERİDEYKEN
-    /// döner; boşta hiçbir timer çalışmaz.
+    /// Doğrulama aralığı. Tik, view pencerede olduğu sürece döner: yutulan
+    /// `.mouseMoved` yüzünden crossing event'i HİÇ gelmeyebiliyor, o yüzden
+    /// giriş de çıkış kadar telafiye muhtaç. Maliyet iki `CGPoint`
+    /// karşılaştırması; timer yalnız auto-reveal'e uygun gizli yuva varken
+    /// (overlay canlıyken) vardır.
     private static let verifyInterval: TimeInterval = 0.1
 
     private var isInside = false
@@ -79,7 +86,7 @@ private final class PointerPresenceView: NSView {
             owner: self
         ))
         // Yeniden yerleşimde (şerit ↔ panel genişliği) varlık yeniden ölçülür.
-        if isInside { evaluate() }
+        evaluate()
     }
 
     override func mouseEntered(with event: NSEvent) { evaluate() }
@@ -91,6 +98,7 @@ private final class PointerPresenceView: NSView {
         if window == nil {
             tearDown()
         } else {
+            startVerifying()
             evaluate()
         }
     }
@@ -112,7 +120,6 @@ private final class PointerPresenceView: NSView {
         )
         guard inside != isInside else { return }
         isInside = inside
-        if inside { startVerifying() } else { stopVerifying() }
         onChange?(inside)
     }
 

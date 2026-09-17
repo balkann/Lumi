@@ -567,8 +567,8 @@ Kullanıcı şikâyeti: sol/sağ panelin auto-reveal'ı çalışmıyor; ayrıca 
 
 Çözüm: hover'ın kaynağı `PointerPresence` (AppKit `NSViewRepresentable`) sensörüdür.
 
-- **Tracking area** (`.mouseEnteredAndExited`, `.activeAlways`, `.inVisibleRect`) — `mouseEntered/Exited` event monitöründen bağımsız üretilir, terminalin yuttuğu `.mouseMoved`'a bağlı değildir.
-- **Doğrulama tik'i** (0,1 sn, yalnız fare İÇERİDEYKEN çalışır; boşta timer yok) fiziksel `NSEvent.mouseLocation`'ı bölgenin ekran dikdörtgeniyle karşılaştırır — kaçan çıkış bildirimi paneli açık bırakamaz.
+- **Tracking area** (`.mouseEnteredAndExited`, `.activeAlways`, `.inVisibleRect`) — anında tepki için. (Bu maddenin "event monitöründen bağımsız üretilir" gerekçesi **yanlış çıktı**; karar 66'ya bakınız.)
+- **Doğrulama tik'i** (0,1 sn) fiziksel `NSEvent.mouseLocation`'ı bölgenin ekran dikdörtgeniyle karşılaştırır — kaçan bildirim paneli açık bırakamaz. (Karar 66'da tik, yalnız fare içerideyken değil, view pencerede olduğu sürece döner.)
 - **Bağlı pencereler içeri sayılır:** imlecin altındaki pencere ana pencerenin (zincirleme) çocuğuysa — popover, `DropdownPanel` — fare "içeride"dir. Karar kuralı saftır ve test edilir (`PointerPresenceRule.isInside`, `PointerPresenceRuleTests`).
 - **Sensör tıklama yutmaz:** `hitTest` daima `nil` döner; şeridin altındaki terminalin seçim/tıklama davranışı değişmez.
 - Uygulama arka plandayken hover yoktur (`NSApp.isActive`), pencereye girmemiş view ölçülemez → dışarıdadır.
@@ -586,3 +586,18 @@ Sebep `SystemProcessRunner`'ın timeout yolundaydı. Sonuç ancak üç kapı bir
 - **Süre dolduğunda sonuç HER HÂLDE verilir.** `isRunning` kapısı kalktı; timeout `box.cancel()` (varsa alt süreçleri de öldürür) + `resume(nil)` + üç kapının da kapatılması demek. Yani 180 sn'lik login sınırı gerçekten bir üst sınır.
 - **Cancel yeniden doğrulamada da görünür** (`ClaudeAccountStore.isSigningIn`): kullanıcı timeout'u beklemek zorunda değil.
 - **`usageAutoRefresh.enabled` varsayılanı açık.** Karar 20'nin opt-in duruşu bırakıldı: elle yenilenmeyen gösterge bayat kalıyordu. Aralık varsayılanı 5 dk, idle-gate (karar 38) aynen korunur. `enabled` anahtarı dosyaya zaten yazılmış kurulumlarda kayıtlı değer kazanır — yeni varsayılan yalnız anahtarı olmayan config'lere uygulanır.
+
+### 66. Kenar hover'ı tamamen imleç yoklamasına dayanır (2026-09-17)
+
+Kullanıcı şikâyeti: karar 64'ten sonra da sol/sağ panelin auto-reveal'ı çalışmıyor.
+
+İki ayrı sebep vardı; ikisi de gerçek:
+
+- **Kullanıcının kurulumunda overlay hiç çizilmiyordu.** `canAutoReveal` = tercih açık **+ yuva gizli** + focus mode kapalı. `~/.lumi/ui-state.json`'da her iki yuva da `visibleSlots` içindeydi (sabit/docked) ve `autoReveal` her ikisi için açıktı: Settings ▸ Appearance dört bağımsız toggle sunuyor, auto-reveal'i panel sabitken açmak sessizce hiçbir şey yapmıyordu. Artık auto-reveal satırının ipucu duruma göre değişir: yuva sabitken "No effect while the sidebar is pinned — turn it off above to use hover" der. Semantik (karar 44) değişmedi; yalnız sebep görünür oldu.
+- **Karar 64'ün tracking-area gerekçesi yanlıştı.** Deneyle (yalıtılmış AppKit probe'u, tek değişkenli karşılaştırma) doğrulandı: AppKit `mouseEntered/Exited` crossing'lerini `.mouseMoved` dispatch'i **sırasında** üretir. `TerminalEventMonitor` local monitörden `nil` döndürüp `.mouseMoved`'ı yuttuğunda crossing event'i de hiç doğmaz — yani terminal `mouseMode == .anyEvent` iken tracking area da `.onHover` kadar ölüdür. (Occlusion, `hitTest` → `nil`, `.inVisibleRect` ve overlay katman sırası ELENDİ: probe'da hepsi sorunsuz çalıştı.)
+
+Karar: hover'ın **tek gerçek kaynağı** doğrulama tik'idir. `PointerPresenceView` artık timer'ı view pencerede olduğu SÜRECE döndürür (eskiden yalnız fare içerideyken dönüyordu, dolayısıyla "içeri girme" olayı hiç telafi edilmiyordu); tracking area yalnız anında tepki için durur, `updateTrackingAreas` da koşulsuz ölçer. Böylece sensör olay teslimatından tamamen bağımsızdır ve overlay imlecin altında doğduğunda da (panel gizlenir gizlenmez) doğru cevap verir.
+
+Maliyet bilinçlidir: tik yalnız auto-reveal'e uygun **gizli** bir yuva varken, yani overlay canlıyken vardır (en fazla iki timer, her biri 0,1 sn'de iki `CGPoint` karşılaştırması). Alternatif — `TerminalEventMonitor`'ın `.mouseMoved` yutmasını SwiftTerm tracking area'sını daraltarak kaldırmak — SwiftTerm iç davranışına bağımlı olduğu için seçilmedi; terminalin alt-buffer fare köprüsü (karar 37/57) aynen kalır.
+
+- **Sınırlar.** `PointerPresence` (LumiUI/Support), `AppearanceSettingsTab` ipucu. `LayoutStore`, `PanelLayout`, `ui-state` biçimi ve `PointerPresenceRule` değişmedi.

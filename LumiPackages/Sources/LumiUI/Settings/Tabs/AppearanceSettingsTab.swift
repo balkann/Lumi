@@ -47,15 +47,26 @@ struct AppearanceSettingsTab: SettingsTabContent {
             )
             LumiToggleRow(
                 title: "Auto-reveal Left Sidebar",
-                hint: "When hidden, hover the left edge to show it over the content",
+                hint: autoRevealHint(.left),
                 isOn: autoRevealBinding(.left)
             )
             LumiToggleRow(
                 title: "Auto-reveal Right Sidebar",
-                hint: "When hidden, hover the right edge to show it over the content",
+                hint: autoRevealHint(.right),
                 isOn: autoRevealBinding(.right)
             )
         }
+    }
+
+    /// Yuva SABİTKEN (docked) auto-reveal'in hiçbir etkisi yoktur
+    /// (`LayoutStore.canAutoReveal`) — toggle açık görünüp sessizce hiçbir şey
+    /// yapmasın diye sebebi ipucunda söylenir.
+    private func autoRevealHint(_ slot: PanelSlot) -> String {
+        let edge = slot == .right ? "right" : "left"
+        guard !shell.layout.visibleSlots.contains(slot) else {
+            return "No effect while the sidebar is pinned — turn it off above to use hover"
+        }
+        return "Hover the \(edge) edge to show it over the content"
     }
 
     private func autoRevealBinding(_ slot: PanelSlot) -> Binding<Bool> {
