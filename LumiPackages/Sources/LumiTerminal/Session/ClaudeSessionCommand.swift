@@ -48,16 +48,22 @@ public enum ClaudeSessionCommand {
         command.split(whereSeparator: \.isWhitespace).first.map(String.init)
     }
 
+    /// ID tırnaklı da gelebilir: Agent History'nin "Resume Session" eylemi
+    /// kabuk güvenliği için `claude --resume '<id>'` üretir. Tırnağı kabul
+    /// etmeyen desen bu komutta ID'yi kaçırıyor, terminal
+    /// `claudeSessionID`'siz kalıyor ve çıkışta persist EDİLMİYORDU — yani
+    /// resume edilen sohbet bir sonraki açılışta geri gelmiyordu.
     private static func extractSessionID(from command: String) -> String? {
         let flags = idCarryingFlags.map(NSRegularExpression.escapedPattern(for:))
             .joined(separator: "|")
-        let pattern = "(?:^|\\s)(?:\(flags))\\s+(\(uuidPattern))(?:\\s|$)"
+        // \\1 geri referansı: açan ve kapayan tırnak aynı olmak zorunda.
+        let pattern = "(?:^|\\s)(?:\(flags))\\s+([\'\"]?)(\(uuidPattern))\\1(?:\\s|$)"
         guard let regex = try? NSRegularExpression(pattern: pattern),
               let match = regex.firstMatch(
                   in: command,
                   range: NSRange(command.startIndex..., in: command)
               ),
-              let range = Range(match.range(at: 1), in: command) else {
+              let range = Range(match.range(at: 2), in: command) else {
             return nil
         }
         return String(command[range]).lowercased()
