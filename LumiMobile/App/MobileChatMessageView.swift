@@ -22,13 +22,21 @@ struct MobileChatMessageView: View {
     private func blockView(_ block: ChatBlock) -> some View {
         switch block {
         case let .text(text, _):
-            Text(LocalizedStringKey(text))
-                .textSelection(.enabled)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(bubbleColor, in: RoundedRectangle(cornerRadius: 14))
-                .foregroundStyle(turn.message.role == .user ? Color.white : Color.primary)
-                .frame(maxWidth: 300, alignment: turn.message.role == .user ? .trailing : .leading)
+            if turn.message.role == .user {
+                Text(LocalizedStringKey(text))
+                    .textSelection(.enabled)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 14))
+                    .foregroundStyle(Color.white)
+                    .frame(maxWidth: 300, alignment: .trailing)
+            } else {
+                // Assistant: balonsuz düz prose (orca dili; spec 2026-09-17).
+                Text(LocalizedStringKey(text))
+                    .textSelection(.enabled)
+                    .foregroundStyle(Color.primary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
         case let .toolCall(name, preview, _):
             Text("▶ \(name) \(preview)")
                 .font(.system(.caption, design: .monospaced))
@@ -46,7 +54,4 @@ struct MobileChatMessageView: View {
         }
     }
 
-    private var bubbleColor: Color {
-        turn.message.role == .user ? Color.accentColor : Color(uiColor: .secondarySystemBackground)
-    }
 }

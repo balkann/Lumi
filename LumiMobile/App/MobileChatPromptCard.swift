@@ -19,26 +19,31 @@ struct MobileChatPromptCard: View {
     var body: some View {
         VStack(spacing: 0) {
             Divider()
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 6) {
-                    Image(systemName: prompt.kind == .approval ? "shield.lefthalf.filled" : "questionmark.circle")
-                    Text(prompt.kind == .question && prompt.questions.count > 1 ? prompt.questions[0].question : prompt.title)
-                        .font(.footnote.bold())
-                }
-                if let detail = prompt.detail, !detail.isEmpty {
-                    Text(detail).font(.system(.footnote, design: .monospaced))
-                        .foregroundStyle(.secondary).lineLimit(2).truncationMode(.middle)
-                }
-                switch prompt.kind {
-                case .approval: approvalButtons
-                case .question:
-                    if prompt.questions.count > 1 {
-                        groupedQuestionBody
-                    } else {
-                        questionBody
+            ScrollView {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 6) {
+                        Image(systemName: prompt.kind == .approval ? "shield.lefthalf.filled" : "questionmark.circle")
+                        Text(prompt.kind == .question && prompt.questions.count > 1 ? prompt.questions[0].question : prompt.title)
+                            .font(.footnote.bold())
+                    }
+                    if let detail = prompt.detail, !detail.isEmpty {
+                        Text(detail).font(.system(.footnote, design: .monospaced))
+                            .foregroundStyle(.secondary).lineLimit(2).truncationMode(.middle)
+                    }
+                    switch prompt.kind {
+                    case .approval: approvalButtons
+                    case .question:
+                        if prompt.questions.count > 1 {
+                            groupedQuestionBody
+                        } else {
+                            questionBody
+                        }
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .frame(maxHeight: UIScreen.main.bounds.height * 0.45)
+            .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 12).padding(.vertical, 8)
             .background(Color(uiColor: .systemBackground))
         }
