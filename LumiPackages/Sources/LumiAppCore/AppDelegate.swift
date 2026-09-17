@@ -136,11 +136,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     ///    yalnız reparent olurlar.
     /// 3. Terminal fontu — SwiftTerm SwiftUI token'larını kullanmaz, ölçek
     ///    kullanıcının font boyutu ayarıyla ÇARPILARAK ayrıca uygulanır.
+    ///
+    /// `Theme.devicePixel` de burada tazelenir: token'lar cihaz pikseline
+    /// yuvarlandığı için ızgaranın yürürlükteki ekranın backingScaleFactor'ünü
+    /// yansıtması gerekir. Erken çıkış kontrolü ızgarayı DA gözetir, yoksa
+    /// açılışta ölçek zaten 1'ken ilk okuma hiç uygulanmazdı.
     private func applyUIScale(_ scale: CGFloat) {
-        guard Theme.uiScale != scale else { return }
+        let pixel = Self.devicePixelSize(for: windowController.window)
+        let gridChanged = Theme.devicePixel != pixel
+        Theme.devicePixel = pixel
+        guard Theme.uiScale != scale || gridChanged else { return }
         Theme.uiScale = scale
         applyTerminalFont()
         rebuildContentView()
+    }
+
+    /// Pencerenin (yoksa ana ekranın) bir cihaz pikselinin punto karşılığı.
+    /// Ekran okunamazsa Retina varsayılır — 1x tahmin etmek her token'ı bir
+    /// kademe kaba bir ızgaraya oturtur ve arayüzü gereksiz yere bozardı.
+    private static func devicePixelSize(for window: NSWindow?) -> CGFloat {
+        let factor = window?.screen?.backingScaleFactor
+            ?? NSScreen.main?.backingScaleFactor
+            ?? 2
+        return factor > 0 ? 1 / factor : 0.5
     }
 
     /// Karar 59: yazı tipi değişimi ölçeğin ikinci ayağını paylaşır (içerik
@@ -167,7 +185,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let config = shared.settings.current
         composition.registry.terminal.applyFont(LumiFonts.mono(
             family: config.terminalFontFamily,
-            size: Theme.scaled(CGFloat(config.terminalFontSize))
+            size: Theme.scaledFontSize(CGFloat(config.terminalFontSize))
         ))
     }
 

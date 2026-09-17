@@ -73,22 +73,22 @@ public extension Theme {
 
         /// Monospace — metinlerin varsayılanı.
         ///
-        /// Punto ÜÇ fabrikada da `Theme.scaled` üzerinden geçer (karar 57):
+        /// Punto ÜÇ fabrikada da `Theme.scaledFontSize` üzerinden geçer (karar 57):
         /// arayüz ölçeği tek noktadan iner, çağrı yerleri ölçeği bilmez. YÜZ de
         /// aynı biçimde tek noktadan iner (karar 59): sistem monospace'i
         /// (SF Mono, varsayılan) ya da bundle'daki JetBrains Mono.
         public static func mono(_ size: Size, weight: Font.Weight = .regular) -> Font {
-            Theme.monoFont(size: Theme.scaled(size.points), weight: weight)
+            Theme.monoFont(size: Theme.scaledFontSize(size.points), weight: weight)
         }
 
         /// Sistem yüzü — SF Symbol glyph'leri ve native kontroller.
         public static func ui(_ size: Size, weight: Font.Weight = .regular) -> Font {
-            .system(size: Theme.scaled(size.points), weight: weight)
+            .system(size: Theme.scaledFontSize(size.points), weight: weight)
         }
 
         /// Yuvarlak yüz — sayaç rozetleri gibi yumuşak öğeler.
         public static func rounded(_ size: Size, weight: Font.Weight = .regular) -> Font {
-            .system(size: Theme.scaled(size.points), weight: weight, design: .rounded)
+            .system(size: Theme.scaledFontSize(size.points), weight: weight, design: .rounded)
         }
 
         // MARK: - Semantik hazır fontlar

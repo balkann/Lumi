@@ -21,7 +21,42 @@ import CoreGraphics
 public extension Theme {
     nonisolated(unsafe) static var uiScale: CGFloat = 1
 
-    /// Token değerini yürürlükteki ölçeğe çevirir. Sıfır (`Radius.none`,
-    /// `Spacing` yok) ölçekten etkilenmez — çarpım zaten sıfırdır.
-    static func scaled(_ value: CGFloat) -> CGFloat { value * uiScale }
+    /// Bir cihaz pikselinin punto karşılığı (`1 / backingScaleFactor`); Retina'da
+    /// 0.5. `AppDelegate` ölçek uygularken yürürlükteki ekrandan tazeler.
+    ///
+    /// Varsayılan 2x'tir: Apple yıllardır 1x ekran satmıyor ve yanlış tahminin
+    /// bedeli yalnız yuvarlama ızgarasının bir kademe ince olması.
+    nonisolated(unsafe) static var devicePixel: CGFloat = 0.5
+
+    /// Token değerini yürürlükteki ölçeğe çevirir ve **cihaz pikseline oturtur**.
+    ///
+    /// Yuvarlama olmadan piksele oturmayan bir ölçek (0.8'de `Spacing.md` 8 →
+    /// 6.4pt, `Stroke.hairline` 1 → 0.8pt) tüm layout'u yarım piksele kaydırır:
+    /// metin taban çizgileri keyfi alt-piksel fazlarına düşer, her glyph farklı
+    /// gri dağılımıyla raster'lanır ve yazı "parıldıyor" gibi görünür. Chromium'un
+    /// page zoom'unda bu olmaz çünkü o da layout'u cihaz pikseline snap'ler —
+    /// yani yuvarlama, karar 57'nin taklit ettiği davranışın eksik kalan yarısıdır.
+    ///
+    /// Sıfır (`Radius.none`) sıfır kalır; sıfırdan farklı bir değer ise asla
+    /// sıfıra çökmez (bir çizgi tamamen kaybolurdu).
+    static func scaled(_ value: CGFloat) -> CGFloat {
+        snapped(value * uiScale, to: devicePixel)
+    }
+
+    /// Punto için ölçek — cihaz pikseline değil **tam sayıya** oturur.
+    ///
+    /// Punto kesirli kalırsa ondan türeyen ascent/descent/satır yüksekliği de
+    /// kesirli olur ve taban çizgisi yine ızgaradan kaçar; `scaled` ile
+    /// hizalanmış bir kap bunu kurtaramaz. Tam sayı punto, kullanıcının
+    /// "Electron'la aynı" dediği %100 durumunun sağladığı koşulun ta kendisidir.
+    static func scaledFontSize(_ value: CGFloat) -> CGFloat {
+        snapped(value * uiScale, to: 1)
+    }
+
+    private static func snapped(_ value: CGFloat, to grid: CGFloat) -> CGFloat {
+        guard value != 0, grid > 0 else { return value }
+        let result = (value / grid).rounded() * grid
+        guard result == 0 else { return result }
+        return value < 0 ? -grid : grid
+    }
 }

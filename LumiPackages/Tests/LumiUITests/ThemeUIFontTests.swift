@@ -70,6 +70,10 @@ final class ThemeUIFontTests: XCTestCase {
 
     /// Yüz seçimi ölçekten (karar 57) bağımsızdır: ikisi de aynı fabrikadan
     /// geçer, biri diğerini yutmaz.
+    ///
+    /// Beklenen punto ÇARPIM DEĞİL yuvarlanmış değerdir: 13 * 1.5 = 19.5 ve
+    /// `scaledFontSize` puntoyu tam sayıya oturtur (20). Kesirli punto kesirli
+    /// satır yüksekliği üretip metni alt-piksel fazına düşürüyordu.
     func testFamilyAndScaleCompose() {
         Theme.uiFontFamily = .jetBrainsMono
         Theme.uiScale = 1.5
@@ -77,7 +81,7 @@ final class ThemeUIFontTests: XCTestCase {
 
         XCTAssertEqual(
             Theme.Typography.mono(.base),
-            .custom(LumiFonts.regularName, fixedSize: Theme.Typography.Size.base.points * 1.5)
+            .custom(LumiFonts.regularName, fixedSize: 20)
         )
     }
 
