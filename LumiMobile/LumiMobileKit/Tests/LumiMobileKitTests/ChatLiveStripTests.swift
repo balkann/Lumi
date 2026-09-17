@@ -49,6 +49,9 @@ final class ChatLiveStripTests: XCTestCase {
         model.handle(.scrollback(TerminalChunk(sessionId: "s1", seq: 0, cols: 80, rows: 24,
                                                bytes: Data("a".utf8))))
         model.subscribeChat("s2")
+        // feedSeen KASITLI olarak subscribeChat'ta temizlenmez (oturumun PTY'li
+        // olduğu gerçeği oturum değişince değişmez); temizlik applySessions'ta.
+        XCTAssertTrue(model.hasFeed("s1"))
         // s1 replay tamponu boşaltıldı; s2 için taze tampon var.
         model.handle(.data(TerminalChunk(sessionId: "s2", seq: 0, bytes: Data("b".utf8))))
         var got: [TerminalChunk] = []
