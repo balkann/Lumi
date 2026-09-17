@@ -71,12 +71,14 @@ public extension Theme {
 
         // MARK: - Fabrikalar
 
-        /// Monospace (JetBrains Mono görsel kimliği) — metinlerin varsayılanı.
+        /// Monospace — metinlerin varsayılanı.
         ///
         /// Punto ÜÇ fabrikada da `Theme.scaled` üzerinden geçer (karar 57):
-        /// arayüz ölçeği tek noktadan iner, çağrı yerleri ölçeği bilmez.
+        /// arayüz ölçeği tek noktadan iner, çağrı yerleri ölçeği bilmez. YÜZ de
+        /// aynı biçimde tek noktadan iner (karar 59): sistem monospace'i
+        /// (SF Mono, varsayılan) ya da bundle'daki JetBrains Mono.
         public static func mono(_ size: Size, weight: Font.Weight = .regular) -> Font {
-            .system(size: Theme.scaled(size.points), weight: weight, design: .monospaced)
+            Theme.monoFont(size: Theme.scaled(size.points), weight: weight)
         }
 
         /// Sistem yüzü — SF Symbol glyph'leri ve native kontroller.

@@ -35,6 +35,9 @@ public struct UIState: Sendable, Equatable {
     /// Karar 57 (additive): arayüz ölçeği (⌘+/⌘−/⌘0). nil = dosyada yok → %100.
     /// Terminal font boyutu ayrı bir ayardır ve bu ölçekle ÇARPILIR.
     public var uiScale: Double?
+    /// Karar 59 (additive): arayüz yazı tipi. nil = dosyada yok → `.system`
+    /// (SF Mono, eski davranış). Terminal fontu AYRI bir ayardır.
+    public var uiFontFamily: UIFontFamily?
 
     public static let defaults = UIState(
         openTabs: [],
@@ -58,7 +61,8 @@ public struct UIState: Sendable, Equatable {
         activeRoute: String? = nil,
         panelLayout: PanelLayout? = nil,
         legacyGridColumns: GridLayout? = nil,
-        uiScale: Double? = nil
+        uiScale: Double? = nil,
+        uiFontFamily: UIFontFamily? = nil
     ) {
         self.openTabs = openTabs
         self.activeTab = activeTab
@@ -72,6 +76,7 @@ public struct UIState: Sendable, Equatable {
         self.panelLayout = panelLayout
         self.legacyGridColumns = legacyGridColumns
         self.uiScale = uiScale
+        self.uiFontFamily = uiFontFamily
     }
 }
 

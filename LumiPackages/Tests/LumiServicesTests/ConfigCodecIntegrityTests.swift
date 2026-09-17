@@ -199,7 +199,8 @@ final class ConfigCodecIntegrityTests: XCTestCase {
             .settingVisible(.right, true)
             .settingWidth(320, for: .left),
         legacyGridColumns: nil,
-        uiScale: 1.25
+        uiScale: 1.25,
+        uiFontFamily: .jetBrainsMono
     )
 }
 

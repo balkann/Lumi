@@ -119,7 +119,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         shared.layout.onUIScaleChanged = { [weak self] scale in
             self?.applyUIScale(scale)
         }
+        // Karar 59: yazı tipi → Theme token'ı + arayüzün yeniden kurulması.
+        shared.layout.onUIFontFamilyChanged = { [weak self] family in
+            self?.applyUIFontFamily(family)
+        }
         applyUIScale(shared.layout.uiScale)
+        applyUIFontFamily(shared.layout.uiFontFamily)
     }
 
     /// Ölçek değişiminin ÜÇ ayağı (karar 57):
@@ -135,6 +140,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard Theme.uiScale != scale else { return }
         Theme.uiScale = scale
         applyTerminalFont()
+        rebuildContentView()
+    }
+
+    /// Karar 59: yazı tipi değişimi ölçeğin ikinci ayağını paylaşır (içerik
+    /// view'ının yeniden kurulması). Terminal fontu ETKİLENMEZ — o ayrı bir
+    /// ayardır ve zaten JetBrains Mono'yu varsayılan alır.
+    private func applyUIFontFamily(_ family: UIFontFamily) {
+        guard Theme.uiFontFamily != family else { return }
+        Theme.uiFontFamily = family
+        rebuildContentView()
+    }
+
+    /// SwiftUI static token okumalarını izlemediği için mevcut ağaç eski
+    /// değerlerde donar; `NSHostingView` baştan kurulunca tüm body'ler yeni
+    /// token'larla çalışır. Terminal NSView'ları `TerminalViewRegistry`'de
+    /// retain edildiğinden PTY kopmaz, yalnız reparent olurlar.
+    private func rebuildContentView() {
         let content = RootViewFactory(composition: composition).makeContentView()
         windowController.replaceContentView(content)
         // Reparent sonrası canlı terminal view'ları yeni host'lara oturur.

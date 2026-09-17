@@ -1,8 +1,8 @@
 import LumiKit
 import SwiftUI
 
-/// Panel görünürlükleri + kenar hover'ıyla açılma (karar 44) — anında
-/// uygulanır ve hatırlanır.
+/// Arayüz yazı tipi (karar 59) + panel görünürlükleri + kenar hover'ıyla
+/// açılma (karar 44) — anında uygulanır ve hatırlanır.
 struct AppearanceSettingsTab: SettingsTabContent {
     static let tab: SettingsTab = .appearance
 
@@ -14,8 +14,27 @@ struct AppearanceSettingsTab: SettingsTabContent {
         VStack(alignment: .leading, spacing: Theme.Spacing.xxl) {
             LumiSectionTitle(
                 title: "Appearance",
-                description: "Panel visibility. Changes apply instantly and are remembered."
+                description: "Interface font and panel visibility. "
+                    + "Changes apply instantly and are remembered."
             )
+            LumiField(
+                title: "Interface Font",
+                hint: "System Mono is macOS's own monospace face (SF Mono). "
+                    + "JetBrains Mono is the bundled face the Electron build used — "
+                    + "larger x-height, tighter shapes, crisper at small sizes. "
+                    + "The terminal keeps its own font setting.",
+                isLast: true
+            ) {
+                LumiSegmented(
+                    options: UIFontFamily.allCases.map {
+                        .init(value: $0, label: $0.displayName)
+                    },
+                    selection: Binding(
+                        get: { shell.layout.uiFontFamily },
+                        set: { shell.layout.setUIFontFamily($0) }
+                    )
+                )
+            }
             LumiToggleRow(
                 title: "Left Sidebar",
                 hint: "Sessions panel",

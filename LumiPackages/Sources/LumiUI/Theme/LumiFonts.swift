@@ -2,6 +2,7 @@ import AppKit
 import CoreText
 import Foundation
 import LumiKit
+import SwiftUI
 
 /// JetBrains Mono kaydı (karar 13; OFL lisansı bundle'da).
 /// Kayıt başarısızsa sistem monospace'ine sessizce düşülür.
@@ -55,6 +56,36 @@ public enum LumiFonts {
 
     /// NSFontManager'ın 0–15 ağırlık ölçeğinde "normal" (regular) değeri.
     private static let fontManagerNormalWeight = 5
+
+    // MARK: - Arayüz yüzü (karar 59)
+
+    /// Bundle'daki dört UI ağırlığının PostScript adları. Ağırlık AİLE ADIYLA
+    /// değil, doğrudan yüzle çözülür: statik JetBrains Mono dosyalarında Medium
+    /// ve SemiBold'un `name` ID 1'i ayrı aile adıdır ("JetBrains Mono Medium");
+    /// CoreText'in aile içi ağırlık eşlemesine güvenmek yüzü sessizce Regular'a
+    /// ya da Bold'a düşürebilirdi.
+    public static func uiPostScriptName(for weight: Font.Weight) -> String {
+        switch weight {
+        case .bold, .heavy, .black: return boldName
+        case .semibold: return semiBoldName
+        case .medium: return mediumName
+        default: return regularName
+        }
+    }
+
+    public static let mediumName = "JetBrainsMono-Medium"
+    public static let semiBoldName = "JetBrainsMono-SemiBold"
+
+    /// Dört yüzün DE kayıtlı olup olmadığı (`registerBundledFonts` sonrası).
+    /// Yanlışsa `Theme` sistem monospace'ine düşer — `Font.custom` kayıtsız bir
+    /// adda sessizce ORANTILI sistem fontuna düşerdi, bu da arayüzü bozardı.
+    ///
+    /// `lazy` değil `static let`: ilk erişim view çizimindedir, kayıt ise
+    /// `AppDelegate` açılışında yapılır — sıra garantilidir.
+    public static let isBundledUIFontAvailable: Bool = {
+        [regularName, mediumName, semiBoldName, boldName]
+            .allSatisfy { NSFont(name: $0, size: 12) != nil }
+    }()
 
     /// Settings font ailesi picker'ı için sistemdeki sabit-genişlikli (monospace)
     /// aileler. Bir kere hesaplanır (availableFontFamilies + fixed-pitch süzgeci).

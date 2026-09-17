@@ -52,6 +52,10 @@ enum UIStateCodec {
         if let value = JSONValue.double(dict["uiScale"]) {
             state.uiScale = value
         }
+        // Karar 59 (additive): arayüz yazı tipi. Yoksa/bozuksa nil → `.system`.
+        if let raw = dict["uiFontFamily"] as? String {
+            state.uiFontFamily = UIFontFamily(rawValue: raw)
+        }
         return state
     }
 
@@ -90,6 +94,11 @@ enum UIStateCodec {
         // dosyalarda olmayan bir anahtar üretilmez (karar 9).
         if let scale = state.uiScale {
             overlay["uiScale"] = scale
+        }
+        // Karar 59 (additive): yalnız DOLU iken yazılır — varsayılan yüzde eski
+        // dosyalarda olmayan bir anahtar üretilmez (karar 9).
+        if let family = state.uiFontFamily {
+            overlay["uiFontFamily"] = family.rawValue
         }
         // legacyGridColumns YAZILMAZ: yalnız okuma yönlü migration girdisi;
         // ham `gridColumns` anahtarı merge'le diskte aynen kalır.

@@ -102,6 +102,50 @@ final class LayoutStoreTests: XCTestCase {
         XCTAssertEqual(store.uiScale, LayoutStore.uiScaleSteps.last)
     }
 
+    // MARK: - Arayüz yazı tipi (karar 59)
+
+    /// Anahtar yoksa eski davranış (SF Mono) sürer — mevcut kurulumlar yüz
+    /// değiştirmez.
+    func testFontFamilyDefaultsToSystemWhenKeyIsAbsent() {
+        var state = WorkspaceFixtures.uiState()
+        state.uiFontFamily = nil
+        store.load(state: state, openTabs: [])
+        XCTAssertEqual(store.uiFontFamily, .system)
+    }
+
+    func testFontFamilyLoadsFromState() {
+        var state = WorkspaceFixtures.uiState()
+        state.uiFontFamily = .jetBrainsMono
+        store.load(state: state, openTabs: [])
+        XCTAssertEqual(store.uiFontFamily, .jetBrainsMono)
+    }
+
+    /// Ölçekteki köprüyle aynı sözleşme: gerçek değişimde ateşlenir, aynı değere
+    /// ikinci kez geçişte ateşlenmez (arayüz gereksiz yere yeniden kurulmaz).
+    func testFontFamilyChangeNotifiesBridgeOnlyOnRealChange() {
+        var received: [UIFontFamily] = []
+        store.onUIFontFamilyChanged = { received.append($0) }
+
+        store.setUIFontFamily(.jetBrainsMono)
+        store.setUIFontFamily(.jetBrainsMono)
+        store.setUIFontFamily(.system)
+
+        XCTAssertEqual(received, [.jetBrainsMono, .system])
+    }
+
+    /// Karar 9: varsayılan yüzde additive anahtar diske YAZILMAZ.
+    func testFontFamilyPersistsOnlyWhenNotSystem() async throws {
+        store.setUIFontFamily(.jetBrainsMono)
+        try await waitForPersist()
+        var written = await config.uiState()
+        XCTAssertEqual(written.uiFontFamily, .jetBrainsMono)
+
+        store.setUIFontFamily(.system)
+        try await waitForPersist(minimumCount: 2)
+        written = await config.uiState()
+        XCTAssertNil(written.uiFontFamily, "varsayılan yüzde anahtar yazılmamalı")
+    }
+
     // MARK: - Yükleme / migration
 
     func testLoadAppliesSidebarsAndLayouts() {

@@ -14,15 +14,20 @@ public struct LayoutSnapshot: Equatable, Sendable {
     /// Karar 57: arayüz ölçeği. %100'de `nil` yazılır — additive anahtar
     /// varsayılan değerde diske hiç girmez (karar 9).
     public var uiScale: Double?
+    /// Karar 59: arayüz yazı tipi. `.system`'de `nil` yazılır (uiScale ile aynı
+    /// gerekçe).
+    public var uiFontFamily: UIFontFamily?
 
     public init(
         panelLayout: PanelLayout,
         projectGridLayouts: [String: GridLayout],
-        uiScale: Double? = nil
+        uiScale: Double? = nil,
+        uiFontFamily: UIFontFamily? = nil
     ) {
         self.panelLayout = panelLayout
         self.projectGridLayouts = projectGridLayouts
         self.uiScale = uiScale
+        self.uiFontFamily = uiFontFamily
     }
 
     /// Karar 9 projeksiyonu — eski bool alanı.
@@ -64,6 +69,10 @@ public final class LayoutStore {
     /// Karar 57: arayüz ölçeği (⌘+/⌘−/⌘0). 1.0 = %100.
     public private(set) var uiScale: CGFloat = 1
 
+    /// Karar 59: arayüz yazı tipi (Settings ▸ Appearance). Varsayılan `.system`
+    /// = SF Mono, yani karar 59 öncesi davranış.
+    public private(set) var uiFontFamily: UIFontFamily = .system
+
     /// Kapalı basamak kümesi — Electron'un çarpansal zoom'u yerine bilinen
     /// değerler: diske yalnız bunlar iner, uçlarda sabitlenir.
     public static let uiScaleSteps: [CGFloat] = [0.8, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0]
@@ -74,6 +83,10 @@ public final class LayoutStore {
     /// Ölçek değişimi: token çarpanını kuran ve arayüzü yeniden kuran köprü
     /// (LumiUI/AppKit tarafı). Store `Theme`'i tanımaz.
     @ObservationIgnored public var onUIScaleChanged: ((CGFloat) -> Void)?
+
+    /// Karar 59: yazı tipi değişimi — `onUIScaleChanged` ile aynı köprü deseni
+    /// (token'ı kur + içerik view'ını yeniden kur). Store `Theme`'i tanımaz.
+    @ObservationIgnored public var onUIFontFamilyChanged: ((UIFontFamily) -> Void)?
 
     @ObservationIgnored private let config: any ConfigServicing
     @ObservationIgnored private let isTerminalVisible: (TerminalID, String) -> Bool
@@ -106,6 +119,9 @@ public final class LayoutStore {
         // ölçekle açılmaz.
         uiScale = Self.nearestScaleStep(state.uiScale.map { CGFloat($0) } ?? 1)
         onUIScaleChanged?(uiScale)
+        // Karar 59: anahtar yoksa/bozuksa `.system` — eski davranış.
+        uiFontFamily = state.uiFontFamily ?? .system
+        onUIFontFamilyChanged?(uiFontFamily)
         projectGridLayouts = state.projectGridLayouts
         if projectGridLayouts.isEmpty, let legacy = state.legacyGridColumns {
             for tab in openTabs {
@@ -290,7 +306,9 @@ public final class LayoutStore {
             panelLayout: panelLayout,
             projectGridLayouts: projectGridLayouts,
             // %100 varsayılanında nil: additive anahtar dosyada görünmez.
-            uiScale: uiScale == 1 ? nil : Double(uiScale)
+            uiScale: uiScale == 1 ? nil : Double(uiScale),
+            // `.system` varsayılanında nil: aynı gerekçe.
+            uiFontFamily: uiFontFamily == .system ? nil : uiFontFamily
         )
     }
 
@@ -305,6 +323,15 @@ public final class LayoutStore {
         let current = steps.firstIndex(of: uiScale) ?? steps.firstIndex(of: 1) ?? 0
         let target = min(max(current + offset, 0), steps.count - 1)
         applyScale(steps[target])
+    }
+
+    // MARK: - Arayüz yazı tipi (karar 59)
+
+    public func setUIFontFamily(_ family: UIFontFamily) {
+        guard family != uiFontFamily else { return }
+        uiFontFamily = family
+        onUIFontFamilyChanged?(family)
+        persist()
     }
 
     private func applyScale(_ scale: CGFloat) {
@@ -338,6 +365,7 @@ public final class LayoutStore {
                 state.panelLayout = snapshot.panelLayout
                 state.projectGridLayouts = snapshot.projectGridLayouts
                 state.uiScale = snapshot.uiScale
+                state.uiFontFamily = snapshot.uiFontFamily
             }
         }
     }
