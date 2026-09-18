@@ -19,53 +19,53 @@ final class ChatTranscriptTests: XCTestCase {
     func testStreamingShowsWhileNoRealMessage() {
         var gate = ChatStreamGate()
         let prev = [assistant("a1", "önceki cevap")]
-        let (g1, s1) = chatDeriveStreaming(gate: gate, folded: prev, incoming: "Merhab")
+        let (g1, s1) = chatDeriveStreaming(gate: gate, folded: prev, incoming: "Merhab", streamLive: true)
         gate = g1
         XCTAssertEqual(s1, "Merhab")
-        let (g2, s2) = chatDeriveStreaming(gate: gate, folded: prev, incoming: "Merhaba dünya")
+        let (g2, s2) = chatDeriveStreaming(gate: gate, folded: prev, incoming: "Merhaba dünya", streamLive: true)
         gate = g2
         XCTAssertEqual(s2, "Merhaba dünya")
     }
 
-    /// Gerçek mesaj transcript'e düşünce (tail assistant metinle önden gidiyor +
-    /// segment başından beri taşındı) → balon gizlenir (nil), gerçek mesaj kalır.
+    /// Gerçek mesaj transcript'e düşünce (tail metinle önden gidiyor + tail taşındı)
+    /// → balon gizlenir (nil), gerçek mesaj kalır. Mac append'i status-canlıyken yollar.
     func testStreamingHidesWhenRealMessageLands() {
         var gate = ChatStreamGate()
         let prev = [assistant("a1", "önceki")]
-        let (g1, _) = chatDeriveStreaming(gate: gate, folded: prev, incoming: "Merhaba dünya")
+        let (g1, _) = chatDeriveStreaming(gate: gate, folded: prev, incoming: "Merhaba dünya", streamLive: true)
         gate = g1
-        // Yanıt landi: yeni assistant mesajı tail oldu, metinle başlıyor.
+        // Yanıt landi (append), status hâlâ canlı: yeni assistant tail metinle başlıyor.
         let landed = prev + [assistant("a2", "Merhaba dünya!")]
-        let (g2, s2) = chatDeriveStreaming(gate: gate, folded: landed, incoming: nil)
+        let (g2, s2) = chatDeriveStreaming(gate: gate, folded: landed, incoming: "Merhaba dünya", streamLive: true)
         gate = g2
-        XCTAssertNil(s2, "gerçek mesaj düşünce streaming balonu gizlenmeli")
+        XCTAssertNil(s2, "gerçek mesaj tail'e düşünce streaming balonu gizlenmeli")
     }
 
-    /// KRİTİK (kullanıcı şikâyeti): yanıt transcript'e HİÇ düşmese ve Mac
-    /// streamingText'i null'a çekse bile metin EKRANDAN SİLİNMEMELİ.
-    func testStreamingPersistsWhenTurnEndsButNoRealMessage() {
+    /// Turn bitince (streamLive=false → önizleme yok) balon gizlenir (orca). Gerçek
+    /// mesaj o an transcript'te olduğundan (Mac append'i status-nil'den önce yollar)
+    /// vanish olmaz — bkz. AppModel entegrasyon testi.
+    func testStreamingHiddenWhenTurnEnds() {
         var gate = ChatStreamGate()
-        let prev = [assistant("a1", "önceki")]
-        let (g1, _) = chatDeriveStreaming(gate: gate, folded: prev, incoming: "Cevap metni")
+        let landed = [assistant("a1", "Cevap tamam")]
+        let (g1, _) = chatDeriveStreaming(gate: gate, folded: landed, incoming: "Cevap", streamLive: true)
         gate = g1
-        // Turn bitti: Mac streamingText=nil yolladı, ama yeni mesaj gelmedi.
-        let (g2, s2) = chatDeriveStreaming(gate: gate, folded: prev, incoming: nil)
+        let (g2, s2) = chatDeriveStreaming(gate: gate, folded: landed, incoming: nil, streamLive: false)
         gate = g2
-        XCTAssertEqual(s2, "Cevap metni", "yeni mesaj yokken streaming metni tutulmalı (vanish yok)")
+        XCTAssertNil(s2, "turn bitince balon gizlenir")
     }
 
     /// Yeni segment (önceki yanıtın önekini tekrarlamayan yeni metin) yeniden çıpalar.
     func testNewSegmentReanchors() {
         var gate = ChatStreamGate()
         let base = [assistant("a1", "ilk")]
-        let (g1, _) = chatDeriveStreaming(gate: gate, folded: base, incoming: "ilk yanıt")
+        let (g1, _) = chatDeriveStreaming(gate: gate, folded: base, incoming: "ilk yanıt", streamLive: true)
         gate = g1
         let landed = base + [assistant("a2", "ilk yanıt")]
-        let (g2, s2) = chatDeriveStreaming(gate: gate, folded: landed, incoming: nil)
+        let (g2, s2) = chatDeriveStreaming(gate: gate, folded: landed, incoming: "ilk yanıt", streamLive: true)
         gate = g2
         XCTAssertNil(s2)
         // Yeni turn başlar: farklı metin → yeni balon görünür.
-        let (g3, s3) = chatDeriveStreaming(gate: gate, folded: landed, incoming: "ikinci")
+        let (g3, s3) = chatDeriveStreaming(gate: gate, folded: landed, incoming: "ikinci", streamLive: true)
         gate = g3
         XCTAssertEqual(s3, "ikinci")
     }

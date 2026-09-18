@@ -758,25 +758,28 @@ final class AppModelTests: XCTestCase {
                       "gönderilen mesaj optimistic olarak hemen listede olmalı")
     }
 
-    /// KRİTİK: streaming metni turn bitince (gerçek mesaj yokken) EKRANDAN SİLİNMEZ;
-    /// gerçek assistant mesajı düşünce balon kalkar, mesaj kalır.
-    func testStreamingPersistsThenReplacedByRealMessage() {
+    /// KRİTİK (vanish yok): Mac'in GERÇEK yayın sırası — chat_append (gerçek mesaj)
+    /// önce, chat_status(working=false) sonra. Balon append'te gizlenir çünkü gerçek
+    /// mesaj o an listede; turn bitince de metin listede kalır (silinmez).
+    func testStreamingReplacedByRealMessageNoVanish() {
         let (model, _, _) = makeModel()
+        // Akış başlıyor.
         model.handle(.chatStatus(sessionId: "s1", status: ChatTurnStatus(
             working: true, startedAtMs: 1, tool: nil, streamingText: "Cevap")))
         XCTAssertTrue(model.chatRenderMessages("s1").contains { $0.id == "streaming" },
-                      "streaming balonu görünmeli")
-        // Turn bitti: streaming=nil AMA gerçek mesaj henüz yok → metin tutulmalı.
-        model.handle(.chatStatus(sessionId: "s1", status: ChatTurnStatus(
-            working: false, startedAtMs: nil, tool: nil, streamingText: nil)))
-        XCTAssertTrue(model.chatRenderMessages("s1").contains { $0.id == "streaming" },
-                      "gerçek mesaj yokken streaming metni silinmemeli (vanish yok)")
-        // Gerçek assistant mesajı düştü (metinle önden gidiyor) → balon gizlenir.
+                      "akış sırasında streaming balonu görünmeli")
+        // Mac önce gerçek mesajı append eder (status hâlâ working=true).
         model.handle(.chatAppend(sessionId: "s1", messages: [ChatMessage(
             id: "a1", role: .assistant, blocks: [.text("Cevap tamamlandı", presentation: nil)],
             timestampMs: nil, turnId: nil)]))
-        let render = model.chatRenderMessages("s1")
-        XCTAssertFalse(render.contains { $0.id == "streaming" }, "gerçek mesaj düşünce balon kalkmalı")
-        XCTAssertTrue(render.contains { $0.id == "a1" }, "gerçek mesaj listede olmalı")
+        var render = model.chatRenderMessages("s1")
+        XCTAssertTrue(render.contains { $0.id == "a1" }, "gerçek mesaj listede")
+        XCTAssertFalse(render.contains { $0.id == "streaming" }, "gerçek mesaj gelince balon gizlenir")
+        // Sonra turn biter.
+        model.handle(.chatStatus(sessionId: "s1", status: ChatTurnStatus(
+            working: false, startedAtMs: nil, tool: nil, streamingText: nil)))
+        render = model.chatRenderMessages("s1")
+        XCTAssertTrue(render.contains { $0.id == "a1" }, "turn bitince mesaj hâlâ listede (vanish yok)")
+        XCTAssertFalse(render.contains { $0.id == "streaming" }, "turn bitince balon yok")
     }
 }

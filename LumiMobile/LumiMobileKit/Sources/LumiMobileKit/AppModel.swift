@@ -70,9 +70,10 @@ public final class AppModel {
     /// Transcript yankılayınca sayım-tabanlı dedup ile emekliye ayrılır; yankılamazsa kalır.
     private var pendingBySession: [String: [ChatPending]] = [:]
     private var pendingCounter = 0
-    /// Session başına streaming geçidi (orca gate + hold uyarlaması).
+    /// Session başına streaming geçidi (orca deriveMobileNativeChatStreaming portu).
     private var streamingGates: [String: ChatStreamGate] = [:]
-    /// Geçitten geçmiş görünür streaming metni (view okur; gerçek mesaj düşene kadar TUTULUR).
+    /// Geçitten geçmiş görünür streaming metni (view okur; gerçek mesaj tail'e
+    /// düşünce veya turn bitince gizlenir).
     public private(set) var gatedStreaming: [String: String] = [:]
     /// sessionId → son canlı turn status (Faz 2; chat_status frame'inden).
     public private(set) var turnStatus: [String: ChatTurnStatus] = [:]
@@ -207,7 +208,7 @@ public final class AppModel {
             chatBySession[sessionId] = messages
             pendingBySession[sessionId] = chatRetireLandedPending(
                 messages: messages, current: pendingBySession[sessionId] ?? [])
-            recomputeStreaming(sessionId, incoming: nil)
+            recomputeStreaming(sessionId)
 
         case .chatAppend(let sessionId, let messages):
             macOnline = true
@@ -222,12 +223,12 @@ public final class AppModel {
             chatBySession[sessionId] = current
             pendingBySession[sessionId] = chatRetireLandedPending(
                 messages: current, current: pendingBySession[sessionId] ?? [])
-            recomputeStreaming(sessionId, incoming: nil)
+            recomputeStreaming(sessionId)
 
         case .chatStatus(let sessionId, let status):
             macOnline = true
             turnStatus[sessionId] = status
-            recomputeStreaming(sessionId, incoming: status.streamingText)
+            recomputeStreaming(sessionId)
 
         case .prompt(let sessionId, let p):
             macOnline = true
@@ -470,13 +471,18 @@ public final class AppModel {
     }
 
     /// Streaming geçidini bir tık ilerletir; sonucu `gatedStreaming`'e yazar. Hem
-    /// chat_status (incoming=metin) hem mesaj değişiminde (incoming=nil) çağrılır —
-    /// gerçek mesaj düşünce catch-up ile balon gizlenir, düşmezse metin tutulur.
-    private func recomputeStreaming(_ sessionId: String, incoming: String?) {
+    /// chat_status hem mesaj değişiminde (chat/chat_append) çağrılır — her ikisi de
+    /// güncel turnStatus + folded'a bakar. Turn canlı değilse önizleme verilmez
+    /// (orca mobileNativeChatStreamPreview); gerçek mesaj düşünce catch-up ile gizlenir.
+    private func recomputeStreaming(_ sessionId: String) {
+        let working = turnStatus[sessionId]?.working ?? false
+        // Önizleme yalnız turn canlıyken; bitince nil → balon gizlenir (gerçek mesaj
+        // o an transcript'te olduğundan boşluk olmaz).
+        let preview = working ? (turnStatus[sessionId]?.streamingText) : nil
         let folded = foldChatMessages(chatBySession[sessionId] ?? []).map { $0.message }
         let (newGate, streaming) = chatDeriveStreaming(
             gate: streamingGates[sessionId] ?? ChatStreamGate(),
-            folded: folded, incoming: incoming)
+            folded: folded, incoming: preview, streamLive: working)
         streamingGates[sessionId] = newGate
         gatedStreaming[sessionId] = streaming
     }

@@ -90,19 +90,18 @@ public func chatCountUserTextOccurrences(_ messages: [ChatMessage], _ normalized
 
 // MARK: - Streaming geçidi (orca deriveMobileNativeChatStreaming + hold uyarlaması)
 
-/// Streaming balonu geçidi. `hold`, Mac streamingText'i null'a çekse bile metni
-/// TUTAR (Lumi tek-kaynak journal boru hattı: append ile null yarışında metin
-/// kaybolmasın) — orca'nın "yalnız transcript tail metinle önden gidince gizle"
-/// ruhu. baselineTailId: segment başındaki tail; gerçek yanıt eski özdeş bir
-/// turn'ün önekini tekrarlarsa balonu yanlışlıkla gizlememek için.
+/// Streaming balonu geçidi (orca deriveMobileNativeChatStreaming birebir portu).
+/// Balon yalnız transcript tail metinle "önden gidince VE segment başından beri
+/// taşınınca" (caughtUp = gerçek yanıt landi) gizlenir; eski özdeş bir turn'ün
+/// önekini tekrarlayan yeni yanıt yanlışlıkla gizlenmez (baselineTailId koruması).
+/// Turn bitince (streamLive=false → incoming nil) balon gizlenir — gerçek mesaj o
+/// an transcript'te (Mac append'i status-nil'den ÖNCE yollar) → boşluk/vanish yok.
 public struct ChatStreamGate: Sendable, Equatable {
     public var prevText: String
     public var baselineTailId: String?
-    public var hold: String?
-    public init(prevText: String = "", baselineTailId: String? = nil, hold: String? = nil) {
+    public init(prevText: String = "", baselineTailId: String? = nil) {
         self.prevText = prevText
         self.baselineTailId = baselineTailId
-        self.hold = hold
     }
 }
 
@@ -114,38 +113,30 @@ private func assistantTailText(_ tail: ChatMessage?) -> String {
 }
 
 /// Geçidi bir tık ilerletir ve görünür streaming metnini döndürür (nil = gizle).
-/// `folded`: journal mesajlarının katlanmış hali (tool satırları katlanmış).
-/// `incoming`: bu tıktaki ham streaming metni (Mac chat_status); yalnız mesaj
-/// değişince çağrıldıysa nil geçilir (hold korunur, catch-up yeniden bakılır).
+/// `folded`: journal mesajlarının katlanmış hali. `incoming`: bu tıktaki streaming
+/// metni (turn canlı değilse nil → "gözlem yok"). `streamLive`: ajan hâlâ turn'de mi.
 public func chatDeriveStreaming(gate: ChatStreamGate, folded: [ChatMessage],
-                                incoming: String?) -> (gate: ChatStreamGate, streaming: String?) {
+                                incoming: String?, streamLive: Bool)
+    -> (gate: ChatStreamGate, streaming: String?) {
     var g = gate
     let text = (incoming ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
     let tailId = folded.last?.id
-
-    if !text.isEmpty {
-        // prevText'i uzatmıyorsa yeni segment (yeni yanıt parçası) → tail'i yeniden çıpala.
-        let segmentStart = !g.prevText.isEmpty && !text.hasPrefix(g.prevText)
-        if segmentStart || g.prevText.isEmpty {
-            g.baselineTailId = tailId
-        }
-        g.prevText = text
-        g.hold = text
-    }
-
-    guard let display = g.hold, !display.isEmpty else {
+    if text.isEmpty {
+        // Metinsiz tık: yalnız turn dışıysa (veya geçit hiç çıpalanmadıysa) tail'i
+        // güvenilir tarih olarak çıpala; turn-içi boşlukta yeni yanıtı ikinci kez
+        // balon olarak çizmemek için çıpalama.
+        let canAnchor = tailId != nil && (!streamLive || g.baselineTailId == nil)
+        if canAnchor { g.prevText = ""; g.baselineTailId = tailId }
         return (g, nil)
     }
-    let tailLeads = assistantTailText(folded.last).hasPrefix(display)
-    // Gerçek yanıt LANDI: tail metinle önden gidiyor VE segment başından beri taşındı.
-    let caughtUp = tailLeads && tailId != g.baselineTailId
-    if caughtUp {
-        g.hold = nil
-        g.prevText = ""
-        g.baselineTailId = nil
-        return (g, nil)
-    }
-    return (g, display)
+    // prevText'i uzatmıyorsa yeni segment (yeni yanıt parçası) → tail'i yeniden çıpala.
+    let segmentStart = !g.prevText.isEmpty && !text.hasPrefix(g.prevText)
+    let baseline = segmentStart ? tailId : g.baselineTailId
+    let tailLeads = assistantTailText(folded.last).hasPrefix(text)
+    let caughtUp = tailLeads && tailId != baseline
+    g.prevText = text
+    g.baselineTailId = baseline
+    return (g, caughtUp ? nil : text)
 }
 
 // MARK: - Render listesi birleştirme (orca buildMobileNativeChatTransientData)
