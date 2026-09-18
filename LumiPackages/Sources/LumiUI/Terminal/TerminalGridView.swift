@@ -90,6 +90,7 @@ struct TerminalCardView: View {
     var body: some View {
         TerminalCardChrome(
             isActive: isActive,
+            needsAttention: needsAttention,
             terminalID: meta.id,
             promptQueue: promptQueue,
             isQueueOpen: $isQueueOpen

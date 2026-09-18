@@ -11,6 +11,9 @@ import SwiftUI
 struct TerminalCardChrome<Header: View, Content: View>: View {
     /// Aktif kart: 1px accent ring + 15pt glow. Maximize'da her zaman `true`.
     let isActive: Bool
+    /// Karar 77: dikkat isteyen kart sarı kenarlık alır. Glow VERİLMEZ —
+    /// hale "aktif kart" dilidir, iki hâl karışmasın.
+    var needsAttention = false
     let terminalID: TerminalID
     let promptQueue: PromptQueueStore
     @Binding var isQueueOpen: Bool
@@ -20,7 +23,7 @@ struct TerminalCardChrome<Header: View, Content: View>: View {
     var body: some View {
         Panel(
             variant: .card,
-            borderColor: isActive ? Theme.accentPrimary : Theme.border,
+            borderColor: borderColor,
             glow: isActive ? .accent() : nil
         ) {
             VStack(spacing: 0) {
@@ -29,6 +32,11 @@ struct TerminalCardChrome<Header: View, Content: View>: View {
             }
         }
         .promptQueueOverlay(isOpen: $isQueueOpen, terminalID: terminalID, store: promptQueue)
+    }
+
+    private var borderColor: Color {
+        if isActive { return Theme.accentPrimary }
+        return needsAttention ? Theme.warning : Theme.border
     }
 }
 

@@ -264,6 +264,7 @@ struct AgentRow: View {
                 .padding(.vertical, Theme.Spacing.xxs)
                 .background(isHovering ? Theme.bgElevated : .clear)
                 .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+                .overlay(alignment: .leading) { attentionBar }
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -276,6 +277,22 @@ struct AgentRow: View {
         .contextMenu {
             Button("Focus Session", action: onSelect)
             Button("Close Session", role: .destructive) { shell.terminals.close(agent.meta.id) }
+        }
+    }
+
+    /// Karar 77 vurgusunun asıl gücü: ajan grubunun girinti hizasında duran
+    /// dikey sarı çubuk. Zemini boyamak yerine boş bir kanal kullanır — satır
+    /// zemini bu listede "seçili / hover" demektir.
+    @ViewBuilder
+    private var attentionBar: some View {
+        if agent.needsAttention {
+            RoundedRectangle(cornerRadius: Theme.Radius.sm)
+                .fill(Theme.warning)
+                // 2pt: ölçek dışı ara değer — hairline görünmüyor, 3pt bağırıyor.
+                .frame(width: Theme.scaled(2))
+                .padding(.vertical, Theme.Spacing.xxs)
+                .padding(.leading, Theme.Spacing.xxl)
+                .accessibilityHidden(true)
         }
     }
 
