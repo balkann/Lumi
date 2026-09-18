@@ -40,4 +40,35 @@ final class ModelPresentationTests: XCTestCase {
         XCTAssertEqual(AgentProvider.claude.displayName, "Claude")
         XCTAssertEqual(AgentProvider.codex.displayName, "Codex")
     }
+
+    func testOriginalCheckoutUsesMainAsItsStableNameAndBranchAsSecondaryIdentity() {
+        let checkout = Checkout.original(Repo(
+            name: "Lumi", path: "/projects/lumi", isGitRepo: true, source: .standalone
+        ))
+
+        XCTAssertEqual(
+            checkout.identity(originalBranch: "feature/sidebar"),
+            CheckoutIdentity(title: "main", branch: "feature/sidebar")
+        )
+        XCTAssertEqual(
+            checkout.identity(),
+            CheckoutIdentity(title: "main", branch: nil),
+            "branch cache'i dolmadan da original checkout adı kararlı kalmalı"
+        )
+    }
+
+    func testManagedCheckoutKeepsWorkspaceNameAndBranchPair() {
+        let checkout = Checkout.workspace(ProjectWorkspace(
+            projectPath: "/projects/lumi",
+            path: "/workspaces/lumi/sidebar",
+            name: "sidebar",
+            branch: "feature/sidebar",
+            scm: .git
+        ))
+
+        XCTAssertEqual(
+            checkout.identity(originalBranch: "ignored"),
+            CheckoutIdentity(title: "sidebar", branch: "feature/sidebar")
+        )
+    }
 }

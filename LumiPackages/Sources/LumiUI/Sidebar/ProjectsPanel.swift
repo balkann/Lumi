@@ -154,19 +154,6 @@ public struct ProjectsPanel: View {
                 isDropTarget: dropTargetProjectPath == project.path
             )
         }
-        .onDrag {
-            draggedProjectPath = project.path
-            let provider = NSItemProvider()
-            let data = Data(project.path.utf8)
-            provider.registerDataRepresentation(
-                forTypeIdentifier: UTType.lumiProjectPath.identifier,
-                visibility: .ownProcess
-            ) { completion in
-                completion(data, nil)
-                return nil
-            }
-            return provider
-        }
         .onDrop(of: [UTType.lumiProjectPath], delegate: ProjectReorderDropDelegate(
             targetPath: project.path,
             draggedPath: $draggedProjectPath,
@@ -235,12 +222,17 @@ public struct ProjectsPanel: View {
                         .foregroundStyle(Theme.textPrimary)
                         .lineLimit(1)
                         .truncationMode(.tail)
+                    Spacer(minLength: 0)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
+                // Put the native drag recognizer on the title surface itself.
+                // The surrounding Button keeps click/keyboard foldout
+                // semantics, while its label no longer swallows drag start.
+                .onDrag { projectDragProvider(for: project) }
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Toggle workspaces for \(project.name)")
-            Spacer(minLength: 0)
             HStack(spacing: Theme.Spacing.xxs) {
                 IconButton(
                     systemName: "ellipsis", label: "Project actions for \(project.name)",
@@ -282,6 +274,20 @@ public struct ProjectsPanel: View {
         .padding(.horizontal, Theme.Spacing.xs)
         .padding(.vertical, Theme.Spacing.xxs)
         .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
+    }
+
+    private func projectDragProvider(for project: Repo) -> NSItemProvider {
+        draggedProjectPath = project.path
+        let provider = NSItemProvider()
+        let data = Data(project.path.utf8)
+        provider.registerDataRepresentation(
+            forTypeIdentifier: UTType.lumiProjectPath.identifier,
+            visibility: .ownProcess
+        ) { completion in
+            completion(data, nil)
+            return nil
+        }
+        return provider
     }
 
     private func toggleProject(_ project: Repo) {

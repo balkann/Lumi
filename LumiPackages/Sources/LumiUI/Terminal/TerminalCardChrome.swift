@@ -40,7 +40,7 @@ struct TerminalCardChrome<Header: View, Content: View>: View {
     }
 }
 
-/// Terminal kartının ORTAK header'ı (refactor 6.7): durum noktası + stalled
+/// Terminal kartının ORTAK header'ı (refactor 6.7): ajan etkinlik glifi + stalled
 /// rozeti + başlık + kuyruk düğmesi + zoom/minimize/kapat.
 ///
 /// Grid ve maximize varyantları yalnız `Style` (boşluk/punto/padding) ve zoom
@@ -76,6 +76,8 @@ struct TerminalCardHeader: View {
     let meta: TerminalMeta
     let isActive: Bool
     let isStalled: Bool
+    /// Hook kararı beklerken Projects paneliyle aynı zil glifini gösterir.
+    var isAwaitingDecision = false
     /// Karar 77: seçili değilken turn'ü kapanmış ya da karar bekleyen terminal —
     /// başlık sarıya döner ki göz taramada yakalasın.
     var needsAttention = false
@@ -94,7 +96,13 @@ struct TerminalCardHeader: View {
 
     var body: some View {
         HStack(spacing: style.spacing) {
-            StatusDot(status: meta.status)
+            AgentActivityIcon(
+                state: AgentActivityState(
+                    status: meta.status,
+                    isAwaitingDecision: isAwaitingDecision
+                ),
+                size: style.titleSize
+            )
             TerminalIdentityIcon(provider: meta.provider, size: style.titleSize)
             if isStalled {
                 Badge(text: "stalled", color: Theme.warning)
@@ -175,38 +183,12 @@ struct TerminalIdentityIcon: View {
     }
 }
 
-/// Durum noktası: working / waiting-unseen pulse'lı, gerisi sabit.
-struct StatusDot: View {
-    let status: TerminalStatus
-
-    @State private var isPulsing = false
-
-    private static var diameter: CGFloat { Theme.scaled(7) }
-
-    private var shouldPulse: Bool {
-        status == .working || status == .waitingUnseen
-    }
-
-    var body: some View {
-        let color = Theme.statusColor(for: status)
-        Circle()
-            .fill(color)
-            .frame(width: Self.diameter, height: Self.diameter)
-            .shadow(color: shouldPulse ? color.opacity(0.8) : .clear, radius: 3)
-            .opacity(shouldPulse && isPulsing ? 0.4 : 1)
-            .animation(shouldPulse ? Theme.Motion.statusPulse : .default, value: isPulsing)
-            .onAppear { isPulsing = true }
-            .onChange(of: shouldPulse) { _, pulse in
-                isPulsing = pulse
-            }
-            .accessibilityHidden(true)
-    }
-}
-
 #if DEBUG
 #Preview("TerminalCardHeader") {
     VStack(spacing: Theme.Spacing.xl) {
-        StatusDot(status: .working)
+        AgentActivityIcon(state: .running)
+        AgentActivityIcon(state: .awaitingDecision)
+        AgentActivityIcon(state: .done)
         HStack(spacing: Theme.Spacing.sm) {
             TerminalIdentityIcon(provider: .claude)
             TerminalIdentityIcon(provider: .codex)

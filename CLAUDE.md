@@ -12,7 +12,7 @@ Teknoloji kararları (2026-06-11, bağlayıcı — detay ve gerekçeler `docs/de
 - **Manuel DI + `AppContainer` composition root**; lokal SPM paketleri `LumiKit ← LumiTerminal / LumiServices / LumiState ← LumiUI`
 - **macOS 14+**, Swift 6 strict concurrency; servis→store `AsyncStream`, store→UI `@Observable`, Combine yok
 
-Son ek: Codex hesapları Orca gibi ayrı `CODEX_HOME` dizinlerinde tutulur; Settings/usage popover seçimi yeni terminallere ve Codex usage probe'una uygulanır, çalışan terminaller hesabını korur (karar 78). Graceful quit'te hook'tan alınan Codex thread kimliği kaynak `CODEX_HOME` ile kaydedilir ve açılışta `codex resume` ile geri açılır (karar 80, 2026-09-18).
+Son ek: Codex hesapları Orca gibi ayrı `CODEX_HOME` dizinlerinde tutulur; Settings/usage popover seçimi yeni terminallere ve Codex usage probe'una uygulanır, çalışan terminaller hesabını korur (karar 78). Graceful quit'te hook'tan alınan Codex thread kimliği kaynak `CODEX_HOME` ile kaydedilir ve açılışta `codex resume` ile geri açılır (karar 80, 2026-09-18). Terminal kartı header'ı ile Projects ajan satırı aynı `AgentActivityIcon` durum dilini kullanır; dikkat isteyen başlık iki yüzeyde de `TerminalAttention` kuralıyla sarıdır (karar 81, 2026-09-18).
 
 ## Kurallar
 

@@ -107,7 +107,7 @@ public enum Theme {
         }
     }
 
-    /// StatusDot renk sistemi: durum → renk eşlemesi birebir.
+    /// Kompakt terminal chip'lerinin durum noktası renk sistemi.
     public static func statusColor(for status: TerminalStatus) -> Color {
         switch status {
         case .idle: return textMuted

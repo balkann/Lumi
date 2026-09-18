@@ -30,6 +30,20 @@ enum Checkout: Identifiable {
         case .workspace(let workspace): workspace.name
         }
     }
+
+    func identity(originalBranch: String? = nil) -> CheckoutIdentity {
+        switch self {
+        case .original:
+            CheckoutIdentity(title: title, branch: originalBranch)
+        case .workspace(let workspace):
+            CheckoutIdentity(title: title, branch: workspace.branch)
+        }
+    }
+}
+
+struct CheckoutIdentity: Equatable {
+    let title: String
+    let branch: String?
 }
 
 /// Checkout satırı + ajan listesi (karar 51, Orca `WorktreeCard` sadeliği).
@@ -111,11 +125,8 @@ struct CheckoutRow: View {
 
     @ViewBuilder
     private var trailing: some View {
-        switch checkout {
-        case .original:
-            EmptyView()
-        case .workspace(let workspace):
-            Text(workspace.branch)
+        if let branchLabel {
+            Text(branchLabel)
                 .font(Theme.Typography.captionMono)
                 .foregroundStyle(Theme.textMuted)
                 .lineLimit(1)
@@ -226,17 +237,27 @@ struct CheckoutRow: View {
     // MARK: - Türevler
 
     private var displayTitle: String {
+        identity.title
+    }
+
+    /// Original checkout da yönetilen workspace'lerle aynı iki kolonlu
+    /// kimliği kullanır: solda sabit `main`, yanında gerçek SCM branch yolu.
+    private var branchLabel: String? {
+        identity.branch
+    }
+
+    private var identity: CheckoutIdentity {
         switch checkout {
         case .original(let repo):
             if let branch = shell.git.branches[repo.path]?.first(where: { $0.isCurrent }) {
-                return branch.name
+                return checkout.identity(originalBranch: branch.name)
             }
             if let branch = shell.plastic.workspaces[repo.path]?.branch {
-                return PlasticBranchName.display(branch)
+                return checkout.identity(originalBranch: PlasticBranchName.display(branch))
             }
-            return checkout.title
+            return checkout.identity()
         case .workspace:
-            return checkout.title
+            return checkout.identity()
         }
     }
 

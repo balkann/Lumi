@@ -47,13 +47,15 @@ struct TerminalGridView: View {
             ForEach(Array(terminals.enumerated()), id: \.element.id) { index, meta in
                 if index < frames.count {
                     let frame = frames[index]
+                    let isAwaitingDecision = awaitingDecisionIDs.contains(meta.id)
                     TerminalCardView(
                         meta: meta,
                         isActive: activeTerminalID == meta.id,
                         isStalled: stalledIDs.contains(meta.id),
+                        isAwaitingDecision: isAwaitingDecision,
                         needsAttention: TerminalAttention.isNeeded(
                             status: meta.status,
-                            isAwaitingDecision: awaitingDecisionIDs.contains(meta.id),
+                            isAwaitingDecision: isAwaitingDecision,
                             isSelected: activeTerminalID == meta.id
                         ),
                         viewProvider: viewProvider,
@@ -77,6 +79,7 @@ struct TerminalCardView: View {
     let meta: TerminalMeta
     let isActive: Bool
     var isStalled = false
+    var isAwaitingDecision = false
     var needsAttention = false
     let viewProvider: any TerminalViewProviding
     let promptQueue: PromptQueueStore
@@ -99,6 +102,7 @@ struct TerminalCardView: View {
                 meta: meta,
                 isActive: isActive,
                 isStalled: isStalled,
+                isAwaitingDecision: isAwaitingDecision,
                 needsAttention: needsAttention,
                 style: .grid,
                 promptQueue: promptQueue,

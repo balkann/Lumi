@@ -13,6 +13,8 @@ struct MaximizedTerminalView: View {
     let others: [TerminalMeta]
     /// Feed watchdog donma sinyali (design/00 Ek A §A.2-10); varsayılan kapalı.
     var isStalled = false
+    var isAwaitingDecision = false
+    var needsAttention = false
     let viewProvider: any TerminalViewProviding
     let promptQueue: PromptQueueStore
     let onSwitch: (TerminalID) -> Void
@@ -37,6 +39,7 @@ struct MaximizedTerminalView: View {
         TerminalCardChrome(
             // Maximize edilen kart her zaman "aktif" çerçeveyi taşır.
             isActive: true,
+            needsAttention: needsAttention,
             terminalID: maximized.id,
             promptQueue: promptQueue,
             isQueueOpen: $isQueueOpen
@@ -45,6 +48,8 @@ struct MaximizedTerminalView: View {
                 meta: maximized,
                 isActive: true,
                 isStalled: isStalled,
+                isAwaitingDecision: isAwaitingDecision,
+                needsAttention: needsAttention,
                 style: .maximized,
                 promptQueue: promptQueue,
                 isQueueOpen: $isQueueOpen,
