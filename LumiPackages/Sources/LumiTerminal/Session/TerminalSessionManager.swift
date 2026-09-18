@@ -21,6 +21,8 @@ public final class TerminalSessionManager: TerminalServicing {
     private var font: NSFont
     /// Caret şekli + blink (SwiftTerm CursorStyle'a çözülmüş). Canlı uygulanır.
     private var cursorStyle: CursorStyle = .blinkBlock
+    /// Karar 57: düz tıkla açılan link eylemleri (Settings ▸ Terminal).
+    private var linkActionsEnabled = true
     /// Odağın tek otoritesi (Faz 4.3/4.9): `setFocused` ile gelen seçim burada
     /// tutulur ki yüzey geçişleri (`setSurfaceState`) odağı yeniden türetmek
     /// yerine aynı kaynaktan okusun — foreground olmak tek başına odak
@@ -72,6 +74,13 @@ public final class TerminalSessionManager: TerminalServicing {
         sessions.forEach { $0.setCursorStyle(style) }
     }
 
+    /// Karar 57: ayar canlı uygulanır ve sonraki spawn'lar devralır.
+    public func applyLinkActions(enabled: Bool) {
+        guard linkActionsEnabled != enabled else { return }
+        linkActionsEnabled = enabled
+        sessions.forEach { $0.setLinkActionsEnabled(enabled) }
+    }
+
     public var terminals: [TerminalMeta] {
         sessions.map(\.meta)
     }
@@ -95,6 +104,7 @@ public final class TerminalSessionManager: TerminalServicing {
         // Spawn-time: manager'ın güncel cursor değerini uygula (palet sabit —
         // DropAwareTerminalView zaten TerminalTheme.lumi uygular).
         session.setCursorStyle(cursorStyle)
+        session.setLinkActionsEnabled(linkActionsEnabled)
         // Katman sınırı (Faz 4.1): oturum superview'a dokunmaz; hücre boyutu
         // değişince yeniden yerleşimi registry üzerinden host'tan ister.
         let sessionID = session.id
@@ -259,6 +269,12 @@ extension TerminalSessionManager: TerminalSessionDelegate {
     func sessionDidBell(_ session: TerminalSession) {
         guard isRegistered(session) else { return }
         broadcaster.send(.bell(session.id))
+    }
+
+    /// Karar 57: link tıklaması diğer terminal sinyalleriyle aynı kanaldan akar.
+    func session(_ session: TerminalSession, didActivateLink activation: TerminalLinkActivation) {
+        guard isRegistered(session) else { return }
+        broadcaster.send(.linkActivated(activation))
     }
 
     func session(_ session: TerminalSession, didExitWithCode code: Int32) {

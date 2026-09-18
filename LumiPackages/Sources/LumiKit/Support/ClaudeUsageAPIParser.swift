@@ -45,7 +45,11 @@ public enum ClaudeUsageAPIParser {
         return UsageLimit(
             kind: kind,
             rawLabel: rawLabel(kindRaw: kindRaw, modelName: modelName),
-            window: window(percent: percent, resetsAt: entry["resets_at"])
+            window: window(
+                percent: percent,
+                resetsAt: entry["resets_at"],
+                duration: ClaudeUsageWindows.duration(for: kind)
+            )
         )
     }
 
@@ -71,32 +75,33 @@ public enum ClaudeUsageAPIParser {
     /// Orca da bu iki alanı ayrıca okur; burada yalnız yedek yoldur.
     private static func fallbackLimits(from root: [String: Any]) -> [UsageLimit] {
         var limits: [UsageLimit] = []
-        if let window = topLevelWindow(root["five_hour"]) {
+        if let window = topLevelWindow(root["five_hour"], duration: ClaudeUsageWindows.session) {
             limits.append(UsageLimit(kind: .session, rawLabel: "five_hour", window: window))
         }
-        if let window = topLevelWindow(root["seven_day"]) {
+        if let window = topLevelWindow(root["seven_day"], duration: ClaudeUsageWindows.weekly) {
             limits.append(UsageLimit(kind: .weeklyAll, rawLabel: "seven_day", window: window))
         }
         return limits
     }
 
-    private static func topLevelWindow(_ value: Any?) -> UsageWindow? {
+    private static func topLevelWindow(_ value: Any?, duration: TimeInterval) -> UsageWindow? {
         guard let entry = value as? [String: Any] else { return nil }
         guard let percent = JSONValue.roundedInt(entry["utilization"], acceptingStrings: true)
             ?? JSONValue.roundedInt(entry["used_percentage"], acceptingStrings: true)
         else { return nil }
-        return window(percent: percent, resetsAt: entry["resets_at"])
+        return window(percent: percent, resetsAt: entry["resets_at"], duration: duration)
     }
 
     // MARK: - Ortak alan çevirileri
 
-    private static func window(percent: Int, resetsAt: Any?) -> UsageWindow {
+    private static func window(percent: Int, resetsAt: Any?, duration: TimeInterval?) -> UsageWindow {
         let date = resetDate(resetsAt)
         return UsageWindow(
             percentUsed: min(100, max(0, percent)),
             resetsAt: date,
             resetsRaw: date.map(UsageResetFormatter.string(from:)) ?? "",
-            timezone: nil
+            timezone: nil,
+            duration: duration
         )
     }
 

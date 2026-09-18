@@ -8,43 +8,43 @@ import CoreGraphics
 public extension Theme {
     enum Radius {
         /// 0pt — tam genişlik liste satırı (hover zemini kenara dayanır).
-        public static let none: CGFloat = 0
+        public static var none: CGFloat { Theme.scaled(0) }
         /// 4pt — rozet, keycap, chip, minik ikon butonu (eski 3/4/5).
-        public static let sm: CGFloat = 4
+        public static var sm: CGFloat { Theme.scaled(4) }
         /// 6pt — input, buton, satır, açılır menü (eski 6/7); modülün varsayılanı.
-        public static let md: CGFloat = 6
+        public static var md: CGFloat { Theme.scaled(6) }
         /// 8pt — kart ve liste kabı (eski 8/10).
-        public static let lg: CGFloat = 8
+        public static var lg: CGFloat { Theme.scaled(8) }
         /// 16pt — modal panel.
-        public static let panel: CGFloat = 16
+        public static var panel: CGFloat { Theme.scaled(16) }
 
         /// Ölçeğin tamamı (lint/test).
-        public static let scale: [CGFloat] = [sm, md, lg, panel]
+        public static var scale: [CGFloat] { [sm, md, lg, panel] }
     }
 
     /// Boşluk ölçeği — 2pt tabanlı.
     enum Spacing {
         /// 1pt — rozet gibi çok sıkı dikey dolgular.
-        public static let xxxs: CGFloat = 1
+        public static var xxxs: CGFloat { Theme.scaled(1) }
         /// 2pt
-        public static let xxs: CGFloat = 2
+        public static var xxs: CGFloat { Theme.scaled(2) }
         /// 4pt
-        public static let xs: CGFloat = 4
+        public static var xs: CGFloat { Theme.scaled(4) }
         /// 6pt
-        public static let sm: CGFloat = 6
+        public static var sm: CGFloat { Theme.scaled(6) }
         /// 8pt
-        public static let md: CGFloat = 8
+        public static var md: CGFloat { Theme.scaled(8) }
         /// 12pt
-        public static let lg: CGFloat = 12
+        public static var lg: CGFloat { Theme.scaled(12) }
         /// 16pt
-        public static let xl: CGFloat = 16
+        public static var xl: CGFloat { Theme.scaled(16) }
         /// 24pt — form alanları arası / bölüm arası.
-        public static let xxl: CGFloat = 24
+        public static var xxl: CGFloat { Theme.scaled(24) }
         /// 32pt — panel iç kenar payı.
-        public static let xxxl: CGFloat = 32
+        public static var xxxl: CGFloat { Theme.scaled(32) }
 
         /// Ölçeğin tamamı (lint/test).
-        public static let scale: [CGFloat] = [xxxs, xxs, xs, sm, md, lg, xl, xxl, xxxl]
+        public static var scale: [CGFloat] { [xxxs, xxs, xs, sm, md, lg, xl, xxl, xxxl] }
     }
 
     /// Liste satırı yükseklikleri.
@@ -54,23 +54,23 @@ public extension Theme {
     /// satırların yerinde durmasını sağlar.
     enum Row {
         /// 22pt — file-tree / arama sonucu satırı (yoğun liste).
-        public static let compact: CGFloat = 22
+        public static var compact: CGFloat { Theme.scaled(22) }
         /// 16pt — satır ikonunun sabit kolon genişliği; adlar aynı x'te hizalanır.
-        public static let iconColumn: CGFloat = 16
+        public static var iconColumn: CGFloat { Theme.scaled(16) }
         /// 40pt — iki satırlı commit graph satırı (mesaj + meta).
         ///
         /// Bu değer AYNI ZAMANDA graph'ın swimlane segment yüksekliğidir:
         /// lane çizgilerinin satırlar arasında kesintisiz akması için canvas
         /// yüksekliği satır yüksekliğine eşit olmak zorunda.
-        public static let commit: CGFloat = 40
+        public static var commit: CGFloat { Theme.scaled(40) }
         /// 28pt — tam genişlik buton/bölünmüş buton yüksekliği (Commit ▾).
-        public static let control: CGFloat = 28
+        public static var control: CGFloat { Theme.scaled(28) }
     }
 
     /// Çizgi kalınlığı — tüm kenarlıklar ve ayraçlar 1pt (hairline).
     enum Stroke {
-        public static let hairline: CGFloat = 1
+        public static var hairline: CGFloat { Theme.scaled(1) }
         /// 1.5pt — commit graph lane'i (Orca `CIRCLE_STROKE_WIDTH`).
-        public static let graph: CGFloat = 1.5
+        public static var graph: CGFloat { Theme.scaled(1.5) }
     }
 }

@@ -33,3 +33,6 @@ LumiMobile/build/
 LumiMobile/build-device/
 LumiMobile/*.log
 LumiMobile/App/Info.plist
+
+# Kişisel build ayarları — commit edilmez
+Scripts/make-app.local.sh

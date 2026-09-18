@@ -39,7 +39,17 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PKG="$ROOT/LumiPackages"
 DIST="${DIST:-$ROOT/dist}"   # test için farklı çıktı dizini: DIST=/path Scripts/make-app.sh
 APP="$DIST/Lumi.app"
-VERSION="${VERSION:-0.6.1}"
+VERSION="${VERSION:-0.7.3}"
+
+# Kişisel, commit'lenmeyen ayarlar: varsa burada source edilir (.gitignore'da).
+# Değişkenler (IDENTITY / VERSION / DIST / NOTARY_PROFILE) burada ezilebilir,
+# kurulum sonrası ek adımlar `post_install` fonksiyonuyla tanımlanabilir.
+# Dosya yoksa script aynen davranır — CI etkilenmez.
+LOCAL_OVERRIDES="$ROOT/Scripts/make-app.local.sh"
+if [ -f "$LOCAL_OVERRIDES" ]; then
+  echo "▸ Yerel ayarlar: Scripts/make-app.local.sh"
+  source "$LOCAL_OVERRIDES"
+fi
 
 echo "▸ Release build…"
 # NEDEN xcodebuild (swift build DEĞİL): `swift build`'in ürettiği Bundle.module
@@ -219,11 +229,27 @@ fi
 
 if [ "$INSTALL" -eq 1 ]; then
   echo "▸ /Applications'a kurulum…"
-  if pgrep -xq Lumi; then
-    echo "  HATA: Lumi çalışıyor — önce uygulamadan çık, sonra tekrar dene." >&2
-    exit 1
-  fi
+  # `pgrep` KULLANILMAZ: `-x Lumi` hiç eşleşmez (macOS'ta süreç adı tam yoldur)
+  # ve `-f` de bazı bağlamlarda uygulamayı göremiyor.
+  #
+  # `ps … | grep -q` DA KULLANILMAZ: bu dosyadaki `set -o pipefail` ile BOZUKTU.
+  # `grep -q` eşleşmeyi bulur bulmaz çıkıyor, `ps` SIGPIPE alıyor ve pipefail
+  # pipeline'ı 141 yapıyordu — yani Lumi ÇALIŞIRKEN koşul "bulunamadı"ya düşüp
+  # koruma hiç tetiklenmiyor, çalışan uygulamanın bundle'ı siliniyordu (süreç
+  # eski inode'u tuttuğu için kullanıcı eski sürümü kullanmaya devam ederdi).
+  # `ps -eo args=` çıktısı ~150 KB, pipe buffer 64 KB — kaçınılmazdı.
+  #
+  # Pipe hiç kurulmaz: çıktı tamamen okunur, eşleşme kabukta yapılır.
+  RUNNING_PROCS="$(ps -eo args= 2>/dev/null || true)"
+  case "$RUNNING_PROCS" in
+    *"Lumi.app/Contents/MacOS/Lumi"*)
+      echo "  HATA: Lumi çalışıyor — önce uygulamadan çık, sonra tekrar dene." >&2
+      exit 1
+      ;;
+  esac
   rm -rf /Applications/Lumi.app
   ditto "$APP" /Applications/Lumi.app
   echo "✓ /Applications/Lumi.app kuruldu"
+  # Yerel ayarlar dosyası tanımladıysa kurulum sonrası kancası
+  if typeset -f post_install >/dev/null 2>&1; then post_install; fi
 fi

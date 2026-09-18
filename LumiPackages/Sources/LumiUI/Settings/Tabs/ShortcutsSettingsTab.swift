@@ -1,19 +1,39 @@
+import LumiKit
 import SwiftUI
 
-/// Salt-okunur kısayol referansı (tek kaynak: `MainMenuBuilder`).
+/// Kısayol referansı (tek kaynak: `AppCommands`) + indeksli kısayolların
+/// ⌘/⌃ ekseni (karar 62). Tablonun geri kalanı salt-okunurdur.
 struct ShortcutsSettingsTab: SettingsTabContent {
     static let tab: SettingsTab = .shortcuts
 
+    @Shell private var shell
+
     init() {}
+
+    private var style: IndexShortcutStyle { shell.settings.current.indexShortcutStyle }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             LumiSectionTitle(
                 title: "Keyboard Shortcuts",
-                description: "Application shortcuts. Read-only reference."
+                description: "Application shortcuts. Read-only except the index shortcuts below."
             )
+            LumiField(
+                title: "Index Shortcuts",
+                hint: "Which modifier switches repository tabs and which focuses terminals (1–9)"
+            ) {
+                LumiSegmented(
+                    options: IndexShortcutStyle.allCases.map {
+                        .init(value: $0, label: $0.label)
+                    },
+                    selection: Binding(
+                        get: { style },
+                        set: { shell.settings.setIndexShortcutStyle($0) }
+                    )
+                )
+            }
             VStack(spacing: Theme.Stroke.hairline) {
-                ForEach(ShortcutReference.all) { reference in
+                ForEach(ShortcutReference.list(style: style)) { reference in
                     row(reference)
                 }
             }
@@ -46,7 +66,7 @@ struct ShortcutsSettingsTab: SettingsTabContent {
         }
         .padding(.horizontal, Theme.Spacing.xl)
         // 10pt: ölçek dışı ara değer (v1 paritesi korunuyor).
-        .padding(.vertical, 10)
+        .padding(.vertical, Theme.scaled(10))
         .frame(maxWidth: .infinity)
         .background(Theme.bgDeep)
     }

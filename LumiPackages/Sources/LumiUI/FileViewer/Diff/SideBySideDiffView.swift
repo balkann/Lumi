@@ -8,7 +8,7 @@ struct SideBySideDiffView: View {
     let diff: UnifiedDiff
     var size: Theme.Typography.Size = .body
 
-    private static let gutterWidth: CGFloat = 44
+    private static var gutterWidth: CGFloat { Theme.scaled(44) }
 
     /// Satır modeli her body'de yeniden kurulmasın: diff değişince bir kez
     /// hesaplanır (HighlightedCodeView kalıbı).
@@ -56,7 +56,7 @@ struct SideBySideDiffView: View {
                 .foregroundStyle(Theme.accentCyan)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, Theme.Spacing.md)
-                .padding(.vertical, 3)
+                .padding(.vertical, Theme.scaled(3))
                 .background(Theme.bgElevated)
         case .lines(let left, let right):
             HStack(alignment: .top, spacing: 0) {

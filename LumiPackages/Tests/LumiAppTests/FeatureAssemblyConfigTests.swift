@@ -205,6 +205,27 @@ final class FeatureAssemblyConfigTests: XCTestCase {
         XCTAssertTrue(registry.fakeTerminal.appliedFonts.isEmpty, "font'a dokunulmaz")
     }
 
+    /// Karar 57: link eylemleri ayarı canlı terminallere uygulanır.
+    func testLinkActionsToggleAppliesToTerminals() {
+        let assembly = build(TerminalFeatureAssembly())
+        let change = changed { $0.terminalLinkActionsEnabled = false }
+
+        assembly.configDidChange(old: change.old, new: change.new)
+
+        XCTAssertEqual(registry.fakeTerminal.appliedLinkActions, [false])
+        XCTAssertTrue(registry.fakeTerminal.appliedFonts.isEmpty, "font'a dokunulmaz")
+        XCTAssertTrue(registry.fakeTerminal.appliedCursors.isEmpty, "cursor'a dokunulmaz")
+    }
+
+    func testUnrelatedChangeLeavesLinkActionsAlone() {
+        let assembly = build(TerminalFeatureAssembly())
+        let change = changed { $0.terminalCursorBlink = false }
+
+        assembly.configDidChange(old: change.old, new: change.new)
+
+        XCTAssertTrue(registry.fakeTerminal.appliedLinkActions.isEmpty)
+    }
+
     func testCursorBlinkDisabledPropagates() {
         let assembly = build(TerminalFeatureAssembly())
         let change = changed { $0.terminalCursorBlink = false }

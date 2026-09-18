@@ -6,13 +6,13 @@ import SwiftUI
 /// her satır ve başlık aynı sağ oluğu ayırır ki CPU/RSS kolonları kill
 /// düğmesi olsun olmasın hizalı kalsın.
 enum ResourceUsageColumns {
-    static let cpu: CGFloat = 48
-    static let memory: CGFloat = 64
-    static let trailingGutter: CGFloat = 20
-    static let sparklineWidth: CGFloat = 48
-    static let sparklineHeight: CGFloat = 14
+    static var cpu: CGFloat { Theme.scaled(48) }
+    static var memory: CGFloat { Theme.scaled(64) }
+    static var trailingGutter: CGFloat { Theme.scaled(20) }
+    static var sparklineWidth: CGFloat { Theme.scaled(48) }
+    static var sparklineHeight: CGFloat { Theme.scaled(14) }
     /// Oturum satırı sol girintisi (Orca `pl-10`).
-    static let sessionIndent: CGFloat = 40
+    static var sessionIndent: CGFloat { Theme.scaled(40) }
 }
 
 /// CPU + RSS çifti; `nil` ölçüm "—" olarak soluk çizilir.

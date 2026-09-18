@@ -28,18 +28,26 @@ enum MainMenuBuilder {
         .quit: #selector(NSApplication.terminate(_:)),
     ]
 
-    static func install(dispatcher: MenuActionDispatcher) {
-        let menus = build(dispatcher: dispatcher)
+    /// `style` indeksli kısayolların ⌘/⌃ ekseni (karar 62) — ayar değişince
+    /// menü bu fonksiyonla YENİDEN kurulur.
+    static func install(
+        dispatcher: MenuActionDispatcher,
+        style: IndexShortcutStyle = .default
+    ) {
+        let menus = build(dispatcher: dispatcher, style: style)
         NSApp.mainMenu = menus.mainMenu
         NSApp.windowsMenu = menus.windowMenu
     }
 
-    static func build(dispatcher: MenuActionDispatcher) -> Menus {
+    static func build(
+        dispatcher: MenuActionDispatcher,
+        style: IndexShortcutStyle = .default
+    ) -> Menus {
         let mainMenu = NSMenu()
         var windowMenu: NSMenu?
 
         for section in MenuSection.allCases {
-            let commands = AppCommands.commands(in: section)
+            let commands = AppCommands.commands(in: section, style: style)
             guard !commands.isEmpty else { continue }
             let submenu = NSMenu(title: section.title)
             for command in commands {

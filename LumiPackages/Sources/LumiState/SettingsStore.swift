@@ -133,6 +133,17 @@ public final class SettingsStore: StoreLifecycle {
         apply { $0.agentHooksEnabled = enabled }
     }
 
+    /// Karar 57: düz tıkla açılan terminal link eylemleri.
+    public func setTerminalLinkActionsEnabled(_ enabled: Bool) {
+        apply { $0.terminalLinkActionsEnabled = enabled }
+    }
+
+    /// Karar 62: indeksli kısayolların ⌘/⌃ ekseni. Menü yeniden kurulumu
+    /// config yan etkisidir (`AppDelegate`); store AppKit'i tanımaz.
+    public func setIndexShortcutStyle(_ style: IndexShortcutStyle) {
+        apply { $0.indexShortcutStyle = style }
+    }
+
     public func setSessionTrigger(_ trigger: SessionTrigger) {
         apply { $0.sessionTrigger = trigger }
     }

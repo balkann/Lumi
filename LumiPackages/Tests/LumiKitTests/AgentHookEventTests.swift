@@ -104,10 +104,13 @@ final class AgentHookEventTests: XCTestCase {
 
     // MARK: - Sağlayıcı çıkarımı
 
-    func testProviderDetectionUsesFirstToken() {
+    func testProviderDetectionUsesTheFirstTokenOfTheLastStage() {
         XCTAssertEqual(AgentProvider.detect(launchCommand: "claude --resume abc"), .claude)
         XCTAssertEqual(AgentProvider.detect(launchCommand: "  codex"), .codex)
         XCTAssertNil(AgentProvider.detect(launchCommand: "npm run claude"))
+        // Karar 54: `&&` zincirinin SON parçası bakılır (DeepSeek launch'ı).
+        XCTAssertEqual(AgentProvider.detect(launchCommand: "source \"/tmp/deepseek.env\" && claude"), .claude)
+        XCTAssertNil(AgentProvider.detect(launchCommand: "claude && npm test"))
         XCTAssertNil(AgentProvider.detect(launchCommand: nil))
         XCTAssertNil(AgentProvider.detect(launchCommand: ""))
     }

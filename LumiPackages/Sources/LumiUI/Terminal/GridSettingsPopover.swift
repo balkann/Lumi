@@ -65,7 +65,7 @@ struct GridSettingsControl: View {
 
     private var popoverBody: some View {
         // 14pt: ölçek dışı ara değer (v1 paritesi korunuyor).
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: Theme.scaled(14)) {
             section(title: "Columns") {
                 SegmentedRow(
                     options: GridColumnOption.allOptions,
@@ -99,8 +99,8 @@ struct GridSettingsControl: View {
                 .foregroundStyle(Theme.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(14)
-        .frame(width: 280)
+        .padding(Theme.scaled(14))
+        .frame(width: Theme.scaled(280))
         .background(Theme.bgSurface)
     }
 

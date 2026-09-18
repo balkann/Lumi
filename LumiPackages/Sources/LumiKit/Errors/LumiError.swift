@@ -18,9 +18,13 @@ public enum LumiError: Error, LocalizedError, Sendable, Equatable {
     case systemCheckFailed(check: String, detail: String)
     case cliNotFound(binary: String)
     case usageUnavailable(detail: String)
+    /// DeepSeek bakiyesi okunamadı (karar 75): anahtar yok, ağ ya da 4xx.
+    case deepSeekBalanceUnavailable(detail: String)
     case sessionStartFailed(detail: String)
     /// Agent History oturumu dışa/içe aktarımı (karar 52) başarısız.
     case sessionTransferFailed(detail: String)
+    /// Claude hesap yönetimi (karar 56): login, seçim ya da kimlik yakalama.
+    case claudeAccountFailed(operation: String, detail: String)
     case underlying(domain: String, message: String)
 
     public var errorDescription: String? {
@@ -49,10 +53,14 @@ public enum LumiError: Error, LocalizedError, Sendable, Equatable {
             return "\(binary) CLI not found in PATH."
         case .usageUnavailable(let detail):
             return "Could not read usage: \(detail)"
+        case .deepSeekBalanceUnavailable(let detail):
+            return "Could not read DeepSeek balance: \(detail)"
         case .sessionStartFailed(let detail):
             return "Could not start session: \(detail)"
         case .sessionTransferFailed(let detail):
             return "Session transfer failed: \(detail)"
+        case .claudeAccountFailed(let operation, let detail):
+            return "Claude account \(operation) failed: \(detail)"
         case .underlying(let domain, let message):
             return "\(domain): \(message)"
         }

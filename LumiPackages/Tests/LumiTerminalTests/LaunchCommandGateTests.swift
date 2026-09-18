@@ -53,11 +53,20 @@ final class LaunchCommandGateTests: XCTestCase {
         // Act — 30ms aralıklı çıktı sürerken sessizlik penceresi (60ms) dolamaz.
         // Yavaş CI runner'da sleep 60ms'yi aşabilir; o durumda ateşleme meşrudur,
         // assert yalnız pencere içinde kalındıysa yapılır.
+        //
+        // Bayrak turlar arasında TAŞINIR: `fired` kümülatiftir ve gate tek atımlık
+        // olduğu için bir tur pencereyi aştıysa `fired` kalıcı olarak 1 olur —
+        // tur başına sıfırlanan bir kontrol, sonraki turda meşru ateşlemeyi hata
+        // sanardı (CI'da görülen flake buydu).
+        var stayedWithinQuietWindow = true
         for _ in 0..<4 {
             let start = ContinuousClock.now
             gate.noteOutput()
             try? await Task.sleep(for: .milliseconds(30))
-            if ContinuousClock.now - start < .milliseconds(60) {
+            if ContinuousClock.now - start >= .milliseconds(60) {
+                stayedWithinQuietWindow = false
+            }
+            if stayedWithinQuietWindow {
                 XCTAssertEqual(fired, 0)
             }
         }

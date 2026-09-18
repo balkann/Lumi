@@ -28,6 +28,157 @@ final class LayoutStoreTests: XCTestCase {
         }
     }
 
+    // MARK: - Arayüz ölçeği (karar 61)
+
+    func testZoomStepsThroughTheClosedSet() {
+        XCTAssertEqual(store.uiScale, 1)
+
+        store.zoomIn()
+        XCTAssertEqual(store.uiScale, 1.1)
+        store.zoomIn()
+        XCTAssertEqual(store.uiScale, 1.25)
+        store.zoomOut()
+        store.zoomOut()
+        XCTAssertEqual(store.uiScale, 1)
+        store.zoomOut()
+        XCTAssertEqual(store.uiScale, 0.9)
+    }
+
+    /// Uçlarda sabitlenir — sonsuz büyüme/küçülme yok.
+    func testZoomClampsAtBothEnds() {
+        for _ in 0..<20 { store.zoomIn() }
+        XCTAssertEqual(store.uiScale, LayoutStore.uiScaleSteps.last)
+        for _ in 0..<40 { store.zoomOut() }
+        XCTAssertEqual(store.uiScale, LayoutStore.uiScaleSteps.first)
+    }
+
+    func testResetZoomReturnsToActualSize() {
+        store.zoomIn()
+        store.zoomIn()
+        store.resetZoom()
+        XCTAssertEqual(store.uiScale, 1)
+    }
+
+    /// Köprü HER değişimde ateşlenir (token çarpanı + arayüzün yeniden kurulması
+    /// buna bağlı), ama aynı değere ikinci kez geçişte ateşlenmez.
+    func testScaleChangeNotifiesBridgeOnlyOnRealChange() {
+        var received: [CGFloat] = []
+        store.onUIScaleChanged = { received.append($0) }
+
+        store.zoomIn()
+        store.resetZoom()
+        store.resetZoom() // zaten %100 — köprü tetiklenmez
+
+        XCTAssertEqual(received, [1.1, 1])
+    }
+
+    /// Karar 9: %100 varsayılanında additive anahtar diske YAZILMAZ.
+    func testScalePersistsOnlyWhenNotActualSize() async throws {
+        store.zoomIn()
+        try await waitForPersist()
+        var written = await config.uiState()
+        XCTAssertEqual(written.uiScale, 1.1)
+
+        store.resetZoom()
+        try await waitForPersist(minimumCount: 2)
+        written = await config.uiState()
+        XCTAssertNil(written.uiScale, "%100'de anahtar yazılmamalı")
+    }
+
+    /// Diskteki bozuk/ara değer en yakın basamağa çekilir — arayüz okunamaz
+    /// bir ölçekle açılmaz.
+    func testLoadSnapsStoredScaleToNearestStep() {
+        var state = WorkspaceFixtures.uiState()
+        state.uiScale = 1.19
+        store.load(state: state, openTabs: [])
+        XCTAssertEqual(store.uiScale, 1.25)
+
+        state.uiScale = -3
+        store.load(state: state, openTabs: [])
+        XCTAssertEqual(store.uiScale, 1)
+
+        state.uiScale = 99
+        store.load(state: state, openTabs: [])
+        XCTAssertEqual(store.uiScale, LayoutStore.uiScaleSteps.last)
+    }
+
+    // MARK: - Arayüz yazı tipi (karar 63)
+
+    /// Anahtar yoksa eski davranış (SF Mono) sürer — mevcut kurulumlar yüz
+    /// değiştirmez.
+    func testFontFamilyDefaultsToSystemWhenKeyIsAbsent() {
+        var state = WorkspaceFixtures.uiState()
+        state.uiFontFamily = nil
+        store.load(state: state, openTabs: [])
+        XCTAssertEqual(store.uiFontFamily, .system)
+    }
+
+    func testFontFamilyLoadsFromState() {
+        var state = WorkspaceFixtures.uiState()
+        state.uiFontFamily = .jetBrainsMono
+        store.load(state: state, openTabs: [])
+        XCTAssertEqual(store.uiFontFamily, .jetBrainsMono)
+    }
+
+    /// Ölçekteki köprüyle aynı sözleşme: gerçek değişimde ateşlenir, aynı değere
+    /// ikinci kez geçişte ateşlenmez (arayüz gereksiz yere yeniden kurulmaz).
+    func testFontFamilyChangeNotifiesBridgeOnlyOnRealChange() {
+        var received: [UIFontFamily] = []
+        store.onUIFontFamilyChanged = { received.append($0) }
+
+        store.setUIFontFamily(.jetBrainsMono)
+        store.setUIFontFamily(.jetBrainsMono)
+        store.setUIFontFamily(.system)
+
+        XCTAssertEqual(received, [.jetBrainsMono, .system])
+    }
+
+    /// Karar 9: varsayılan yüzde additive anahtar diske YAZILMAZ.
+    func testFontFamilyPersistsOnlyWhenNotSystem() async throws {
+        store.setUIFontFamily(.jetBrainsMono)
+        try await waitForPersist()
+        var written = await config.uiState()
+        XCTAssertEqual(written.uiFontFamily, .jetBrainsMono)
+
+        store.setUIFontFamily(.system)
+        try await waitForPersist(minimumCount: 2)
+        written = await config.uiState()
+        XCTAssertNil(written.uiFontFamily, "varsayılan yüzde anahtar yazılmamalı")
+    }
+
+    // MARK: - Sağ panel sekmesi (karar 72)
+
+    /// Seçim view'ın `@State`'indeyken panel her kapanışta Explorer'a
+    /// dönüyordu; artık yerleşim durumudur ve yeniden yüklenince korunur.
+    func testProjectToolsTabLoadsAndDefaultsToExplorer() {
+        var state = WorkspaceFixtures.uiState()
+        state.projectToolsTab = nil
+        store.load(state: state, openTabs: [])
+        XCTAssertEqual(store.projectToolsTab, .explorer)
+
+        state.projectToolsTab = "sourceControl"
+        store.load(state: state, openTabs: [])
+        XCTAssertEqual(store.projectToolsTab, .sourceControl)
+
+        // Bilinmeyen değer varsayılana iner (karar 9: okuma asla düşmez).
+        state.projectToolsTab = "yokBoyleSekme"
+        store.load(state: state, openTabs: [])
+        XCTAssertEqual(store.projectToolsTab, .explorer)
+    }
+
+    /// Karar 9: varsayılan sekmede additive anahtar diske YAZILMAZ.
+    func testProjectToolsTabPersistsOnlyWhenNotExplorer() async throws {
+        store.setProjectToolsTab(.agentHistory)
+        try await waitForPersist()
+        var written = await config.uiState()
+        XCTAssertEqual(written.projectToolsTab, "agentHistory")
+
+        store.setProjectToolsTab(.explorer)
+        try await waitForPersist(minimumCount: 2)
+        written = await config.uiState()
+        XCTAssertNil(written.projectToolsTab, "varsayılan sekmede anahtar yazılmamalı")
+    }
+
     // MARK: - Yükleme / migration
 
     func testLoadAppliesSidebarsAndLayouts() {
@@ -224,8 +375,8 @@ final class LayoutStoreTests: XCTestCase {
 
     // MARK: - Panel yerleşimi (Faz 6.2)
 
-    func testDefaultLayoutPlacesSessionsLeftAndGitRight() {
-        XCTAssertEqual(store.items(in: .left), [.sessions, .projects])
+    func testDefaultLayoutPlacesTasksLeftAndGitRight() {
+        XCTAssertEqual(store.items(in: .left), [.tasks, .projects])
         XCTAssertEqual(store.items(in: .right), [.projectTools])
         XCTAssertEqual(store.width(for: .left), PanelLayout.defaultWidth)
         XCTAssertEqual(store.visibleSlots, [.left], "sağ panel default kapalı")
@@ -233,22 +384,22 @@ final class LayoutStoreTests: XCTestCase {
 
     /// **Ana hedef:** bir öğeyi soldan sağa taşımak TEK mutasyondur.
     func testMovingItemFromLeftToRightIsASingleMutation() async throws {
-        store.move(item: .sessions, to: .right, index: 0)
+        store.move(item: .tasks, to: .right, index: 0)
 
         XCTAssertEqual(store.items(in: .left), [.projects])
-        XCTAssertEqual(store.items(in: .right), [.sessions, .projectTools])
+        XCTAssertEqual(store.items(in: .right), [.tasks, .projectTools])
         try await waitForPersist()
         let persisted = await config.uiState()
-        XCTAssertEqual(persisted.panelLayout?.items(in: .right).first, .sessions)
+        XCTAssertEqual(persisted.panelLayout?.items(in: .right).first, .tasks)
     }
 
     func testMovingWithoutIndexAppends() {
-        store.move(item: .sessions, to: .right)
-        XCTAssertEqual(store.items(in: .right), [.projectTools, .sessions])
+        store.move(item: .tasks, to: .right)
+        XCTAssertEqual(store.items(in: .right), [.projectTools, .tasks])
     }
 
     func testMoveToSamePositionDoesNotPersist() async throws {
-        store.move(item: .sessions, to: .left, index: 0)
+        store.move(item: .tasks, to: .left, index: 0)
         try await Task.sleep(for: .milliseconds(50))
         let writes = await config.uiStateUpdateCount
         XCTAssertEqual(writes, 0, "değişmeyen yerleşim yazım doğurmaz")
@@ -273,7 +424,7 @@ final class LayoutStoreTests: XCTestCase {
             openTabs: []
         )
         XCTAssertEqual(store.visibleSlots, [.right])
-        XCTAssertEqual(store.items(in: .left), [.sessions, .projects], "yerleşim default'tan gelir")
+        XCTAssertEqual(store.items(in: .left), [.tasks, .projects], "yerleşim default'tan gelir")
     }
 
     /// Yeni anahtar VARSA otoritedir (eski bool'lar yok sayılır).
@@ -286,7 +437,7 @@ final class LayoutStoreTests: XCTestCase {
         store.load(state: state, openTabs: [])
 
         XCTAssertEqual(store.visibleSlots, [.right])
-        XCTAssertEqual(store.items(in: .left), [.sessions, .projects])
+        XCTAssertEqual(store.items(in: .left), [.tasks, .projects])
         XCTAssertEqual(store.items(in: .right), [.fileTree, .projectTools])
     }
 
@@ -295,23 +446,23 @@ final class LayoutStoreTests: XCTestCase {
     func testProjectsMigrationPreservesHiddenSidebarAndCustomLayout() async throws {
         var state = UIState.defaults
         state.panelLayout = PanelLayout(
-            slots: [.left: [.sessions], .right: [.projectTools]],
+            slots: [.left: [.tasks], .right: [.projectTools]],
             visibleSlots: [.right], widths: [.left: 310], autoRevealSlots: [.left]
         )
         store.load(state: state, openTabs: [])
-        XCTAssertEqual(store.items(in: .left), [.sessions, .projects])
+        XCTAssertEqual(store.items(in: .left), [.tasks, .projects])
         XCTAssertEqual(store.visibleSlots, [.right])
         XCTAssertEqual(store.width(for: .left), 310)
         XCTAssertTrue(store.panelLayout.isAutoReveal(.left))
         try await waitForPersist()
         let saved = await config.uiState()
-        XCTAssertEqual(saved.panelLayout?.items(in: .left), [.sessions, .projects])
+        XCTAssertEqual(saved.panelLayout?.items(in: .left), [.tasks, .projects])
     }
 
     func testProjectsMigrationReordersLegacyDefaultWithoutChangingMetadata() async throws {
         var state = UIState.defaults
         state.panelLayout = PanelLayout(
-            slots: [.left: [.projects, .sessions], .right: [.projectTools]],
+            slots: [.left: [.projects, .tasks], .right: [.projectTools]],
             visibleSlots: [.right],
             widths: [.left: 315, .right: 405],
             autoRevealSlots: [.left]
@@ -319,21 +470,39 @@ final class LayoutStoreTests: XCTestCase {
 
         store.load(state: state, openTabs: [])
 
-        XCTAssertEqual(store.items(in: .left), [.sessions, .projects])
+        XCTAssertEqual(store.items(in: .left), [.tasks, .projects])
         XCTAssertEqual(store.visibleSlots, [.right])
         XCTAssertEqual(store.width(for: .left), 315)
         XCTAssertEqual(store.width(for: .right), 405)
         XCTAssertTrue(store.panelLayout.isAutoReveal(.left))
         try await waitForPersist()
         let saved = await config.uiState()
-        XCTAssertEqual(saved.panelLayout?.items(in: .left), [.sessions, .projects])
+        XCTAssertEqual(saved.panelLayout?.items(in: .left), [.tasks, .projects])
+    }
+
+    /// Karar 55: diskteki `sessions` öğesi Tasks'a dönüşür ve yeni hâl persist
+    /// edilir (bir sonraki açılışta migration tekrar koşmaz).
+    func testSessionsItemMigratesToTasksAndPersists() async throws {
+        var state = UIState.defaults
+        state.panelLayout = PanelLayout(
+            slots: [.left: [PanelItemID("sessions"), .projects], .right: [.projectTools]],
+            visibleSlots: [.left], widths: [.left: 310]
+        )
+
+        store.load(state: state, openTabs: [])
+
+        XCTAssertEqual(store.items(in: .left), [.tasks, .projects])
+        XCTAssertEqual(store.width(for: .left), 310)
+        try await waitForPersist()
+        let saved = await config.uiState()
+        XCTAssertEqual(saved.panelLayout?.items(in: .left), [.tasks, .projects])
     }
 
     func testProjectsMigrationRespectsAnExistingUserMove() {
         var state = UIState.defaults
         state.panelLayout = PanelLayout.defaults.moving(.projects, to: .right, index: 1)
         store.load(state: state, openTabs: [])
-        XCTAssertEqual(store.items(in: .left), [.sessions])
+        XCTAssertEqual(store.items(in: .left), [.tasks])
         XCTAssertEqual(store.items(in: .right), [.projectTools, .projects])
     }
 

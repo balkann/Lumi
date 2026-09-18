@@ -19,8 +19,8 @@ struct UsageStatusRow: View {
     /// ara değerlerdir — v1 paritesi korunuyor.
     private enum Metrics {
         static let size: Theme.Typography.Size = .label
-        static let spacing: CGFloat = 5
-        static let lineSpacing: CGFloat = 3
+        static var spacing: CGFloat { Theme.scaled(5) }
+        static var lineSpacing: CGFloat { Theme.scaled(3) }
     }
 
     var body: some View {

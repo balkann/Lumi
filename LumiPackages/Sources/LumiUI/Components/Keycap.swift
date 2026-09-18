@@ -10,7 +10,10 @@ struct Keycap: View {
         Text(key)
             .font(Theme.Typography.labelMono)
             .foregroundStyle(Theme.textSecondary)
-            .frame(minWidth: 24, minHeight: 24)
+            // Dar satırlarda "Click" alt satıra düşüyordu (karar 57 popover'ı).
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
+            .frame(minWidth: Theme.scaled(24), minHeight: Theme.scaled(24))
             .padding(.horizontal, Theme.Spacing.sm)
             .background(Theme.bgSurface)
             .overlay(

@@ -1,8 +1,8 @@
 import LumiKit
 import SwiftUI
 
-/// Panel görünürlükleri + kenar hover'ıyla açılma (karar 44) — anında
-/// uygulanır ve hatırlanır.
+/// Arayüz yazı tipi (karar 63) + panel görünürlükleri + kenar hover'ıyla
+/// açılma (karar 44) — anında uygulanır ve hatırlanır.
 struct AppearanceSettingsTab: SettingsTabContent {
     static let tab: SettingsTab = .appearance
 
@@ -14,8 +14,27 @@ struct AppearanceSettingsTab: SettingsTabContent {
         VStack(alignment: .leading, spacing: Theme.Spacing.xxl) {
             LumiSectionTitle(
                 title: "Appearance",
-                description: "Panel visibility. Changes apply instantly and are remembered."
+                description: "Interface font and panel visibility. "
+                    + "Changes apply instantly and are remembered."
             )
+            LumiField(
+                title: "Interface Font",
+                hint: "System Mono is macOS's own monospace face (SF Mono). "
+                    + "JetBrains Mono is the bundled face the Electron build used — "
+                    + "larger x-height, tighter shapes, crisper at small sizes. "
+                    + "The terminal keeps its own font setting.",
+                isLast: true
+            ) {
+                LumiSegmented(
+                    options: UIFontFamily.allCases.map {
+                        .init(value: $0, label: $0.displayName)
+                    },
+                    selection: Binding(
+                        get: { shell.layout.uiFontFamily },
+                        set: { shell.layout.setUIFontFamily($0) }
+                    )
+                )
+            }
             LumiToggleRow(
                 title: "Left Sidebar",
                 hint: "Sessions panel",
@@ -28,15 +47,26 @@ struct AppearanceSettingsTab: SettingsTabContent {
             )
             LumiToggleRow(
                 title: "Auto-reveal Left Sidebar",
-                hint: "When hidden, hover the left edge to show it over the content",
+                hint: autoRevealHint(.left),
                 isOn: autoRevealBinding(.left)
             )
             LumiToggleRow(
                 title: "Auto-reveal Right Sidebar",
-                hint: "When hidden, hover the right edge to show it over the content",
+                hint: autoRevealHint(.right),
                 isOn: autoRevealBinding(.right)
             )
         }
+    }
+
+    /// Yuva SABİTKEN (docked) auto-reveal'in hiçbir etkisi yoktur
+    /// (`LayoutStore.canAutoReveal`) — toggle açık görünüp sessizce hiçbir şey
+    /// yapmasın diye sebebi ipucunda söylenir.
+    private func autoRevealHint(_ slot: PanelSlot) -> String {
+        let edge = slot == .right ? "right" : "left"
+        guard !shell.layout.visibleSlots.contains(slot) else {
+            return "No effect while the sidebar is pinned — turn it off above to use hover"
+        }
+        return "Hover the \(edge) edge to show it over the content"
     }
 
     private func autoRevealBinding(_ slot: PanelSlot) -> Binding<Bool> {

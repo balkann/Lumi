@@ -63,6 +63,34 @@ final class WorkspaceServiceTests: XCTestCase {
         XCTAssertEqual(try outputGit(in: source, "branch", "--list", "unsafe"), "")
     }
 
+    /// Yönetilen kökün ÜSTÜNDEKİ bir repo işaretçisi (ev dizinindeki dotfile
+    /// repo'su, Plastic istemcisinin `~/.plastic` klasörü) oluşturmayı
+    /// engellememeli — aksi hâlde o makinelerde hiçbir workspace açılamıyordu.
+    func testAllowsDestinationWhenRepositoryMarkerIsAboveManagedRoot() async throws {
+        let source = try makeGitProject("source")
+        let container = root.appendingPathComponent("container")
+        try FileManager.default.createDirectory(at: container, withIntermediateDirectories: true)
+        try Data("gitdir: /elsewhere".utf8).write(to: container.appendingPathComponent(".git"))
+        try FileManager.default.createDirectory(at: container.appendingPathComponent(".plastic"), withIntermediateDirectories: true)
+
+        let service = WorkspaceService(workspaceRoot: container.appendingPathComponent("workspaces"))
+        let result = try await service.create(WorkspaceCreateRequest(project: repo(source), name: "review"))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: result.workspace.path + "/a.txt"))
+    }
+
+    func testRejectsDestinationNestedInRepositoryInsideManagedRoot() async throws {
+        let source = try makeGitProject("source")
+        let workspaceRoot = root.appendingPathComponent("workspaces")
+        try FileManager.default.createDirectory(at: workspaceRoot, withIntermediateDirectories: true)
+        try Data("gitdir: /elsewhere".utf8).write(to: workspaceRoot.appendingPathComponent(".git"))
+
+        let service = WorkspaceService(workspaceRoot: workspaceRoot)
+        do {
+            _ = try await service.create(WorkspaceCreateRequest(project: repo(source), name: "review"))
+            XCTFail("Expected nested repository rejection")
+        } catch { XCTAssertTrue(error.localizedDescription.contains("existing repository")) }
+    }
+
     func testRejectsExistingDestinationWithoutChangingIt() async throws {
         let source = try makeGitProject("source")
         let service = WorkspaceService(workspaceRoot: root.appendingPathComponent("workspaces"))
@@ -188,6 +216,56 @@ final class WorkspaceServiceTests: XCTestCase {
         }
         try await service.remove(record, force: true)
         XCTAssertFalse(FileManager.default.fileExists(atPath: folder.path))
+    }
+
+    // MARK: - Dal seçimi (karar 58)
+
+    func testListsRecentGitBranchesMostRecentFirst() async throws {
+        let source = try makeGitProject("source")
+        try runGit(in: source, "branch", "feature")
+        try runGit(in: source, "branch", "hotfix")
+        let service = WorkspaceService(workspaceRoot: root.appendingPathComponent("workspaces"))
+        let listed = try await service.branches(project: repo(source), limit: 10).map(\.name)
+        XCTAssertEqual(Set(listed), ["main", "feature", "hotfix"])
+    }
+
+    func testChecksOutExistingGitBranchWithoutCreatingANewOne() async throws {
+        let source = try makeGitProject("source")
+        try runGit(in: source, "branch", "feature")
+        let service = WorkspaceService(workspaceRoot: root.appendingPathComponent("workspaces"))
+        let result = try await service.create(WorkspaceCreateRequest(
+            project: repo(source), name: "review", branchName: "feature", branchMode: .existing,
+            knownProjectPaths: [source.path]))
+        XCTAssertEqual(result.workspace.branch, "feature")
+        XCTAssertEqual(try outputGit(in: URL(fileURLWithPath: result.workspace.path), "branch", "--show-current"), "feature")
+    }
+
+    func testNewGitBranchStartsFromSelectedBaseBranch() async throws {
+        let source = try makeGitProject("source")
+        try runGit(in: source, "checkout", "-b", "base")
+        try Data("second".utf8).write(to: source.appendingPathComponent("b.txt"))
+        try runGit(in: source, "add", "b.txt")
+        try runGit(in: source, "commit", "-m", "base commit")
+        try runGit(in: source, "checkout", "main")
+        let service = WorkspaceService(workspaceRoot: root.appendingPathComponent("workspaces"))
+        let result = try await service.create(WorkspaceCreateRequest(
+            project: repo(source), name: "review", branchMode: .new, baseBranch: "base",
+            knownProjectPaths: [source.path]))
+        // Taban daldan çıktığı için o dalın dosyası workspace'te olmalı.
+        XCTAssertTrue(FileManager.default.fileExists(atPath: result.workspace.path + "/b.txt"))
+    }
+
+    func testGitRejectsCurrentBranchModeBeforeTouchingDisk() async throws {
+        let source = try makeGitProject("source")
+        let managed = root.appendingPathComponent("workspaces")
+        let service = WorkspaceService(workspaceRoot: managed)
+        do {
+            _ = try await service.create(WorkspaceCreateRequest(
+                project: repo(source), name: "review", branchMode: .current, knownProjectPaths: [source.path]))
+            XCTFail("Git'te mevcut dal ikinci worktree'de checkout edilemez")
+        } catch {
+            XCTAssertFalse(FileManager.default.fileExists(atPath: managed.path + "/source/review"))
+        }
     }
 
     private func repo(_ url: URL, name: String = "source") -> Repo {

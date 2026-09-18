@@ -29,7 +29,7 @@ public struct ToastOverlay: View {
             HStack(spacing: 0) {
                 Rectangle()
                     .fill(stripeColor(for: toast.kind))
-                    .frame(width: 3) // ölçek dışı ara değer (v1 stripe genişliği)
+                    .frame(width: Theme.scaled(3)) // ölçek dışı ara değer (v1 stripe genişliği)
                     .accessibilityHidden(true)
                 body(for: toast)
                 Spacer(minLength: 0)
@@ -43,10 +43,10 @@ public struct ToastOverlay: View {
                     store.dismiss(toast.id)
                 }
                 // 10pt: ölçek dışı ara değer (v1 paritesi korunuyor).
-                .padding(.trailing, 10)
+                .padding(.trailing, Theme.scaled(10))
             }
         }
-        .frame(minWidth: 280, maxWidth: 360, alignment: .leading)
+        .frame(minWidth: Theme.scaled(280), maxWidth: Theme.scaled(360), alignment: .leading)
         // Dikeyde içerik yüksekliğine sabitle: stripe Rectangle açgözlüdür,
         // bu olmadan kart overlay'in önerdiği TÜM pencere yüksekliğine uzuyordu.
         .fixedSize(horizontal: false, vertical: true)
@@ -85,7 +85,7 @@ public struct ToastOverlay: View {
             }
         }
         // 10pt: ölçek dışı ara değer (v1 paritesi korunuyor).
-        .padding(.horizontal, 10)
+        .padding(.horizontal, Theme.scaled(10))
         .padding(.vertical, Theme.Spacing.md)
     }
 

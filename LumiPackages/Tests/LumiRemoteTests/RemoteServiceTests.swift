@@ -162,6 +162,7 @@ final class FakeTerminalServicing: TerminalServicing {
     func shutdown() {}
     func applyFont(_ font: NSFont) {}
     func applyCursor(shape: TerminalCursorShape, blink: Bool) {}
+    func applyLinkActions(enabled: Bool) {}
 
     func subscribeOutput(_ id: TerminalID) -> AsyncStream<Data> {
         subscribedIDs.append(id)

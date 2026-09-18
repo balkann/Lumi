@@ -29,4 +29,11 @@ final class UsageIndicatorsTests: XCTestCase {
     func testNoneEnabledYieldsEmptyList() {
         XCTAssertTrue(UsageIndicators(claude: false, codex: false).enabledProviders.isEmpty)
     }
+
+    /// Auto refresh varsayılan olarak AÇIK: elle yenilenmeyen gösterge bayat
+    /// kalıyordu. Anahtarı zaten yazılmış config'ler kendi değerini korur.
+    func testAutoRefreshIsEnabledByDefault() {
+        XCTAssertTrue(UsageAutoRefresh.defaults.enabled)
+        XCTAssertEqual(UsageAutoRefresh.defaults.intervalMinutes, 5)
+    }
 }

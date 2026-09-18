@@ -49,23 +49,40 @@ final class PanelItemRegistryTests: XCTestCase {
         registry.resolved(slot: slot, layout: layout, context: fixture.context).map(\.id)
     }
 
+    // MARK: - Değer semantiği (karar 71)
+
+    /// `PanelItemRegistry` bir DEĞER tipidir: erken alınan bir kopya, sonradan
+    /// kaydedilen öğeleri GÖRMEZ. Kenar hover'ı overlay'i (karar 44) tam bu
+    /// tuzağa düşmüştü — descriptor'ı kompozisyonun en başında kaydedildiği
+    /// için `registries.panels`'ın BOŞ kopyasını donduruyor, `resolved` hep boş
+    /// dönüyor ve auto-reveal hiç kurulmuyordu. Çözüm, kopya yerine
+    /// `ShellRegistries` nesnesini saklayıp `panels`'ı render anında okumaktır.
+    func testCopyTakenBeforeRegistrationDoesNotSeeLaterItems() {
+        var live = PanelItemRegistry()
+        let earlyCopy = live
+        live.register(descriptor(.tasks))
+
+        XCTAssertTrue(ids(earlyCopy, .left, .defaults).isEmpty)
+        XCTAssertEqual(ids(live, .left, .defaults), [.tasks])
+    }
+
     // MARK: - Sıra
 
     func testOrderComesFromLayoutNotRegistrationOrder() {
-        let registry = registry([descriptor(.sessions), descriptor(.fileTree)])
+        let registry = registry([descriptor(.tasks), descriptor(.fileTree)])
         let layout = PanelLayout.defaults.moving(.fileTree, to: .left, index: 0)
-        XCTAssertEqual(ids(registry, .left, layout), [.fileTree, .sessions])
+        XCTAssertEqual(ids(registry, .left, layout), [.fileTree, .tasks])
     }
 
     func testItemsResolvePerSlot() {
         let registry = registry([
-            descriptor(.sessions),
+            descriptor(.tasks),
             descriptor(.fileTree),
             descriptor(.gitCommits, slot: .right),
             descriptor(.gitChanges, slot: .right),
         ])
-        let legacyLayout = PanelLayout(slots: [.left: [.sessions, .fileTree], .right: [.gitCommits, .gitChanges]], visibleSlots: [.left, .right], widths: [:])
-        XCTAssertEqual(ids(registry, .left, legacyLayout), [.sessions, .fileTree])
+        let legacyLayout = PanelLayout(slots: [.left: [.tasks, .fileTree], .right: [.gitCommits, .gitChanges]], visibleSlots: [.left, .right], widths: [:])
+        XCTAssertEqual(ids(registry, .left, legacyLayout), [.tasks, .fileTree])
         XCTAssertEqual(ids(registry, .right, legacyLayout), [.gitCommits, .gitChanges])
         XCTAssertEqual(ids(registry, .bottom, .defaults), [])
     }
@@ -74,60 +91,60 @@ final class PanelItemRegistryTests: XCTestCase {
     /// hiç değişmez.
     func testMovedItemLeavesSourceSlot() {
         let registry = registry([
-            descriptor(.sessions),
+            descriptor(.tasks),
             descriptor(.fileTree),
             descriptor(.gitCommits, slot: .right),
             descriptor(.gitChanges, slot: .right),
         ])
         let layout = PanelLayout.defaults.moving(.fileTree, to: .right, index: 0)
-        XCTAssertEqual(ids(registry, .left, layout), [.sessions])
+        XCTAssertEqual(ids(registry, .left, layout), [.tasks])
         XCTAssertEqual(ids(registry, .right, layout), [.fileTree, .gitCommits, .gitChanges])
     }
 
     // MARK: - Dayanıklılık
 
     func testUnknownLayoutIDsAreSkipped() {
-        let registry = registry([descriptor(.sessions)])
+        let registry = registry([descriptor(.tasks)])
         let layout = PanelLayout(
-            slots: [.left: [PanelItemID("ghostFeature"), .sessions]],
+            slots: [.left: [PanelItemID("ghostFeature"), .tasks]],
             visibleSlots: [.left],
             widths: [:]
         )
         XCTAssertEqual(
             ids(registry, .left, layout),
-            [.sessions],
+            [.tasks],
             "ui-state'te kalmış bilinmeyen id kabuğu bozmaz"
         )
     }
 
     func testLegacyLayoutFallsBackToProjectToolsRegistration() {
         let registry = registry([
-            descriptor(.sessions),
+            descriptor(.tasks),
             descriptor(.projectTools, slot: .right)
         ])
         let legacy = PanelLayout(
-            slots: [.left: [.sessions], .right: [.fileTree, .gitCommits, .gitChanges]],
+            slots: [.left: [.tasks], .right: [.fileTree, .gitCommits, .gitChanges]],
             visibleSlots: [.left, .right], widths: [:]
         )
         XCTAssertEqual(ids(registry, .right, legacy), [.projectTools])
     }
 
     func testDuplicateLayoutEntriesAreCollapsed() {
-        let registry = registry([descriptor(.sessions)])
+        let registry = registry([descriptor(.tasks)])
         let layout = PanelLayout(
-            slots: [.left: [.sessions, .sessions]],
+            slots: [.left: [.tasks, .tasks]],
             visibleSlots: [.left],
             widths: [:]
         )
-        XCTAssertEqual(ids(registry, .left, layout), [.sessions])
+        XCTAssertEqual(ids(registry, .left, layout), [.tasks])
     }
 
     /// Yerleşimde HİÇ adı geçmeyen yeni bir öğe `defaultSlot`'una düşer —
     /// yeni feature ui-state migration'ı beklemez.
     func testUnplacedItemFallsBackToDefaultSlot() {
-        let registry = registry([descriptor(.sessions), descriptor(PanelItemID("tasks"), slot: .right)])
-        XCTAssertEqual(ids(registry, .right, .defaults).last, PanelItemID("tasks"))
-        XCTAssertFalse(ids(registry, .left, .defaults).contains(PanelItemID("tasks")))
+        let registry = registry([descriptor(.tasks), descriptor(PanelItemID("newcomer"), slot: .right)])
+        XCTAssertEqual(ids(registry, .right, .defaults).last, PanelItemID("newcomer"))
+        XCTAssertFalse(ids(registry, .left, .defaults).contains(PanelItemID("newcomer")))
     }
 
     func testPlacedItemDoesNotAlsoAppearInItsDefaultSlot() {
@@ -139,35 +156,35 @@ final class PanelItemRegistryTests: XCTestCase {
 
     func testRegisteringSameIDTwiceReplacesWithoutDuplicating() {
         var registry = PanelItemRegistry()
-        registry.register(descriptor(.sessions))
+        registry.register(descriptor(.tasks))
         registry.register(PanelItemDescriptor(
-            id: .sessions,
+            id: .tasks,
             title: "Sessions v2",
             icon: "square",
             defaultSlot: .left,
             makeView: { AnyView(EmptyView()) }
         ))
         XCTAssertEqual(registry.all.count, 1)
-        XCTAssertEqual(registry.descriptor(for: .sessions)?.title, "Sessions v2")
+        XCTAssertEqual(registry.descriptor(for: .tasks)?.title, "Sessions v2")
     }
 
     // MARK: - isAvailable filtresi
 
     func testUnavailableItemsAreFilteredOut() {
         let registry = registry([
-            descriptor(.sessions, isAvailable: { $0.activeRepoPath != nil }),
+            descriptor(.tasks, isAvailable: { $0.activeRepoPath != nil }),
             descriptor(.fileTree),
         ])
         XCTAssertEqual(ids(registry, .left, .defaults), [.fileTree], "repo yokken sessions çizilmez")
 
         fixture.openRepo()
-        XCTAssertEqual(ids(registry, .left, .defaults), [.sessions, .fileTree])
+        XCTAssertEqual(ids(registry, .left, .defaults), [.tasks, .fileTree])
     }
 
     func testAvailabilityIsEvaluatedAgainstTheLiveContext() async throws {
-        let registry = registry([descriptor(.sessions, isAvailable: { !$0.terminals.terminals.isEmpty })])
+        let registry = registry([descriptor(.tasks, isAvailable: { !$0.terminals.terminals.isEmpty })])
         XCTAssertEqual(ids(registry, .left, .defaults), [])
         try await fixture.spawnTerminal()
-        XCTAssertEqual(ids(registry, .left, .defaults), [.sessions])
+        XCTAssertEqual(ids(registry, .left, .defaults), [.tasks])
     }
 }

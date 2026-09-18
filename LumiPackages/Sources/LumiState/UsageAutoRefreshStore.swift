@@ -19,12 +19,14 @@ import Observation
 @Observable
 @MainActor
 public final class UsageAutoRefreshStore: StoreLifecycle {
-    @ObservationIgnored private let stores: [UsageStore]
+    /// Somut tip değil, `AutoRefreshing` yüzü (karar 75): listede kullanım
+    /// store'ları ve DeepSeek bakiye store'u yan yana durur.
+    @ObservationIgnored private let stores: [any AutoRefreshing]
     @ObservationIgnored private let activity: any ActivityMonitoring
     @ObservationIgnored private var settings: UsageAutoRefresh = .defaults
     @ObservationIgnored private var timerTask: Task<Void, Never>?
 
-    public init(stores: [UsageStore], activity: any ActivityMonitoring) {
+    public init(stores: [any AutoRefreshing], activity: any ActivityMonitoring) {
         self.stores = stores
         self.activity = activity
     }

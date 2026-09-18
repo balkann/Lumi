@@ -143,10 +143,11 @@ private final class SpyViewMaker: TerminalViewMaking {
 }
 
 @MainActor
-private final class SpyDelegate: TerminalSessionDelegate {
+final class SpyDelegate: TerminalSessionDelegate {
     private(set) var exitCodes: [Int32] = []
     private(set) var bells = 0
     private(set) var stalls: [Bool] = []
+    private(set) var linkActivations: [TerminalLinkActivation] = []
 
     func session(_ session: TerminalSession, didChangeStatus status: TerminalStatus) {}
     func session(_ session: TerminalSession, didChangeAwaitingDecision awaiting: Bool) {}
@@ -164,5 +165,9 @@ private final class SpyDelegate: TerminalSessionDelegate {
 
     func sessionDidBell(_ session: TerminalSession) {
         bells += 1
+    }
+
+    func session(_ session: TerminalSession, didActivateLink activation: TerminalLinkActivation) {
+        linkActivations.append(activation)
     }
 }

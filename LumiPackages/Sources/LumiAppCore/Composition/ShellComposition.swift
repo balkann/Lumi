@@ -37,6 +37,9 @@ struct ShellComposition {
         workspaceBoot: WorkspaceBootAssembly,
         statusBar: StatusBarFeatureAssembly,
         remote: RemoteFeatureAssembly,
+        deepSeek: DeepSeekAssembly,
+        claudeAccounts: ClaudeAccountsAssembly,
+        terminalLinks: TerminalLinkActionsAssembly,
         contributors: [any ShellContributing]
     ) -> ShellComposition {
         let registries = makeRegistries(contributors: contributors)
@@ -60,12 +63,20 @@ struct ShellComposition {
             toasts: shared.toasts,
             onboarding: workspaceBoot.onboarding,
             usage: usage.usageStores,
+            deepSeek: deepSeek.deepSeek,
+            deepSeekBalance: usage.deepSeekBalance,
+            claudeAccounts: claudeAccounts.claudeAccounts,
+            terminalLinks: terminalLinks.makeStore(shared: shared, repo: repo),
             computerAwake: statusBar.computerAwake,
             resourceUsage: statusBar.resourceUsage,
             viewProvider: registry.viewProvider,
             highlighter: registry.highlighter,
             actions: makeActions(registry: registry, shared: shared, repo: repo)
         )
+        // Niyet → kabuk yürütmesi (sekme / FileViewer / Finder / tarayıcı).
+        context.terminalLinks.onIntent = { [weak context] intent in
+            context?.performTerminalLinkIntent(intent)
+        }
         return ShellComposition(registries: registries, context: context)
     }
 
@@ -98,15 +109,28 @@ struct ShellComposition {
     /// barı, dosya görüntüleyici, ayarlar, toast'lar, iki onay dialogu).
     /// Karar 44: İLK kayıt — diğer overlay'lerin (modal, toast, dialog) altında
     /// kalır. Yalnız en az bir yuva kenar hover'ına uygunken çizilir.
+    ///
+    /// Karar 71: kayıt defteri CANLI okunur, kopyalanmaz. `PanelItemRegistry`
+    /// bir DEĞER tipidir; burada `registries.panels` kopyalanınca descriptor,
+    /// feature'lar öğelerini kaydetmeden ÖNCEKİ boş kopyayı donduruyordu
+    /// (bu kayıt kasten en başta yapılıyor). `resolved` hep boş dönüyor, kenar
+    /// şeridi hiç kurulmuyor ve auto-reveal tamamen ölü kalıyordu. `weak`:
+    /// kayıt defteri closure'ı tuttuğu için güçlü yakalama döngü yaratırdı.
     private static func registerPanelRevealOverlay(into registries: ShellRegistries) {
-        let panels = registries.panels
         registries.overlays.register(OverlayDescriptor(
             id: .panelReveal,
+            // Karar 73: repo koşulu YOK. Sabit paneller de repo sormaz (bkz.
+            // `AppShellView`); overlay'e konan `activeRepoPath != nil` kapısı,
+            // Tasks/Remote route'unda ve hiç proje seçili değilken kenar
+            // hover'ını sessizce kapatıyordu. "Gösterilecek bir şey var mı?"
+            // sorusunun tek cevabı yuvanın çözümlenen öğeleridir.
             isPresented: { shell in
-                shell.activeRepoPath != nil
-                    && PanelRevealOverlay.slots.contains { shell.layout.canAutoReveal($0) }
+                PanelRevealOverlay.slots.contains { shell.layout.canAutoReveal($0) }
             },
-            makeView: { AnyView(PanelRevealOverlay(registry: panels)) }
+            makeView: { [weak registries] in
+                guard let registries else { return AnyView(EmptyView()) }
+                return AnyView(PanelRevealOverlay(registries: registries))
+            }
         ))
     }
 
@@ -121,6 +145,11 @@ struct ShellComposition {
             id: .fileViewer,
             isPresented: { $0.fileViewer.isPresented },
             makeView: { AnyView(FileViewerOverlay()) }
+        ))
+        registries.overlays.register(OverlayDescriptor(
+            id: .repoSelector,
+            isPresented: { $0.dialogs.isRepoSelectorOpen },
+            makeView: { AnyView(RepoSelectorOverlay()) }
         ))
         registries.overlays.register(OverlayDescriptor(
             id: .settings,
@@ -165,7 +194,13 @@ struct ShellComposition {
                     await repo.repoStore.loadFileTree(repoPath)
                 }
             },
-            revealPath: { path in registry.system.revealInFinder(path: path) }
+            revealPath: { path in registry.system.revealInFinder(path: path) },
+            openURL: { url in
+                Task { @MainActor in
+                    shared.toasts.reporting { try registry.system.openExternal(url) }
+                }
+            },
+            openPath: { path in registry.system.openWithDefaultApp(path: path) }
         )
     }
 }

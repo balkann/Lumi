@@ -20,8 +20,12 @@ final class ConfigCodecIntegrityTests: XCTestCase {
         "legacyGridColumns": "yalnız okuma — v1 gridColumns migration girdisi",
     ]
 
-    /// Alan adı → JSON anahtarı (yalnız camelCase eşleşmeyenler). Bugün BOŞ.
-    private static let configKeyMapping: [String: String] = [:]
+    /// Alan adı → JSON anahtarı (yalnız camelCase eşleşmeyenler).
+    /// - `claudeAccountSelection`: diskte hesabın id'si (ya da `null`) olarak
+    ///   durur; sum type'ın adı değil seçilen hesabın kimliği yazılır (K56).
+    private static let configKeyMapping: [String: String] = [
+        "claudeAccountSelection": "activeClaudeAccountId",
+    ]
     private static let uiStateKeyMapping: [String: String] = [:]
 
     private func fieldNames(of value: Any) -> [String] {
@@ -153,6 +157,10 @@ final class ConfigCodecIntegrityTests: XCTestCase {
         return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
     }
 
+    /// Hesap id'leri UUID olmak ZORUNDA (karar 56 sertleştirmesi: id dosya
+    /// yoluna giriyor), o yüzden fixture sabit bir UUID kullanır.
+    private static let accountID = "11111111-1111-4111-8111-111111111111"
+
     private static let nonDefaultConfig = AppConfig(
         projectsRoot: "/tmp/projects",
         additionalPaths: [
@@ -173,10 +181,24 @@ final class ConfigCodecIntegrityTests: XCTestCase {
         ),
         autoMinimizeOnSend: true,
         sessionTrigger: SessionTrigger(enabled: true, hour: 22, minute: 45, prompt: "go"),
-        usageAutoRefresh: UsageAutoRefresh(enabled: true, intervalMinutes: 15),
+        usageAutoRefresh: UsageAutoRefresh(enabled: true, intervalMinutes: 1),
         usageIndicators: UsageIndicators(claude: false, codex: true),
         computerAwakeMode: .auto,
         agentHooksEnabled: false,
+        indexShortcutStyle: .repoOnCommand,
+        terminalLinkActionsEnabled: false,
+        claudeAccounts: [
+            ClaudeAccount(
+                id: ConfigCodecIntegrityTests.accountID,
+                email: "dev@example.com",
+                organizationUUID: "org-1",
+                organizationName: "Example",
+                createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+                updatedAt: Date(timeIntervalSince1970: 1_700_000_100),
+                lastAuthenticatedAt: Date(timeIntervalSince1970: 1_700_000_200)
+            ),
+        ],
+        claudeAccountSelection: .account(ConfigCodecIntegrityTests.accountID),
         workspaces: [ProjectWorkspace(projectPath: "/p", path: "/w", name: "Feature", branch: "feature", scm: .git)],
         sidebarProjectPaths: ["/tmp/selected", "/tmp/another"]
     )
@@ -197,7 +219,11 @@ final class ConfigCodecIntegrityTests: XCTestCase {
             .moving(.fileTree, to: .right, index: 0)
             .settingVisible(.right, true)
             .settingWidth(320, for: .left),
-        legacyGridColumns: nil
+        legacyGridColumns: nil,
+        uiScale: 1.25,
+        uiFontFamily: .jetBrainsMono,
+        lastCheckouts: ["/r/alpha": "/r/alpha/wt"],
+        projectToolsTab: "agentHistory"
     )
 }
 
@@ -253,7 +279,7 @@ extension ConfigCodecIntegrityTests {
     }
 
     func testUsageAutoRefreshCodecCoversEveryField() {
-        let value = UsageAutoRefresh(enabled: true, intervalMinutes: 30)
+        let value = UsageAutoRefresh(enabled: true, intervalMinutes: 1)
         assertOverlayMatchesFields(value, overlay: UsageAutoRefreshCodec.overlay(value))
         XCTAssertEqual(UsageAutoRefreshCodec.decode(UsageAutoRefreshCodec.overlay(value)), value)
     }

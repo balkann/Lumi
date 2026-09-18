@@ -18,11 +18,18 @@ public extension OverlayID {
     static let toasts = OverlayID("toasts")
     static let closeTabDialog = OverlayID("closeTabDialog")
     static let quitDialog = OverlayID("quitDialog")
+    /// Karar 55: repo tab şeridi kalkınca repo seçici popover olmaktan çıkıp
+    /// kabuk overlay'i oldu (menü ⌘O ve Welcome butonunun tek yüzü).
+    static let repoSelector = OverlayID("repoSelector")
     /// Karar 46/49: Projects paneline ait modal ve onay dialogu.
     static let createWorkspace = OverlayID("createWorkspace")
     static let deleteWorkspaceDialog = OverlayID("deleteWorkspaceDialog")
     /// Karar 53: Agent History oturum silme onayı.
     static let deleteAgentSessionDialog = OverlayID("deleteAgentSessionDialog")
+    /// Karar 56: Claude hesabı silme onayı (geri alınamaz).
+    static let removeClaudeAccountDialog = OverlayID("removeClaudeAccountDialog")
+    /// Karar 57: terminalde tıklanan link/path için eylem popover'ı.
+    static let terminalLinkActions = OverlayID("terminalLinkActions")
 }
 
 /// Kabuğun üstüne binen bir katmanın tanımı (K33, Faz 6.5).

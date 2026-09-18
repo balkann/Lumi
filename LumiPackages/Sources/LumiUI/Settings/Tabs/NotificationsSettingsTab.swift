@@ -73,7 +73,7 @@ struct IntervalStepper: View {
             Stepper("\(value)", value: $value, in: 1...60)
                 .font(Theme.Typography.bodyMono)
                 .foregroundStyle(Theme.textPrimary)
-                .frame(width: 110, alignment: .leading)
+                .frame(width: Theme.scaled(110), alignment: .leading)
                 .accessibilityLabel(label)
             Text("min")
                 .font(Theme.Typography.bodyMono)

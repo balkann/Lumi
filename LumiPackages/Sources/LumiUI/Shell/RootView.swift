@@ -49,7 +49,7 @@ struct AppShellView: View {
                 HeaderBarView(registry: registries.toolbar)
                 Rectangle()
                     .fill(Theme.border)
-                    .frame(height: 1)
+                    .frame(height: Theme.scaled(1))
             }
             HStack(spacing: 0) {
                 PanelHostView(slot: .left, registry: registries.panels)
@@ -84,7 +84,7 @@ public struct WelcomeView: View {
             Text("Open a repo and start a terminal")
                 .font(Theme.Typography.mono(.base))
                 .foregroundStyle(Theme.textMuted)
-            Button("Open Repo") {
+            Button("Go to Project") {
                 shell.dialogs.isRepoSelectorOpen = true
             }
             .buttonStyle(.borderedProminent)

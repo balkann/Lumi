@@ -2,25 +2,35 @@ import LumiKit
 import SwiftUI
 
 /// Kabuğun KENDİ toolbar öğeleri (Faz 6.4/6.6) — bir feature'a ait olmayanlar:
-/// panel yuvası toggle'ları, logo, repo tab şeridi, focus mode ve settings.
+/// panel yuvası toggle'ları, logo, focus mode ve settings.
 ///
 /// Descriptor'ların **kümesi** composition root'ta kaydedilir
 /// (`ShellComposition`); burada üretim fabrikası durur ki "panel toggle'ları
 /// `PanelSlot.allCases`'ten türer" kuralı view render etmeden test edilebilsin.
+///
+/// Karar 55: repo tab şeridi top bar'dan kalktı — projeler ve checkout'lar
+/// yalnız sol paneldeki Projects panelinden gezilir.
 public enum ShellToolbarItems {
     /// Bölge içi sıralar. Aralıklı numaralar: bir feature araya öğe
     /// sokabilsin diye (yeni öğe = yeni sayı, mevcutlar kaymaz).
     public enum Order {
-        public static let panelToggleLeading = 0
-        public static let logo = 10
-        public static let repoTabs = 20
+        public static let logo = 0
+        /// Karar 55: sol panel toggle'ı logo + ürün adının ARDINDA durur
+        /// (traffic light → logo → toggle).
+        public static let panelToggleLeading = 10
 
         public static let gridSettings = 0
         public static let newTerminal = 10
+        /// Repo-dışı bir route'un kendi başlığı (karar 55) — grid/CTA o
+        /// route'ta zaten görünmez, yani sıra çakışmaz.
+        public static let routeTitle = 20
 
         /// Usage göstergeleri en solda: `AgentProvider.allCases` sırasında,
         /// sağlayıcı başına 10 adım.
         public static let usageStep = 10
+        /// DeepSeek bakiyesi (karar 75) — sağlayıcı göstergelerinden sonra,
+        /// focus mode'dan önce.
+        public static let deepSeekBalance = 50
         public static let focusMode = 100
         public static let panelToggleBottom = 105
         public static let panelToggleRight = 110
@@ -98,12 +108,6 @@ public enum ShellToolbarItems {
                 makeView: { AnyView(LogoToolbarItem()) }
             ),
             ToolbarItemDescriptor(
-                id: .repoTabs,
-                region: .leading,
-                order: Order.repoTabs,
-                makeView: { AnyView(RepoTabStrip()) }
-            ),
-            ToolbarItemDescriptor(
                 id: .focusMode,
                 region: .trailing,
                 order: Order.focusMode,
@@ -171,8 +175,8 @@ struct LogoToolbarItem: View {
                 Image(nsImage: logo)
                     .resizable()
                     .interpolation(.high)
-                    .frame(width: Theme.Typography.Size.headline.points,
-                           height: Theme.Typography.Size.headline.points)
+                    .frame(width: Theme.Typography.Size.headline.scaledPoints,
+                           height: Theme.Typography.Size.headline.scaledPoints)
                     .accessibilityHidden(true)
             }
             Text(Self.appName)

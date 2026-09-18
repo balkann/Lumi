@@ -44,30 +44,52 @@ struct CheckoutRow: View {
     // MARK: - Satır
 
     private var row: some View {
-        Button { shell.navigation.openTab(checkout.path) } label: {
+        HoverReader { isHovering in
             HStack(spacing: Theme.Spacing.sm) {
-                icon
-                Text(checkout.title)
-                    .font(Theme.Typography.labelMono)
-                    .foregroundStyle(isActive ? Theme.accentPrimary : Theme.textSecondary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                trailing
-                Spacer(minLength: 0)
-                summary
+                Button { shell.navigation.openTab(checkout.path) } label: {
+                    HStack(spacing: Theme.Spacing.sm) {
+                        icon
+                        Text(checkout.title)
+                            .font(Theme.Typography.labelMono)
+                            .foregroundStyle(isActive ? Theme.accentPrimary : Theme.textSecondary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                        trailing
+                        Spacer(minLength: 0)
+                        summary
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(isMissing)
+                .accessibilityLabel("Open \(checkout.title)")
+                // Karar 55: top bar tab şeridi kalktı; sekme kapatma satırın
+                // kendisinde yaşar (yalnız açık bir sekmede, hover/aktifken).
+                if isOpenTab {
+                    closeTabButton
+                        .opacity(isHovering || isActive ? 1 : 0)
+                }
             }
             .padding(.leading, Theme.Spacing.xl)
             .padding(.trailing, Theme.Spacing.sm)
             .padding(.vertical, Theme.Spacing.xs)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
         .background(isActive ? Theme.bgElevated : .clear)
         .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
-        .disabled(isMissing)
         .help(checkout.path)
-        .accessibilityLabel("Open \(checkout.title)")
         .contextMenu { contextMenu }
+    }
+
+    private var closeTabButton: some View {
+        IconButton(
+            systemName: "xmark",
+            label: "Close \(checkout.title) tab",
+            size: .micro,
+            side: Theme.Spacing.xl,
+            role: .destructive
+        ) {
+            shell.requestCloseTab(checkout.path, repoName: checkout.title)
+        }
     }
 
     @ViewBuilder
@@ -145,9 +167,18 @@ struct CheckoutRow: View {
     /// yeni etkinlik üstte (Orca `smart` sıralaması).
     private var agents: [AgentRow.Model] {
         shell.terminals.terminals(in: checkout.path)
-            .map { AgentRow.Model(meta: $0, state: AgentActivityState(
-                status: $0.status, isAwaitingDecision: shell.terminals.awaitingDecisionIDs.contains($0.id)
-            )) }
+            .map { meta in
+                let isAwaitingDecision = shell.terminals.awaitingDecisionIDs.contains(meta.id)
+                return AgentRow.Model(
+                    meta: meta,
+                    state: AgentActivityState(status: meta.status, isAwaitingDecision: isAwaitingDecision),
+                    needsAttention: TerminalAttention.isNeeded(
+                        status: meta.status,
+                        isAwaitingDecision: isAwaitingDecision,
+                        isSelected: shell.terminals.activeTerminalID == meta.id
+                    )
+                )
+            }
             .sorted { lhs, rhs in
                 lhs.state.sortRank != rhs.state.sortRank
                     ? lhs.state.sortRank < rhs.state.sortRank
@@ -163,10 +194,16 @@ struct CheckoutRow: View {
         case .original(let repo):
             Button("Create Workspace…") { shell.dialogs.present(.createWorkspace(projectPath: repo.path)) }
                 .disabled(shell.workspaces.isCreating)
+            if isOpenTab {
+                Button("Close Tab") { shell.requestCloseTab(repo.path, repoName: repo.name) }
+            }
             Button("Reveal in Finder") { shell.actions.revealPath(repo.path) }
             Button("Copy Path") { Pasteboard.copy(repo.path) }
         case .workspace(let workspace):
             Button("Open") { shell.navigation.openTab(workspace.path) }.disabled(isMissing)
+            if isOpenTab {
+                Button("Close Tab") { shell.requestCloseTab(workspace.path, repoName: workspace.name) }
+            }
             Button("Reveal in Finder") { shell.actions.revealPath(workspace.path) }.disabled(isMissing)
             Button("Copy Path") { Pasteboard.copy(workspace.path) }
             Divider()
@@ -183,6 +220,9 @@ struct CheckoutRow: View {
 
     private var isActive: Bool { shell.navigation.activeRepoPath == checkout.path }
 
+    /// Checkout açık bir sekme mi (kapatma yalnız o zaman anlamlı).
+    private var isOpenTab: Bool { shell.navigation.openTabs.contains(checkout.path) }
+
     private var isMissing: Bool {
         if case .workspace(let workspace) = checkout { return shell.workspaces.isMissing(workspace) }
         return false
@@ -194,6 +234,8 @@ struct AgentRow: View {
     struct Model {
         let meta: TerminalMeta
         let state: AgentActivityState
+        /// Karar 77: seçili değilken turn'ü kapanmış / karar bekleyen ajan.
+        var needsAttention = false
     }
 
     let agent: Model
@@ -208,7 +250,7 @@ struct AgentRow: View {
                     TerminalIdentityIcon(provider: agent.meta.provider, size: .caption)
                     Text(agent.meta.displayTitle)
                         .font(Theme.Typography.captionMono)
-                        .foregroundStyle(isHovering ? Theme.textPrimary : Theme.textSecondary)
+                        .foregroundStyle(titleColor(isHovering: isHovering))
                         .lineLimit(1)
                         .truncationMode(.tail)
                     Spacer(minLength: 0)
@@ -222,15 +264,43 @@ struct AgentRow: View {
                 .padding(.vertical, Theme.Spacing.xxs)
                 .background(isHovering ? Theme.bgElevated : .clear)
                 .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.sm))
+                .overlay(alignment: .leading) { attentionBar }
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
         }
-        .accessibilityLabel("\(agent.state.title): \(agent.meta.displayTitle)")
+        .accessibilityLabel(
+            agent.needsAttention
+                ? "\(agent.state.title): \(agent.meta.displayTitle), needs attention"
+                : "\(agent.state.title): \(agent.meta.displayTitle)"
+        )
         .contextMenu {
             Button("Focus Session", action: onSelect)
             Button("Close Session", role: .destructive) { shell.terminals.close(agent.meta.id) }
         }
+    }
+
+    /// Karar 77 vurgusunun asıl gücü: ajan grubunun girinti hizasında duran
+    /// dikey sarı çubuk. Zemini boyamak yerine boş bir kanal kullanır — satır
+    /// zemini bu listede "seçili / hover" demektir.
+    @ViewBuilder
+    private var attentionBar: some View {
+        if agent.needsAttention {
+            RoundedRectangle(cornerRadius: Theme.Radius.sm)
+                .fill(Theme.warning)
+                // 2pt: ölçek dışı ara değer — hairline görünmüyor, 3pt bağırıyor.
+                .frame(width: Theme.scaled(2))
+                .padding(.vertical, Theme.Spacing.xxs)
+                .padding(.leading, Theme.Spacing.xxl)
+                .accessibilityHidden(true)
+        }
+    }
+
+    /// Vurgu hover'ı EZER: sarı "ilgilenilmedi" bilgisidir, imleç oradan
+    /// geçtiği için kaybolmamalı.
+    private func titleColor(isHovering: Bool) -> Color {
+        if agent.needsAttention { return Theme.warning }
+        return isHovering ? Theme.textPrimary : Theme.textSecondary
     }
 }
 

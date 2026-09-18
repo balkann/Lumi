@@ -7,11 +7,20 @@ public struct CloseTabDialogState: Equatable, Sendable {
     public let repoPath: String
     public let repoName: String
     public let minimizedCount: Int
+    /// Karar 66: onay bir PROJEYİ mi yoksa tek bir checkout'u mu kapatıyor.
+    /// Aynı dialog zinciri iki akışı da taşır; onay yalnız burada ayrışır.
+    public let isProject: Bool
 
-    public init(repoPath: String, repoName: String, minimizedCount: Int) {
+    public init(
+        repoPath: String,
+        repoName: String,
+        minimizedCount: Int,
+        isProject: Bool = false
+    ) {
         self.repoPath = repoPath
         self.repoName = repoName
         self.minimizedCount = minimizedCount
+        self.isProject = isProject
     }
 }
 
@@ -39,6 +48,18 @@ public struct DeleteAgentSessionDialogState: Equatable, Sendable {
     }
 }
 
+/// Claude hesabı silme onayının sunum verisi (karar 56).
+public struct RemoveClaudeAccountDialogState: Equatable, Sendable {
+    public let account: ClaudeAccount
+    /// Silinecek hesap o an aktif mi (yüzey sistem varsayılanına döner).
+    public let isActive: Bool
+
+    public init(account: ClaudeAccount, isActive: Bool) {
+        self.account = account
+        self.isActive = isActive
+    }
+}
+
 /// Kabuğun modal/overlay durumu — TEK alan (refactor 5.2).
 ///
 /// Önceden beş bağımsız bayrak vardı (`isRepoSelectorOpen`, `isSettingsOpen`,
@@ -56,6 +77,7 @@ public enum ActiveDialog: Equatable, Sendable {
     case closeTab(CloseTabDialogState)
     case deleteWorkspace(DeleteWorkspaceDialogState)
     case deleteAgentSession(DeleteAgentSessionDialogState)
+    case removeClaudeAccount(RemoveClaudeAccountDialogState)
     case quit(terminalCount: Int)
 
     public var isPresented: Bool { self != .none }
@@ -66,7 +88,7 @@ public enum ActiveDialog: Equatable, Sendable {
         switch self {
         case .none: false
         case .repoSelector, .sidebarProjectSelector, .createWorkspace, .settings, .onboarding, .closeTab,
-             .deleteWorkspace, .deleteAgentSession, .quit: true
+             .deleteWorkspace, .deleteAgentSession, .removeClaudeAccount, .quit: true
         }
     }
 }
@@ -105,6 +127,11 @@ public final class DialogRouter {
         return state
     }
 
+    public var removeClaudeAccountDialog: RemoveClaudeAccountDialogState? {
+        guard case .removeClaudeAccount(let state) = active else { return nil }
+        return state
+    }
+
     public var quitDialogTerminalCount: Int? {
         guard case .quit(let count) = active else { return nil }
         return count
@@ -118,6 +145,21 @@ public final class DialogRouter {
     public var isRepoSelectorOpen: Bool {
         get { isPresenting(.repoSelector) }
         set { setPresented(.repoSelector, newValue) }
+    }
+
+    /// Settings açılırken istenen sekme (karar 56: "Manage Accounts…").
+    /// Panel onu bir kez okuyup tüketir — kapanıp yeniden açılınca kullanıcı
+    /// en son baktığı sekmede kalsın.
+    public private(set) var requestedSettingsTab: String?
+
+    public func openSettings(tab: String? = nil) {
+        requestedSettingsTab = tab
+        present(.settings)
+    }
+
+    public func consumeRequestedSettingsTab() -> String? {
+        defer { requestedSettingsTab = nil }
+        return requestedSettingsTab
     }
 
     public var isSettingsOpen: Bool {

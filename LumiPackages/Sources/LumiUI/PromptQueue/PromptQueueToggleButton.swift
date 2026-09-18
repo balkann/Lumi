@@ -11,11 +11,11 @@ struct PromptQueueToggleButton: View {
 
     /// İkon kutusu ve sayaç baloncuğunun geometrisi — ölçek dışı sabitler.
     private enum Metrics {
-        static let side: CGFloat = 20
-        static let bubbleSide: CGFloat = 12
-        static let bubblePadding: CGFloat = 3
-        static let bubbleOffsetX: CGFloat = 4
-        static let bubbleOffsetY: CGFloat = -2
+        static var side: CGFloat { Theme.scaled(20) }
+        static var bubbleSide: CGFloat { Theme.scaled(12) }
+        static var bubblePadding: CGFloat { Theme.scaled(3) }
+        static var bubbleOffsetX: CGFloat { Theme.scaled(4) }
+        static var bubbleOffsetY: CGFloat { Theme.scaled(-2) }
     }
 
     var body: some View {

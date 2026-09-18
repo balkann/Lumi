@@ -57,6 +57,7 @@ public struct TerminalsRouteView: View {
                     layout: shell.layout.gridLayout(for: repoPath),
                     activeTerminalID: shell.terminals.activeTerminalID,
                     stalledIDs: shell.terminals.stalledIDs,
+                    awaitingDecisionIDs: shell.terminals.awaitingDecisionIDs,
                     viewProvider: shell.viewProvider,
                     promptQueue: shell.promptQueue,
                     onFocus: { shell.terminals.focus($0) },
@@ -79,7 +80,7 @@ public struct TerminalsRouteView: View {
                         command: shell.settings.current.aiProvider.launchCommand
                     )
                 },
-                onNewBash: { shell.terminals.spawn(in: repoPath, task: "Bash") }
+                items: NewTerminalMenu.items(shell: shell, repoPath: repoPath)
             )
         }
     }

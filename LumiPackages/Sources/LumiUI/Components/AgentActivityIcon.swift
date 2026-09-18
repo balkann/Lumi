@@ -11,7 +11,7 @@ struct AgentActivityIcon: View {
 
     var body: some View {
         glyph
-            .frame(width: size.points, height: size.points)
+            .frame(width: size.scaledPoints, height: size.scaledPoints)
             .accessibilityLabel(state.title)
             .help(state.title)
     }
@@ -28,7 +28,7 @@ struct AgentActivityIcon: View {
         case .failed:
             Image(systemName: "xmark.circle").font(Theme.Typography.ui(size)).foregroundStyle(Theme.error)
         case .idle:
-            Circle().fill(Theme.textMuted).padding(size.points / 4)
+            Circle().fill(Theme.textMuted).padding(size.scaledPoints / 4)
         }
     }
 }

@@ -32,6 +32,22 @@ public struct UIState: Sendable, Equatable {
     /// (migration için); yazımda overlay'e girmez, ham anahtar
     /// bilinmeyen-anahtar korumasıyla diskte aynen kalır.
     public var legacyGridColumns: GridLayout?
+    /// Karar 61 (additive): arayüz ölçeği (⌘+/⌘−/⌘0). nil = dosyada yok → %100.
+    /// Terminal font boyutu ayrı bir ayardır ve bu ölçekle ÇARPILIR.
+    public var uiScale: Double?
+    /// Karar 63 (additive): arayüz yazı tipi. nil = dosyada yok → `.system`
+    /// (SF Mono, eski davranış). Terminal fontu AYRI bir ayardır.
+    public var uiFontFamily: UIFontFamily?
+    /// Karar 65 (additive): proje yolu → o projede EN SON aktif olan checkout
+    /// yolu. İndeksli kısayol bir projeye atlarken hangi checkout'un açılacağını
+    /// buradan okur. Boşsa/proje yoksa projenin kendi kökü açılır.
+    public var lastCheckouts: [String: String]
+    /// karar 72 (additive): sağ panelin (Project Tools) seçili sekmesi —
+    /// `explorer` / `agentHistory` / `sourceControl`. nil = dosyada yok →
+    /// Explorer. Seçim view'ın `@State`'indeydi, panel her kapanışta (auto-reveal
+    /// dahil) sıfırlanıyordu. Ham `String`: `ProjectToolsTab` LumiState'te
+    /// tanımlı, LumiKit onu göremez; bilinmeyen değer okumada varsayılana iner.
+    public var projectToolsTab: String?
 
     public static let defaults = UIState(
         openTabs: [],
@@ -54,7 +70,11 @@ public struct UIState: Sendable, Equatable {
         resumeSessions: [ResumeSession] = [],
         activeRoute: String? = nil,
         panelLayout: PanelLayout? = nil,
-        legacyGridColumns: GridLayout? = nil
+        legacyGridColumns: GridLayout? = nil,
+        uiScale: Double? = nil,
+        uiFontFamily: UIFontFamily? = nil,
+        lastCheckouts: [String: String] = [:],
+        projectToolsTab: String? = nil
     ) {
         self.openTabs = openTabs
         self.activeTab = activeTab
@@ -67,6 +87,10 @@ public struct UIState: Sendable, Equatable {
         self.activeRoute = activeRoute
         self.panelLayout = panelLayout
         self.legacyGridColumns = legacyGridColumns
+        self.uiScale = uiScale
+        self.uiFontFamily = uiFontFamily
+        self.lastCheckouts = lastCheckouts
+        self.projectToolsTab = projectToolsTab
     }
 }
 

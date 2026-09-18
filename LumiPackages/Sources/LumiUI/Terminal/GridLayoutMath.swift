@@ -4,8 +4,8 @@ import LumiKit
 /// Terminal grid yerleşim matematiği (design/03 — iki eksenli model).
 /// Saf fonksiyonlar — SwiftUI'dan bağımsız test edilir.
 public enum GridLayoutMath {
-    public static let gap: CGFloat = 12
-    public static let minCardWidth: CGFloat = 400
+    public static var gap: CGFloat { Theme.scaled(12) }
+    public static var minCardWidth: CGFloat { Theme.scaled(400) }
 
     /// Kolon sayısı: auto → floor((w+gap)/(400+gap)) min 1; columns → N.
     public static func columnCount(

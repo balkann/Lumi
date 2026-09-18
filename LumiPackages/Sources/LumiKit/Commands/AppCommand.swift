@@ -23,10 +23,15 @@ public extension CommandID {
     static let focusNextTerminal: CommandID = "focusNextTerminal"
     static let focusPreviousTerminal: CommandID = "focusPreviousTerminal"
     static let focusTerminalAtIndex: CommandID = "focusTerminalAtIndex"
+    static let switchToProjectAtIndex: CommandID = "switchToProjectAtIndex"
+    static let closeProject: CommandID = "closeProject"
     static let toggleMaximizeTerminal: CommandID = "toggleMaximizeTerminal"
     static let toggleLeftSidebar: CommandID = "toggleLeftSidebar"
     static let toggleRightSidebar: CommandID = "toggleRightSidebar"
     static let toggleFocusMode: CommandID = "toggleFocusMode"
+    static let zoomIn: CommandID = "zoomIn"
+    static let zoomOut: CommandID = "zoomOut"
+    static let resetZoom: CommandID = "resetZoom"
     static let minimizeWindow: CommandID = "minimizeWindow"
 }
 
@@ -121,6 +126,23 @@ public struct AppCommand: Identifiable, Sendable, Equatable {
         self.indexRange = indexRange
         self.referenceTitle = referenceTitle
         self.referenceOrder = referenceOrder
+    }
+
+    /// Yalnız değiştiricileri değişmiş kopya (karar 62: indeksli kısayol
+    /// düzeni ayardan gelir; komutun kimliği/başlığı/sırası aynı kalır).
+    public func withModifiers(_ modifiers: CommandModifiers) -> AppCommand {
+        AppCommand(
+            id: id,
+            title: title,
+            menu: menu,
+            key: key,
+            modifiers: modifiers,
+            isSystemStandard: isSystemStandard,
+            separatorBefore: separatorBefore,
+            indexRange: indexRange,
+            referenceTitle: referenceTitle,
+            referenceOrder: referenceOrder
+        )
     }
 
     /// Kullanıcıya gösterilen kombo(lar). İndeksli komut iki uç kombo ile

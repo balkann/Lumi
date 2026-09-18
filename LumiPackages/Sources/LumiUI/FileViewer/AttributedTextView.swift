@@ -18,7 +18,7 @@ struct AttributedTextView: NSViewRepresentable {
         textView.isSelectable = true
         textView.drawsBackground = true
         textView.backgroundColor = Theme.NS.bgDeep
-        textView.textContainerInset = NSSize(width: 8, height: 8)
+        textView.textContainerInset = NSSize(width: Theme.scaled(8), height: Theme.scaled(8))
 
         textView.isHorizontallyResizable = true
         textView.isVerticallyResizable = true

@@ -219,7 +219,8 @@ final class ConfigServiceTests: XCTestCase {
         try writeFixture(realConfigFixture, to: paths.configFile)
         let config = await makeService().config()
         XCTAssertEqual(config.usageAutoRefresh, .defaults)
-        XCTAssertFalse(config.usageAutoRefresh.enabled)
+        // Anahtar yoksa varsayılan AÇIK'tır (gösterge bayat kalmasın).
+        XCTAssertTrue(config.usageAutoRefresh.enabled)
         XCTAssertEqual(config.usageAutoRefresh.intervalMinutes, 5)
     }
 
@@ -228,35 +229,35 @@ final class ConfigServiceTests: XCTestCase {
         let service = makeService()
 
         try await service.updateConfig {
-            $0.usageAutoRefresh = UsageAutoRefresh(enabled: true, intervalMinutes: 15)
+            $0.usageAutoRefresh = UsageAutoRefresh(enabled: true, intervalMinutes: 1)
         }
 
         let written = try readJSONDict(paths.configFile)
         let nested = try XCTUnwrap(written["usageAutoRefresh"] as? [String: Any])
         XCTAssertEqual(nested["enabled"] as? Bool, true)
-        XCTAssertEqual(nested["intervalMinutes"] as? Int, 15)
+        XCTAssertEqual(nested["intervalMinutes"] as? Int, 1)
         // Mevcut alanlar korunur (additive, karar 9)
         XCTAssertEqual(written["terminalFontSize"] as? Int, 13)
 
         let reloaded = await ConfigService(paths: paths).config()
         XCTAssertEqual(
             reloaded.usageAutoRefresh,
-            UsageAutoRefresh(enabled: true, intervalMinutes: 15)
+            UsageAutoRefresh(enabled: true, intervalMinutes: 1)
         )
     }
 
-    /// K38-A: izinli set {5, 15, 30}'a daraldı. Diskteki eski `1` (önceki set)
+    /// Karar 55: izinli set {1, 5}'e daraldı. Diskteki eski `15` (K38-A seti)
     /// ilk OKUMADA 5'e clamp'lenir ve ilk yazımda clamp'li hâliyle diske döner.
     /// Karar 9 ihlali değildir: aralık zaten baştan beri doğrulanan bir alandı,
     /// yalnız izinli küme değişti; bilinmeyen anahtarlar yine korunur.
-    func testLegacyOneMinuteIntervalIsClampedOnReadAndWrite() async throws {
+    func testLegacyFifteenMinuteIntervalIsClampedOnReadAndWrite() async throws {
         try writeFixture(
             """
             {
               "projectsRoot": "/p",
               "terminalFontSize": 13,
               "maxTerminals": 12,
-              "usageAutoRefresh": { "enabled": true, "intervalMinutes": 1 }
+              "usageAutoRefresh": { "enabled": true, "intervalMinutes": 15 }
             }
             """,
             to: paths.configFile

@@ -25,7 +25,7 @@ struct ProviderIcon: View {
             Image(nsImage: image)
                 .resizable()
                 .interpolation(.high)
-                .frame(width: size.points, height: size.points)
+                .frame(width: size.scaledPoints, height: size.scaledPoints)
         } else {
             Image(systemName: "gauge.with.dots.needle.bottom.50percent")
                 .font(Theme.Typography.ui(size))

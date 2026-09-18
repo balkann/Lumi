@@ -9,9 +9,19 @@ import LumiTestSupport
 ///
 /// Registry çözümlemeleri (`isAvailable`) bağlam ister; bu fixture sayesinde o
 /// çözümlemeler **view render etmeden** doğrulanabilir.
+/// Kabuk yan etkilerinin kaydı (karar 57 testleri): Finder / varsayılan
+/// uygulama / tarayıcı çağrıları.
+@MainActor
+final class ShellActionRecorder {
+    var revealedPaths: [String] = []
+    var openedPaths: [String] = []
+    var openedURLs: [URL] = []
+}
+
 @MainActor
 struct ShellContextFixture {
     let context: ShellContext
+    let recorder: ShellActionRecorder
     let shared: SharedStores
     let config: FakeConfigService
     let terminalService: FakeTerminalService
@@ -21,6 +31,7 @@ struct ShellContextFixture {
     /// `spawn` yolundan terminal üretebilsin diye (`apply` LumiState-internal).
     static func make(repo: FakeRepoService = FakeRepoService(), git: FakeGitService = FakeGitService(), workspaces: FakeWorkspaceService = FakeWorkspaceService()) async -> ShellContextFixture {
         let config = FakeConfigService()
+        let recorder = ShellActionRecorder()
         let terminalService = FakeTerminalService()
         let viewProvider = FakeTerminalViewProvider()
         let shared = SharedStores.make(
@@ -56,6 +67,12 @@ struct ShellContextFixture {
                 onComplete: {}
             ),
             usage: [:],
+            deepSeek: DeepSeekStore(service: FakeDeepSeekEnvironmentService(), toasts: toasts),
+            deepSeekBalance: DeepSeekBalanceStore(service: FakeDeepSeekBalanceService()),
+            claudeAccounts: ClaudeAccountStore(service: FakeClaudeAccountService(), toasts: toasts),
+            terminalLinks: TerminalLinkActionStore(
+                terminals: shared.terminals, repos: repos, workspaces: ProjectWorkspaceStore(service: workspaces, config: config, repos: repos, toasts: toasts)
+            ),
             computerAwake: ComputerAwakeStore(
                 terminals: shared.terminals, settings: shared.settings, assertion: FakeSleepAssertion()
             ),
@@ -67,12 +84,19 @@ struct ShellContextFixture {
             actions: ShellActions(
                 chooseFolder: { nil },
                 reveal: { _, _ in },
-                trash: { _, _ in }
+                trash: { _, _ in },
+                revealPath: { recorder.revealedPaths.append($0) },
+                openURL: { recorder.openedURLs.append($0) },
+                openPath: { recorder.openedPaths.append($0) }
             )
         )
         await shared.terminals.start()
+        context.terminalLinks.onIntent = { [weak context] intent in
+            context?.performTerminalLinkIntent(intent)
+        }
         return ShellContextFixture(
             context: context,
+            recorder: recorder,
             shared: shared,
             config: config,
             terminalService: terminalService,

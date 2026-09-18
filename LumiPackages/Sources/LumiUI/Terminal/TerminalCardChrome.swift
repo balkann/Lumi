@@ -11,6 +11,9 @@ import SwiftUI
 struct TerminalCardChrome<Header: View, Content: View>: View {
     /// Aktif kart: 1px accent ring + 15pt glow. Maximize'da her zaman `true`.
     let isActive: Bool
+    /// Karar 77: dikkat isteyen kart sarı kenarlık alır. Glow VERİLMEZ —
+    /// hale "aktif kart" dilidir, iki hâl karışmasın.
+    var needsAttention = false
     let terminalID: TerminalID
     let promptQueue: PromptQueueStore
     @Binding var isQueueOpen: Bool
@@ -20,7 +23,7 @@ struct TerminalCardChrome<Header: View, Content: View>: View {
     var body: some View {
         Panel(
             variant: .card,
-            borderColor: isActive ? Theme.accentPrimary : Theme.border,
+            borderColor: borderColor,
             glow: isActive ? .accent() : nil
         ) {
             VStack(spacing: 0) {
@@ -29,6 +32,11 @@ struct TerminalCardChrome<Header: View, Content: View>: View {
             }
         }
         .promptQueueOverlay(isOpen: $isQueueOpen, terminalID: terminalID, store: promptQueue)
+    }
+
+    private var borderColor: Color {
+        if isActive { return Theme.accentPrimary }
+        return needsAttention ? Theme.warning : Theme.border
     }
 }
 
@@ -68,6 +76,9 @@ struct TerminalCardHeader: View {
     let meta: TerminalMeta
     let isActive: Bool
     let isStalled: Bool
+    /// Karar 77: seçili değilken turn'ü kapanmış ya da karar bekleyen terminal —
+    /// başlık sarıya döner ki göz taramada yakalasın.
+    var needsAttention = false
     let style: Style
     let promptQueue: PromptQueueStore
     @Binding var isQueueOpen: Bool
@@ -91,8 +102,11 @@ struct TerminalCardHeader: View {
             }
             Text(meta.displayTitle)
                 .font(Theme.Typography.mono(style.titleSize))
-                .foregroundStyle(isActive ? Theme.textPrimary : Theme.textSecondary)
+                .foregroundStyle(titleColor)
                 .lineLimit(1)
+                .accessibilityLabel(
+                    needsAttention ? "\(meta.displayTitle), needs attention" : meta.displayTitle
+                )
             Spacer()
             PromptQueueToggleButton(
                 count: promptQueue.count(for: meta.id),
@@ -131,6 +145,11 @@ struct TerminalCardHeader: View {
         // Başlığa çift tık zoom'u çevirir (grid → maximize, maximize → grid)
         .simultaneousGesture(TapGesture(count: 2).onEnded(onZoom))
     }
+
+    private var titleColor: Color {
+        if needsAttention { return Theme.warning }
+        return isActive ? Theme.textPrimary : Theme.textSecondary
+    }
 }
 
 /// Kim koşuyor (karar 45; Orca `TerminalTabLeadingIcon`): durum noktasının
@@ -151,7 +170,7 @@ struct TerminalIdentityIcon: View {
                     .foregroundStyle(Theme.textMuted)
             }
         }
-        .frame(width: size.points, height: size.points)
+        .frame(width: size.scaledPoints, height: size.scaledPoints)
         .accessibilityLabel(provider.map { $0.rawValue.capitalized } ?? "Shell")
     }
 }
@@ -162,7 +181,7 @@ struct StatusDot: View {
 
     @State private var isPulsing = false
 
-    private static let diameter: CGFloat = 7
+    private static var diameter: CGFloat { Theme.scaled(7) }
 
     private var shouldPulse: Bool {
         status == .working || status == .waitingUnseen

@@ -107,4 +107,25 @@ final class DialogRouterTests: XCTestCase {
         router.dismiss()
         XCTAssertEqual(router.collapsedRepoGroups, ["__standalone__"], "session-local, dialoga bağlı değil")
     }
+
+    // MARK: - Settings sekme isteği (karar 56)
+
+    func testOpenSettingsWithATabPresentsSettingsAndHandsTheTabOverOnce() {
+        router.openSettings(tab: "accounts")
+
+        XCTAssertEqual(router.active, .settings)
+        XCTAssertEqual(router.consumeRequestedSettingsTab(), "accounts")
+        XCTAssertNil(
+            router.consumeRequestedSettingsTab(),
+            "istek tüketilir — panel yeniden açılınca kullanıcı son sekmesinde kalır"
+        )
+    }
+
+    func testOpenSettingsWithoutATabClearsAPreviousRequest() {
+        router.openSettings(tab: "accounts")
+        router.dismiss()
+        router.openSettings()
+
+        XCTAssertNil(router.consumeRequestedSettingsTab())
+    }
 }

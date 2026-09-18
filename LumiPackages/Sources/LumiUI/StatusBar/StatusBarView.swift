@@ -5,18 +5,18 @@ import SwiftUI
 /// Punto/radius burada yoktur — onlar `Theme` token'larından gelir.
 public enum StatusBarMetrics {
     /// Bar yüksekliği (Orca 24px).
-    public static let height: CGFloat = 24
+    public static var height: CGFloat { Theme.scaled(24) }
     /// Segment ve ikon buton yüksekliği.
-    public static let controlHeight: CGFloat = 18
+    public static var controlHeight: CGFloat { Theme.scaled(18) }
     /// Yatay iç boşluk (Orca `px-3`).
-    public static let horizontalPadding: CGFloat = 12
+    public static var horizontalPadding: CGFloat { Theme.scaled(12) }
     /// Durum noktası çapı (Orca `size-1.5`).
-    public static let dotSize: CGFloat = 6
+    public static var dotSize: CGFloat { Theme.scaled(6) }
     /// Popover genişliği (Orca `w-[26rem]`).
-    public static let popoverWidth: CGFloat = 416
+    public static var popoverWidth: CGFloat { Theme.scaled(416) }
     /// Resource Manager liste gövdesinin sabit yüksekliği — polling
     /// sırasında popover'ın zıplamaması için (Orca `h-[420px]`).
-    public static let popoverBodyHeight: CGFloat = 360
+    public static var popoverBodyHeight: CGFloat { Theme.scaled(360) }
 }
 
 /// Pencerenin en altındaki ince durum barı (karar 43; Orca `StatusBar`).

@@ -24,18 +24,28 @@ public protocol TerminalGridSizing: AnyObject {
 @MainActor
 public enum TerminalGridFit {
     /// Frame gerçekten değiştiyse `true` — çağıran redraw kararını buna bağlar.
+    ///
+    /// `scale` yalnız testler için: `nil` (varsayılan) üretimdeki zinciri kullanır
+    /// (pencere → `NSScreen.main` → 2). Testler ortamın backing scale'ine bağlı
+    /// kalmasın diye değeri sabitler; CI runner'ının 1x sanal ekranında yarım
+    /// piksellik ortalama artığı tam piksele yuvarlanıyordu.
     @discardableResult
-    public static func fit(_ view: NSView, in host: NSView) -> Bool {
+    public static func fit(_ view: NSView, in host: NSView, scale: CGFloat? = nil) -> Bool {
         let bounds = host.bounds
         guard !bounds.isEmpty else { return false }
-        let target = targetFrame(for: view, in: bounds, host: host)
+        let target = targetFrame(for: view, in: bounds, host: host, scale: scale)
         guard !view.frame.equalTo(target) else { return false }
         view.frame = target
         return true
     }
 
     /// Hücre geometrisi bildirmeyen view (test double'ları) tam bounds'a oturur.
-    private static func targetFrame(for view: NSView, in bounds: CGRect, host: NSView) -> CGRect {
+    private static func targetFrame(
+        for view: NSView,
+        in bounds: CGRect,
+        host: NSView,
+        scale: CGFloat?
+    ) -> CGRect {
         guard let sizing = view as? any TerminalGridSizing else { return bounds }
         let cell = sizing.cellSize
         guard cell.width > 0, cell.height > 0 else { return bounds }
@@ -48,8 +58,8 @@ public enum TerminalGridFit {
         )
         return CGRect(
             origin: CGPoint(
-                x: bounds.minX + pixelAligned((bounds.width - grid.width) / 2, in: host),
-                y: bounds.minY + pixelAligned((bounds.height - grid.height) / 2, in: host)
+                x: bounds.minX + pixelAligned((bounds.width - grid.width) / 2, in: host, scale: scale),
+                y: bounds.minY + pixelAligned((bounds.height - grid.height) / 2, in: host, scale: scale)
             ),
             size: grid
         )
@@ -57,8 +67,8 @@ public enum TerminalGridFit {
 
     /// Ortalama artığı backing piksel ızgarasına indirilir; yarım piksellik kayma
     /// glyph'leri bulanıklaştırırdı.
-    private static func pixelAligned(_ value: CGFloat, in view: NSView) -> CGFloat {
-        let scale = view.window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2
+    private static func pixelAligned(_ value: CGFloat, in view: NSView, scale: CGFloat?) -> CGFloat {
+        let scale = scale ?? view.window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2
         guard scale > 0 else { return value.rounded(.down) }
         return (value * scale).rounded(.down) / scale
     }

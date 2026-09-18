@@ -21,6 +21,8 @@ public final class FakeTerminalService: TerminalServicing {
 
     // MARK: Çağrı kaydı
     public private(set) var spawnedMetas: [TerminalMeta] = []
+    /// Spawn argümanları — meta komutu taşımadığı için ayrı kaydedilir.
+    public private(set) var spawnCalls: [(repoPath: String, task: String?, command: String?)] = []
     public private(set) var spawnAttempts = 0
     public private(set) var killedIDs: [TerminalID] = []
     public private(set) var killAllCount = 0
@@ -79,6 +81,7 @@ public final class FakeTerminalService: TerminalServicing {
             claudeSessionID: UUID().uuidString
         )
         spawnedMetas.append(meta)
+        spawnCalls.append((repoPath, task, command))
         broadcaster.send(.spawned(meta))
         return meta
     }
@@ -147,6 +150,13 @@ public final class FakeTerminalService: TerminalServicing {
 
     public func applyCursor(shape: TerminalCursorShape, blink: Bool) {
         appliedCursors.append((shape, blink))
+    }
+
+    /// Karar 57: uygulanan link-eylemi ayarlarının kaydı.
+    public private(set) var appliedLinkActions: [Bool] = []
+
+    public func applyLinkActions(enabled: Bool) {
+        appliedLinkActions.append(enabled)
     }
 
     public func events() -> AsyncStream<TerminalEvent> {

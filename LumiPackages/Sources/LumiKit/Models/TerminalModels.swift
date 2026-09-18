@@ -46,8 +46,14 @@ public enum AgentProvider: String, Sendable, Codable, Equatable, CaseIterable {
 
     /// Launch komutunun ilk token'ından sağlayıcı çıkarımı (`claude …` /
     /// `codex …`); başka komut ya da `nil` → `nil` (düz shell).
+    ///
+    /// `&&` zinciri varsa SON parçaya bakılır: DeepSeek terminali
+    /// `source "…/deepseek.env" && claude` ile açılır (karar 54) ve kartın
+    /// kimliği yine Claude'dur — çalışan CLI gerçekten claude'dur.
     public static func detect(launchCommand: String?) -> AgentProvider? {
-        guard let first = launchCommand?.split(whereSeparator: \.isWhitespace).first else { return nil }
+        guard let command = launchCommand else { return nil }
+        let lastStage = command.components(separatedBy: "&&").last ?? command
+        guard let first = lastStage.split(whereSeparator: \.isWhitespace).first else { return nil }
         return AgentProvider(rawValue: String(first))
     }
 }
@@ -132,4 +138,7 @@ public enum TerminalEvent: Sendable, Equatable {
     /// buna göre senkronlar — composition root'ta callback köprüsü yerine
     /// diğer tüm terminal sinyalleriyle aynı kanaldan akar (Faz 3.7).
     case viewFocused(TerminalID)
+    /// Karar 57: terminalde bir link/path tıklandı. Hedefin çözümlenmesi
+    /// (URL / workspace / dizin / dosya) ve eylemler store katmanındadır.
+    case linkActivated(TerminalLinkActivation)
 }

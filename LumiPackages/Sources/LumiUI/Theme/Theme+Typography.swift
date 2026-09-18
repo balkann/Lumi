@@ -57,6 +57,15 @@ public extension Theme {
                 .base, .title, .headline, .heading, .display, .hero, .splash,
             ]
 
+            /// Basamağın YÜRÜRLÜKTEKİ ölçekteki puntosu.
+            ///
+            /// Glyph'iyle aynı boyutta durması gereken kaplar (ikon kutusu,
+            /// highlighter'a verilen punto) bunu kullanır: ham `points`
+            /// ölçeği ATLAR, kutu tam boyutta kalırken içindeki glyph küçülür.
+            /// `Theme.Typography` fabrikalarıyla aynı yuvarlamadan geçer, yani
+            /// kutu ile glyph tek piksel bile ayrışmaz.
+            public var scaledPoints: CGFloat { Theme.scaledFontSize(points) }
+
             /// Ölçekte `offset` basamak yukarı (+) / aşağı (−); uçlarda kırpılır.
             ///
             /// Türetilmiş puntoların (markdown başlık merdiveni, diff gutter'ı)
@@ -71,31 +80,38 @@ public extension Theme {
 
         // MARK: - Fabrikalar
 
-        /// Monospace (JetBrains Mono görsel kimliği) — metinlerin varsayılanı.
+        /// Monospace — metinlerin varsayılanı.
+        ///
+        /// Punto ÜÇ fabrikada da `Theme.scaledFontSize` üzerinden geçer (karar 61):
+        /// arayüz ölçeği tek noktadan iner, çağrı yerleri ölçeği bilmez. YÜZ de
+        /// aynı biçimde tek noktadan iner (karar 63): sistem monospace'i
+        /// (SF Mono, varsayılan) ya da bundle'daki JetBrains Mono.
         public static func mono(_ size: Size, weight: Font.Weight = .regular) -> Font {
-            .system(size: size.points, weight: weight, design: .monospaced)
+            Theme.monoFont(size: Theme.scaledFontSize(size.points), weight: weight)
         }
 
         /// Sistem yüzü — SF Symbol glyph'leri ve native kontroller.
         public static func ui(_ size: Size, weight: Font.Weight = .regular) -> Font {
-            .system(size: size.points, weight: weight)
+            .system(size: Theme.scaledFontSize(size.points), weight: weight)
         }
 
         /// Yuvarlak yüz — sayaç rozetleri gibi yumuşak öğeler.
         public static func rounded(_ size: Size, weight: Font.Weight = .regular) -> Font {
-            .system(size: size.points, weight: weight, design: .rounded)
+            .system(size: Theme.scaledFontSize(size.points), weight: weight, design: .rounded)
         }
 
         // MARK: - Semantik hazır fontlar
 
-        public static let caption = ui(.caption)
-        public static let captionMono = mono(.caption)
-        public static let label = ui(.label)
-        public static let labelMono = mono(.label)
-        public static let body = ui(.body)
-        public static let bodyMono = mono(.body)
-        public static let baseMono = mono(.base)
-        public static let title = ui(.title, weight: .semibold)
-        public static let titleMono = mono(.title, weight: .semibold)
+        // `var`: ölçek değiştiğinde yeniden hesaplanmaları gerekir (karar 61).
+        // `let` olsalardı ilk erişimdeki ölçekte donup kalırlardı.
+        public static var caption: Font { ui(.caption) }
+        public static var captionMono: Font { mono(.caption) }
+        public static var label: Font { ui(.label) }
+        public static var labelMono: Font { mono(.label) }
+        public static var body: Font { ui(.body) }
+        public static var bodyMono: Font { mono(.body) }
+        public static var baseMono: Font { mono(.base) }
+        public static var title: Font { ui(.title, weight: .semibold) }
+        public static var titleMono: Font { mono(.title, weight: .semibold) }
     }
 }

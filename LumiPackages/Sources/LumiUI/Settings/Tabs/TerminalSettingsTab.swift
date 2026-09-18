@@ -38,6 +38,20 @@ struct TerminalSettingsTab: SettingsTabContent {
                 )
             }
             LumiField(
+                title: "Link Actions",
+                hint: "Click a path or URL in the terminal to choose what happens with it. "
+                    + "Turning this off leaves plain clicks to the terminal; ⌘-click and "
+                    + "⇧⌘-click still open links."
+            ) {
+                LumiToggleSwitch(
+                    isOn: Binding(
+                        get: { shell.settings.current.terminalLinkActionsEnabled },
+                        set: { shell.settings.setTerminalLinkActionsEnabled($0) }
+                    ),
+                    label: "Terminal link actions"
+                )
+            }
+            LumiField(
                 title: "Agent Status Hooks",
                 hint: "Install Lumi hooks into Claude Code and Codex so working / waiting / idle "
                     + "come straight from the agent. Turning this off removes the hooks and falls "
@@ -71,7 +85,7 @@ struct TerminalSettingsTab: SettingsTabContent {
         }
         .labelsHidden()
         .font(Theme.Typography.bodyMono)
-        .frame(width: 260, alignment: .leading)
+        .frame(width: Theme.scaled(260), alignment: .leading)
         .accessibilityLabel("Terminal font family")
     }
 
@@ -86,7 +100,7 @@ struct TerminalSettingsTab: SettingsTabContent {
         )
         .font(Theme.Typography.bodyMono)
         .foregroundStyle(Theme.textPrimary)
-        .frame(width: 140, alignment: .leading)
+        .frame(width: Theme.scaled(140), alignment: .leading)
     }
 
     private var cursorControls: some View {
@@ -101,7 +115,7 @@ struct TerminalSettingsTab: SettingsTabContent {
                 )
             )
             // 10pt: ölçek dışı ara değer (v1 paritesi korunuyor).
-            HStack(spacing: 10) {
+            HStack(spacing: Theme.scaled(10)) {
                 Text("Blink")
                     .font(Theme.Typography.bodyMono)
                     .foregroundStyle(Theme.textSecondary)

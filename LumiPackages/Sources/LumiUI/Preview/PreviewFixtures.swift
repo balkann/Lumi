@@ -53,6 +53,17 @@ public extension ShellContext {
                 onComplete: {}
             ),
             usage: [:],
+            deepSeek: DeepSeekStore(service: PreviewDeepSeekEnvironmentService(), toasts: shared.toasts),
+            deepSeekBalance: .preview,
+            claudeAccounts: ClaudeAccountStore(
+                service: PreviewClaudeAccountService(), toasts: shared.toasts
+            ),
+            terminalLinks: TerminalLinkActionStore(
+                terminals: shared.terminals, repos: repos,
+                workspaces: ProjectWorkspaceStore(
+                    service: PreviewWorkspaceService(), config: config, repos: repos, toasts: shared.toasts
+                )
+            ),
             computerAwake: ComputerAwakeStore(
                 terminals: shared.terminals, settings: shared.settings, assertion: PreviewSleepAssertion()
             ),
@@ -98,6 +109,9 @@ private actor PreviewWorkspaceService: WorkspaceServicing {
     func inspect(project: Repo) async throws -> WorkspaceSource {
         WorkspaceSource(projectPath: project.path, scm: .git, branch: "main", revision: "abc123",
                         destinationDirectory: "/Users/preview/lumi/workspaces/\(project.name)")
+    }
+    func branches(project: Repo, limit: Int) async throws -> [WorkspaceBranch] {
+        [WorkspaceBranch(name: "main"), WorkspaceBranch(name: "feature/preview")]
     }
     func create(_ request: WorkspaceCreateRequest) async throws -> WorkspaceCreateResult {
         throw WorkspaceFailure("Creation is unavailable in previews.")
@@ -168,6 +182,7 @@ private final class PreviewTerminalService: TerminalServicing {
     func subscribeOutput(_ id: TerminalID) -> AsyncStream<Data> { remoteOutputBroadcaster.stream() }
     func writeInput(_ data: Data, to id: TerminalID) {}
     func serializeScrollback(_ id: TerminalID) -> (data: Data, cols: Int, rows: Int) { (Data(), 0, 0) }
+    func applyLinkActions(enabled: Bool) {}
 }
 
 @MainActor
@@ -176,6 +191,48 @@ private final class PreviewSleepAssertion: SleepAsserting {
     func setPreventingSleep(_ prevent: Bool, reason: String) -> Bool {
         isPreventingSleep = prevent
         return true
+    }
+}
+
+/// İki hesaplı, ikincisi aktif bir liste — Settings ▸ Accounts önizlemesi
+/// boş görünmesin (karar 56).
+private struct PreviewClaudeAccountService: ClaudeAccountServicing {
+    private static let snapshot = ClaudeAccountsSnapshot(
+        accounts: [
+            ClaudeAccount(
+                id: "personal", email: "dev@example.com", organizationName: "Personal",
+                createdAt: .distantPast, updatedAt: .distantPast, lastAuthenticatedAt: .distantPast
+            ),
+            ClaudeAccount(
+                id: "work", email: "dev@company.com", organizationName: "Company",
+                createdAt: .distantPast, updatedAt: .distantPast, lastAuthenticatedAt: .distantPast
+            ),
+        ],
+        selection: .account("work")
+    )
+
+    func accounts() async -> ClaudeAccountsSnapshot { Self.snapshot }
+    func syncActiveSelection() async {}
+    func addAccount() async throws -> ClaudeAccountsSnapshot { Self.snapshot }
+    func cancelPendingLogin() async {}
+    func reauthenticate(accountID: String) async throws -> ClaudeAccountsSnapshot { Self.snapshot }
+    func removeAccount(accountID: String) async throws -> ClaudeAccountsSnapshot { Self.snapshot }
+    func select(_ selection: ClaudeAccountSelection) async throws -> ClaudeAccountsSnapshot {
+        ClaudeAccountsSnapshot(accounts: Self.snapshot.accounts, selection: selection)
+    }
+}
+
+private struct PreviewDeepSeekEnvironmentService: DeepSeekEnvironmentServicing {
+    func read() async -> DeepSeekSetup {
+        DeepSeekSetup(envFilePath: "/Users/preview/.claude/deepseek.env", apiKey: nil)
+    }
+
+    func install(apiKey: String) async throws -> DeepSeekSetup {
+        DeepSeekSetup(envFilePath: "/Users/preview/.claude/deepseek.env", apiKey: apiKey)
+    }
+
+    func remove() async throws -> DeepSeekSetup {
+        DeepSeekSetup(envFilePath: "/Users/preview/.claude/deepseek.env", apiKey: nil)
     }
 }
 
@@ -287,12 +344,16 @@ private struct PreviewUsageService: UsageServicing {
         )
     }
 
+    /// 5 saatlik pencerenin 3 saati kalmış → tempo çizgisi %40'ta durur
+    /// (karar 74); yalnız Codex gerçekte süre bildirir, preview ikisinde de
+    /// çizgiyi gösterir.
     private func window(_ percent: Int) -> UsageWindow {
         UsageWindow(
             percentUsed: percent,
             resetsAt: Date().addingTimeInterval(3 * 60 * 60),
             resetsRaw: "in 3h",
-            timezone: nil
+            timezone: nil,
+            duration: 5 * 60 * 60
         )
     }
 }
@@ -394,6 +455,44 @@ public extension UsageStore {
     }
 }
 
+public extension DeepSeekBalanceStore {
+    /// Dolu bir bakiyeyle kurulur (karar 75 preview'ları).
+    @MainActor
+    static var preview: DeepSeekBalanceStore {
+        let store = DeepSeekBalanceStore(service: PreviewDeepSeekBalanceService())
+        store.setEnabled(true)
+        Task { await store.loadInitialIfNeeded() }
+        return store
+    }
+}
+
+/// Ağsız sahte bakiye (karar 75).
+private struct PreviewDeepSeekBalanceService: DeepSeekBalanceServicing {
+    func fetch() async throws -> DeepSeekBalance {
+        DeepSeekBalance(
+            isAvailable: true,
+            accounts: [
+                DeepSeekBalance.Account(
+                    currency: "USD", total: 1.69, granted: 0, toppedUp: 1.69
+                )
+            ],
+            fetchedAt: Date()
+        )
+    }
+}
+
+public extension ClaudeAccountStore {
+    /// İki hesaplı, ikincisi aktif bir store (karar 56 preview'ları).
+    @MainActor
+    static var preview: ClaudeAccountStore {
+        let store = ClaudeAccountStore(
+            service: PreviewClaudeAccountService(), toasts: ToastStore()
+        )
+        Task { await store.load() }
+        return store
+    }
+}
+
 public extension RepoStore.RepoGroup {
     /// İki gruplu örnek repo listesi (dropdown preview'ı).
     static var previewGroups: [RepoStore.RepoGroup] {
@@ -425,6 +524,7 @@ private struct PreviewSessionStarterService: SessionStarterServicing {
 private struct PreviewSystemService: SystemServicing {
     func runChecks(selectedProvider: AgentProvider) async -> [SystemCheckResult] { [] }
     func fixProcessPath() async {}
+    func openWithDefaultApp(path: String) {}
     func openExternal(_ url: URL) throws {}
     func trash(path: String) async throws {}
     func revealInFinder(path: String) {}

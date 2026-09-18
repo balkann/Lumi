@@ -29,6 +29,36 @@ public struct FileViewerOverlay: View {
     }
 }
 
+/// Repo seçici (karar 55). Eskiden top bar tab şeridindeki (+) butonunun
+/// popover'ıydı; şerit kalkınca modal overlay'e taşındı. Seçim aktif tab'ı
+/// açar, açık tab'lar listede gizlenir.
+public struct RepoSelectorOverlay: View {
+    @Shell private var shell
+
+    public init() {}
+
+    public var body: some View {
+        ModalOverlay(onDismiss: { shell.dialogs.isRepoSelectorOpen = false }) {
+            Panel(variant: .modal) {
+                RepoSelectorView(
+                    groups: shell.repos.groupedRepos,
+                    // Karar 65: HİÇBİR ŞEY dışlanmaz. Eskiden açık tab'lar
+                    // dışlanıyordu, yani açtığın bir repo'ya ⌘O ile geri
+                    // dönemiyordun. Artık ⌘O hem ekler hem geçiş yapar.
+                    excludedRepoPaths: [],
+                    collapsedGroups: Binding(
+                        get: { shell.dialogs.collapsedRepoGroups },
+                        set: { shell.dialogs.collapsedRepoGroups = $0 }
+                    )
+                ) { repo in
+                    shell.dialogs.isRepoSelectorOpen = false
+                    Task { await shell.goToProject(repo) }
+                }
+            }
+        }
+    }
+}
+
 public struct SettingsOverlay: View {
     public init() {}
 
@@ -57,19 +87,33 @@ public struct CloseTabDialogOverlay: View {
 
     public init() {}
 
+    /// Karar 66: aynı dialog iki akışı taşır. Metin proje kaldırmada AÇIKÇA
+    /// farklıdır — kaldırma kalıcı listeye dokunur ve projenin TÜM
+    /// checkout'larını kapatır; "Close Tab" yazan bir buton bunu gizlerdi.
+    private var isProject: Bool { shell.dialogs.closeTabDialog?.isProject ?? false }
+    private var name: String { shell.dialogs.closeTabDialog?.repoName ?? "" }
+    private var minimizedCount: Int { shell.dialogs.closeTabDialog?.minimizedCount ?? 0 }
+
     public var body: some View {
         DialogAnchor()
             .confirmationDialog(
-                "Close \(shell.dialogs.closeTabDialog?.repoName ?? "")?",
+                isProject ? "Remove \(name) from Projects?" : "Close \(name)?",
                 isPresented: Binding(
                     get: { shell.dialogs.closeTabDialog != nil },
                     set: { if !$0 { shell.cancelCloseTab() } }
                 )
             ) {
-                Button("Close Tab", role: .destructive) { shell.confirmCloseTab() }
+                Button(
+                    isProject ? "Remove Project" : "Close Tab",
+                    role: .destructive
+                ) { shell.confirmCloseTab() }
                 Button("Cancel", role: .cancel) { shell.cancelCloseTab() }
             } message: {
-                Text("\(shell.dialogs.closeTabDialog?.minimizedCount ?? 0) minimized terminal will be killed.")
+                Text(
+                    isProject
+                        ? "\(minimizedCount) minimized terminal across this project's checkouts will be killed."
+                        : "\(minimizedCount) minimized terminal will be killed."
+                )
             }
     }
 }

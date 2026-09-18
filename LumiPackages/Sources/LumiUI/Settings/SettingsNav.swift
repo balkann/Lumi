@@ -38,10 +38,12 @@ private struct SettingsNavItem: View {
                     Text(tab.title)
                         .font(Theme.Typography.mono(.base, weight: .medium))
                         .foregroundStyle(foreground(isHovering: isHovering))
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
                     Spacer(minLength: 0)
                 }
                 // 10pt: ölçek dışı ara değer (v1 paritesi korunuyor).
-                .padding(10)
+                .padding(Theme.scaled(10))
                 .background(background(isHovering: isHovering))
                 .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.lg))
                 .contentShape(Rectangle())
@@ -66,7 +68,7 @@ private struct SettingsNavItem: View {
 #if DEBUG
 #Preview("SettingsNav") {
     SettingsNav(selection: .constant(.terminal))
-        .frame(width: 180, height: 420)
+        .frame(width: 200, height: 420)
         .background(Theme.bgSurface)
 }
 #endif

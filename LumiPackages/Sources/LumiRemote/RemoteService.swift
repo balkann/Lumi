@@ -229,7 +229,7 @@ public final class RemoteService: RemoteServicing {
                 promptWriteTasks[id]?.cancel(); promptWriteTasks[id] = nil
             }
             await sendSessions()
-        case .titleChanged, .awaitingDecisionChanged, .bell, .providerChanged, .writeFailed, .stalled, .viewFocused:
+        case .titleChanged, .awaitingDecisionChanged, .bell, .providerChanged, .writeFailed, .stalled, .viewFocused, .linkActivated:
             break
         }
     }

@@ -33,7 +33,7 @@ struct SessionSettingsTab: SettingsTabContent {
                 DatePicker("", selection: triggerTimeBinding, displayedComponents: .hourAndMinute)
                     .labelsHidden()
                     .font(Theme.Typography.bodyMono)
-                    .frame(width: 140, alignment: .leading)
+                    .frame(width: Theme.scaled(140), alignment: .leading)
                     .accessibilityLabel("Daily trigger time")
             }
             LumiField(
@@ -47,7 +47,7 @@ struct SessionSettingsTab: SettingsTabContent {
                         set: { value in updateTrigger { $0.prompt = value } }
                     ),
                     placeholder: "hello",
-                    width: 260
+                    width: Theme.scaled(260)
                 )
             }
             statusRow
@@ -72,7 +72,7 @@ struct SessionSettingsTab: SettingsTabContent {
                 }
             }
             // 10pt: ölçek dışı ara değer (v1 paritesi korunuyor).
-            HStack(spacing: 10) {
+            HStack(spacing: Theme.scaled(10)) {
                 startNowButton
                 lastRunLabel
             }
@@ -92,8 +92,8 @@ struct SessionSettingsTab: SettingsTabContent {
                     .foregroundStyle(Theme.textPrimary)
             }
             // 14/7pt: ölçek dışı ara değerler (v1 paritesi korunuyor).
-            .padding(.horizontal, 14)
-            .padding(.vertical, 7)
+            .padding(.horizontal, Theme.scaled(14))
+            .padding(.vertical, Theme.scaled(7))
             .background(Theme.bgElevated)
             .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
             .overlay(
@@ -134,7 +134,7 @@ struct SessionSettingsTab: SettingsTabContent {
         @ViewBuilder content: () -> some View
     ) -> some View {
         // 5pt: ölçek dışı ara değer (v1 paritesi korunuyor).
-        HStack(spacing: 5) {
+        HStack(spacing: Theme.scaled(5)) {
             Image(systemName: icon)
                 .font(Theme.Typography.label)
                 .foregroundStyle(tint)

@@ -15,7 +15,7 @@ struct PromptQueueOverlayModifier: ViewModifier {
     /// Panelin kart içindeki oranları — ölçek dışı geometri sabitleri.
     private enum Metrics {
         static let widthRatio: CGFloat = 0.9
-        static let maxWidth: CGFloat = 760
+        static var maxWidth: CGFloat { Theme.scaled(760) }
         static let maxHeightRatio: CGFloat = 0.92
         static let entryScale: CGFloat = 0.97
         static let entryDuration: TimeInterval = 0.16

@@ -60,8 +60,10 @@ public extension ToolbarItemID {
         ToolbarItemID("usageIndicator.\(provider.rawValue)")
     }
 
+    /// DeepSeek bakiye göstergesi (karar 75) — sağlayıcı ekseninin dışında.
+    static let deepSeekBalance = ToolbarItemID("deepSeekBalance")
+
     static let logo = ToolbarItemID("logo")
-    static let repoTabs = ToolbarItemID("repoTabs")
     static let gridSettings = ToolbarItemID("gridSettings")
     static let newTerminal = ToolbarItemID("newTerminal")
     static let focusMode = ToolbarItemID("focusMode")

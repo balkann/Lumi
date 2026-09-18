@@ -19,7 +19,15 @@ public struct UsageToolbarItem: View {
 
     public var body: some View {
         if let store = shell.usage[provider] {
-            UsageIndicatorView(store: store)
+            // Hesap değiştirici yalnız Claude'da (karar 56): Codex'in hesap
+            // yönetimi Lumi'de yok.
+            UsageIndicatorView(
+                store: store,
+                accounts: provider == .claude ? shell.claudeAccounts : nil,
+                openAccountSettings: provider == .claude
+                    ? { shell.dialogs.openSettings(tab: SettingsTab.accounts.rawValue) }
+                    : nil
+            )
         }
     }
 }

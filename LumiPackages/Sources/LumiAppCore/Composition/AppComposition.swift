@@ -45,10 +45,21 @@ struct AppComposition {
         let workspaceBoot = WorkspaceBootAssembly()
         let statusBar = StatusBarFeatureAssembly()
         let remote = RemoteFeatureAssembly()
+        let deepSeek = DeepSeekAssembly()
+        let tasks = TasksFeatureAssembly()
+        // Hesap değişince Claude göstergesi yeni hesabın kotasını göstermeli.
+        let claudeAccounts = ClaudeAccountsAssembly(refreshClaudeUsage: { [weak usage] in
+            guard let store = usage?.usageStores[.claude] else { return }
+            Task { await store.refreshAfterSourceChange() }
+        })
+        let terminalLinks = TerminalLinkActionsAssembly()
         let container = AppContainer(
             services: registry,
             shared: shared,
-            assemblies: [agentHooks, terminal, notifications, sessionSchedule, usage, repo, workspaceBoot, statusBar, remote]
+            assemblies: [
+                agentHooks, terminal, notifications, sessionSchedule, usage, repo, workspaceBoot,
+                statusBar, remote, deepSeek, tasks, claudeAccounts, terminalLinks,
+            ]
         )
         let shell = ShellComposition.make(
             registry: registry,
@@ -60,7 +71,10 @@ struct AppComposition {
             workspaceBoot: workspaceBoot,
             statusBar: statusBar,
             remote: remote,
-            contributors: [terminal, repo, usage, statusBar]
+            deepSeek: deepSeek,
+            claudeAccounts: claudeAccounts,
+            terminalLinks: terminalLinks,
+            contributors: [tasks, terminal, repo, usage, statusBar, claudeAccounts, terminalLinks]
         )
         return AppComposition(
             registry: registry,

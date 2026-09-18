@@ -269,6 +269,10 @@ public final class TerminalListStore: StoreLifecycle {
 
     // MARK: - Event uygulama (testler doğrudan sürebilsin diye internal)
 
+    /// Karar 57: terminalde link tıklandı. Composition root bunu
+    /// `TerminalLinkActionStore`'a bağlar; bağlanmazsa sinyal sessizce düşer.
+    @ObservationIgnored public var onLinkActivated: ((TerminalLinkActivation) -> Void)?
+
     func apply(_ event: TerminalEvent) {
         switch event {
         case .spawned(let meta):
@@ -325,6 +329,10 @@ public final class TerminalListStore: StoreLifecycle {
             // Terminal NSView'ına tıklama: store odağı senkronlanır. `focus`
             // kuralları aynen geçerli (minimize edilmiş odak alamaz).
             focus(id)
+        case .linkActivated(let activation):
+            // Karar 57: hedef çözümlemesi ve eylemler link store'unda; burada
+            // yalnız kanal köprülenir (repo/workspace bilgisi bu store'da yok).
+            onLinkActivated?(activation)
         case .bell(let id):
             // Emülatör BEL karakteri — status-güdümlü bell'ler ayrıca
             // NotificationService'ten gelir

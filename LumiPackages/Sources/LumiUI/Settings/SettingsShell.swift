@@ -7,9 +7,12 @@ import SwiftUI
 ///
 /// Kaydetme modeli: macOS anlık uygulama (karar 3) — Save/Cancel footer'ı YOK.
 struct SettingsShell: View {
-    private static let panelWidth: CGFloat = 700
-    private static let panelHeight: CGFloat = 600
-    private static let navigationWidth: CGFloat = 180
+    /// Karar 55 (kullanıcı düzeltmesi): form satırları 700×600'de sıkışıyordu.
+    private static var panelWidth: CGFloat { Theme.scaled(860) }
+    private static var panelHeight: CGFloat { Theme.scaled(720) }
+    /// En uzun sekme adı ("Notifications") tek satıra sığmalı — 180'de son
+    /// harf alt satıra düşüyordu (karar 55 kullanıcı düzeltmesi).
+    private static var navigationWidth: CGFloat { Theme.scaled(200) }
 
     @Shell private var shell
 
@@ -32,6 +35,14 @@ struct SettingsShell: View {
                 }
             }
             .frame(width: Self.panelWidth, height: Self.panelHeight)
+        }
+        // Karar 56: popover'daki "Manage Accounts…" paneli doğrudan ilgili
+        // sekmede açar; istek bir kez tüketilir.
+        .onAppear {
+            if let raw = shell.dialogs.consumeRequestedSettingsTab(),
+               let tab = SettingsTab(rawValue: raw) {
+                selectedTab = tab
+            }
         }
     }
 

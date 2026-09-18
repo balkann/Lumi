@@ -8,7 +8,7 @@ struct PromptQueueRow: View {
     let onDelete: () -> Void
 
     /// Sıra numarası kolonunun genişliği — ölçek dışı sabit.
-    private static let ordinalWidth: CGFloat = 18
+    private static var ordinalWidth: CGFloat { Theme.scaled(18) }
 
     var body: some View {
         HStack(alignment: .top, spacing: Theme.Spacing.md) {
@@ -35,7 +35,7 @@ struct PromptQueueRow: View {
         }
         .padding(.vertical, Theme.Spacing.sm)
         // 10pt: ölçek dışı ara değer (v1 paritesi korunuyor).
-        .padding(.horizontal, 10)
+        .padding(.horizontal, Theme.scaled(10))
         .background(Theme.bgSurface)
         .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.lg))
     }

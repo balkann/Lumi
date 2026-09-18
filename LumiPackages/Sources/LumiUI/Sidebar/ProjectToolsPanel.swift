@@ -4,7 +4,19 @@ import SwiftUI
 
 public struct ProjectToolsPanel: View {
     @Shell private var shell
-    @State private var selected: ProjectToolsTab = .explorer
+
+    /// Seçim `LayoutStore`'dadır (karar 72): view'ın `@State`'i panel her
+    /// kapandığında — kenar hover'ıyla açılan geçici panelde her seferinde —
+    /// yok oluyor, sekme Explorer'a dönüyordu.
+    private var selected: ProjectToolsTab {
+        let stored = shell.layout.projectToolsTab
+        // Kaydedilen sekme bu repoda yoksa (Source Control'süz proje) Explorer.
+        return available.contains(stored) ? stored : .explorer
+    }
+
+    private var available: [ProjectToolsTab] {
+        ProjectToolsTab.available(isGitRepo: isGitRepo, isPlasticWorkspace: isPlasticWorkspace)
+    }
 
     public init() {}
 
@@ -24,8 +36,8 @@ public struct ProjectToolsPanel: View {
     public var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 0) {
-                ForEach(ProjectToolsTab.available(isGitRepo: isGitRepo, isPlasticWorkspace: isPlasticWorkspace), id: \.self) { tab in
-                    Button { selected = tab } label: {
+                ForEach(available, id: \.self) { tab in
+                    Button { shell.layout.setProjectToolsTab(tab) } label: {
                         VStack(spacing: 0) {
                             Image(systemName: tab.icon)
                                 .font(Theme.Typography.ui(.base))
@@ -70,10 +82,6 @@ public struct ProjectToolsPanel: View {
         .background(Theme.bgSurface)
         .foregroundStyle(Theme.textPrimary)
         .environment(\.colorScheme, .dark)
-        .onChange(of: hasSourceControl) { if !hasSourceControl && selected == .sourceControl { selected = .explorer } }
-        .onChange(of: shell.activeRepoPath) {
-            if !hasSourceControl && selected == .sourceControl { selected = .explorer }
-        }
     }
 }
 

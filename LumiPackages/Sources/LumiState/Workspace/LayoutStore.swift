@@ -11,10 +11,27 @@ import Observation
 public struct LayoutSnapshot: Equatable, Sendable {
     public var panelLayout: PanelLayout
     public var projectGridLayouts: [String: GridLayout]
+    /// Karar 61: arayüz ölçeği. %100'de `nil` yazılır — additive anahtar
+    /// varsayılan değerde diske hiç girmez (karar 9).
+    public var uiScale: Double?
+    /// Karar 63: arayüz yazı tipi. `.system`'de `nil` yazılır (uiScale ile aynı
+    /// gerekçe).
+    public var uiFontFamily: UIFontFamily?
+    /// karar 72: sağ panelin seçili sekmesi. Varsayılan sekmede `nil` yazılır.
+    public var projectToolsTab: ProjectToolsTab?
 
-    public init(panelLayout: PanelLayout, projectGridLayouts: [String: GridLayout]) {
+    public init(
+        panelLayout: PanelLayout,
+        projectGridLayouts: [String: GridLayout],
+        uiScale: Double? = nil,
+        uiFontFamily: UIFontFamily? = nil,
+        projectToolsTab: ProjectToolsTab? = nil
+    ) {
         self.panelLayout = panelLayout
         self.projectGridLayouts = projectGridLayouts
+        self.uiScale = uiScale
+        self.uiFontFamily = uiFontFamily
+        self.projectToolsTab = projectToolsTab
     }
 
     /// Karar 9 projeksiyonu — eski bool alanı.
@@ -53,8 +70,33 @@ public final class LayoutStore {
     /// Oturumluk — persist edilmez; kalıcı tercih `panelLayout.autoRevealSlots`.
     public private(set) var revealedSlots: Set<PanelSlot> = []
 
+    /// Karar 61: arayüz ölçeği (⌘+/⌘−/⌘0). 1.0 = %100.
+    public private(set) var uiScale: CGFloat = 1
+
+    /// Karar 63: arayüz yazı tipi (Settings ▸ Appearance). Varsayılan `.system`
+    /// = SF Mono, yani karar 63 öncesi davranış.
+    public private(set) var uiFontFamily: UIFontFamily = .system
+
+    /// karar 72: sağ panelin (Project Tools) seçili sekmesi. Seçim view'ın
+    /// `@State`'indeyken panel her kapanışta — özellikle kenar hover'ıyla
+    /// açılan geçici panelde — Explorer'a dönüyordu; yuvanın kendisi gibi
+    /// yerleşim durumudur ve `ui-state`'e iner.
+    public private(set) var projectToolsTab: ProjectToolsTab = .explorer
+
+    /// Kapalı basamak kümesi — Electron'un çarpansal zoom'u yerine bilinen
+    /// değerler: diske yalnız bunlar iner, uçlarda sabitlenir.
+    public static let uiScaleSteps: [CGFloat] = [0.8, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0]
+
     /// Traffic-light gizleme AppKit tarafında bu callback ile senkronlanır.
     @ObservationIgnored public var onFocusModeChanged: ((Bool) -> Void)?
+
+    /// Ölçek değişimi: token çarpanını kuran ve arayüzü yeniden kuran köprü
+    /// (LumiUI/AppKit tarafı). Store `Theme`'i tanımaz.
+    @ObservationIgnored public var onUIScaleChanged: ((CGFloat) -> Void)?
+
+    /// Karar 63: yazı tipi değişimi — `onUIScaleChanged` ile aynı köprü deseni
+    /// (token'ı kur + içerik view'ını yeniden kur). Store `Theme`'i tanımaz.
+    @ObservationIgnored public var onUIFontFamilyChanged: ((UIFontFamily) -> Void)?
 
     @ObservationIgnored private let config: any ConfigServicing
     @ObservationIgnored private let isTerminalVisible: (TerminalID, String) -> Bool
@@ -83,6 +125,15 @@ public final class LayoutStore {
     /// K34 migration: `panelLayout` anahtarı yoksa yerleşim default'tan,
     /// görünürlük eski `leftSidebarOpen`/`rightSidebarOpen` bool'larından gelir.
     public func load(state: UIState, openTabs: [String]) {
+        // Bozuk/ara değer en yakın basamağa çekilir — arayüz okunamaz bir
+        // ölçekle açılmaz.
+        uiScale = Self.nearestScaleStep(state.uiScale.map { CGFloat($0) } ?? 1)
+        onUIScaleChanged?(uiScale)
+        // Karar 63: anahtar yoksa/bozuksa `.system` — eski davranış.
+        uiFontFamily = state.uiFontFamily ?? .system
+        onUIFontFamilyChanged?(uiFontFamily)
+        // karar 72: anahtar yoksa/bozuksa Explorer.
+        projectToolsTab = state.projectToolsTab.flatMap(ProjectToolsTab.init(rawValue:)) ?? .explorer
         projectGridLayouts = state.projectGridLayouts
         if projectGridLayouts.isEmpty, let legacy = state.legacyGridColumns {
             for tab in openTabs {
@@ -94,13 +145,21 @@ public final class LayoutStore {
             rightOpen: state.rightSidebarOpen
         )
 
-        let migratedOrder = panelLayout.migratingProjectsAfterSessions()
+        // Karar 55: sessions → tasks dönüşümü SIRA migration'ından ÖNCE koşar
+        // (sıra kuralı Tasks'ı çapa alır).
+        let migratedTasks = panelLayout.migratingSessionsToTasks()
+        if migratedTasks != panelLayout {
+            panelLayout = migratedTasks
+            persist()
+        }
+
+        let migratedOrder = panelLayout.migratingProjectsAfterTasks()
         if migratedOrder != panelLayout {
             panelLayout = migratedOrder
             persist()
         }
         if panelLayout.slot(of: .projects) == nil {
-            let insertionIndex = panelLayout.items(in: .left).firstIndex(of: .sessions).map { $0 + 1 } ?? 0
+            let insertionIndex = panelLayout.items(in: .left).firstIndex(of: .tasks).map { $0 + 1 } ?? 0
             panelLayout = panelLayout.moving(.projects, to: .left, index: insertionIndex)
             persist()
         }
@@ -263,7 +322,60 @@ public final class LayoutStore {
     // MARK: - Persistence
 
     public var snapshot: LayoutSnapshot {
-        LayoutSnapshot(panelLayout: panelLayout, projectGridLayouts: projectGridLayouts)
+        LayoutSnapshot(
+            panelLayout: panelLayout,
+            projectGridLayouts: projectGridLayouts,
+            // %100 varsayılanında nil: additive anahtar dosyada görünmez.
+            uiScale: uiScale == 1 ? nil : Double(uiScale),
+            // `.system` varsayılanında nil: aynı gerekçe.
+            uiFontFamily: uiFontFamily == .system ? nil : uiFontFamily,
+            // Explorer varsayılanında nil: aynı gerekçe.
+            projectToolsTab: projectToolsTab == .explorer ? nil : projectToolsTab
+        )
+    }
+
+    // MARK: - Sağ panel sekmesi (karar 72)
+
+    /// Idempotent; yalnız değişimde diske iner.
+    public func setProjectToolsTab(_ tab: ProjectToolsTab) {
+        guard tab != projectToolsTab else { return }
+        projectToolsTab = tab
+        persist()
+    }
+
+    // MARK: - Arayüz ölçeği (karar 61)
+
+    public func zoomIn() { stepZoom(by: 1) }
+    public func zoomOut() { stepZoom(by: -1) }
+    public func resetZoom() { applyScale(1) }
+
+    private func stepZoom(by offset: Int) {
+        let steps = Self.uiScaleSteps
+        let current = steps.firstIndex(of: uiScale) ?? steps.firstIndex(of: 1) ?? 0
+        let target = min(max(current + offset, 0), steps.count - 1)
+        applyScale(steps[target])
+    }
+
+    // MARK: - Arayüz yazı tipi (karar 63)
+
+    public func setUIFontFamily(_ family: UIFontFamily) {
+        guard family != uiFontFamily else { return }
+        uiFontFamily = family
+        onUIFontFamilyChanged?(family)
+        persist()
+    }
+
+    private func applyScale(_ scale: CGFloat) {
+        guard scale != uiScale else { return }
+        uiScale = scale
+        onUIScaleChanged?(scale)
+        persist()
+    }
+
+    /// Diskten gelen değeri kapalı kümeye çeker.
+    static func nearestScaleStep(_ value: CGFloat) -> CGFloat {
+        guard value.isFinite, value > 0 else { return 1 }
+        return uiScaleSteps.min { abs($0 - value) < abs($1 - value) } ?? 1
     }
 
     /// Yazımlar tek zincirde serileştirilir (1.17): geç kalan BAYAT snapshot en
@@ -283,6 +395,9 @@ public final class LayoutStore {
                 state.rightSidebarOpen = snapshot.rightSidebarOpen
                 state.panelLayout = snapshot.panelLayout
                 state.projectGridLayouts = snapshot.projectGridLayouts
+                state.uiScale = snapshot.uiScale
+                state.uiFontFamily = snapshot.uiFontFamily
+                state.projectToolsTab = snapshot.projectToolsTab?.rawValue
             }
         }
     }

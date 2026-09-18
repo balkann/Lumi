@@ -50,11 +50,11 @@ final class ToolbarRegistryTests: XCTestCase {
     func testItemsAreResolvedPerRegion() {
         let registry = registry([
             descriptor(.logo, region: .leading, order: 10),
-            descriptor(.repoTabs, region: .leading, order: 20),
+            descriptor(.focusMode, region: .leading, order: 20),
             descriptor(.gridSettings, region: .center),
             descriptor(.settings, region: .trailing),
         ])
-        XCTAssertEqual(ids(registry, .leading), [.logo, .repoTabs])
+        XCTAssertEqual(ids(registry, .leading), [.logo, .focusMode])
         XCTAssertEqual(ids(registry, .center), [.gridSettings])
         XCTAssertEqual(ids(registry, .trailing), [.settings])
     }
@@ -169,7 +169,7 @@ final class ToolbarRegistryTests: XCTestCase {
     func testPanelToggleRegionsMatchTodaysHeader() {
         var registry = ToolbarRegistry()
         registry.register(contentsOf: ShellToolbarItems.panelToggles(
-            panels: panelRegistry([.sessions: .left, .gitCommits: .right])
+            panels: panelRegistry([.tasks: .left, .gitCommits: .right])
         ))
         XCTAssertEqual(ids(registry, .leading), [.panelToggle(.left)], "hamburger solda")
         XCTAssertEqual(ids(registry, .trailing), [.panelToggle(.right)], "git ikonu sağda")
@@ -179,7 +179,7 @@ final class ToolbarRegistryTests: XCTestCase {
     func testSlotWithoutRegisteredItemsHidesItsToggle() {
         var registry = ToolbarRegistry()
         registry.register(contentsOf: ShellToolbarItems.panelToggles(
-            panels: panelRegistry([.sessions: .left])
+            panels: panelRegistry([.tasks: .left])
         ))
         XCTAssertEqual(ids(registry, .trailing), [], "bottom ve right için öğe yok → toggle yok")
     }
@@ -188,7 +188,7 @@ final class ToolbarRegistryTests: XCTestCase {
     func testRegisteringABottomItemRevealsItsToggle() {
         var registry = ToolbarRegistry()
         registry.register(contentsOf: ShellToolbarItems.panelToggles(
-            panels: panelRegistry([PanelItemID("tasks"): .bottom])
+            panels: panelRegistry([PanelItemID("bottomFeature"): .bottom])
         ))
         XCTAssertEqual(ids(registry, .trailing), [.panelToggle(.bottom)])
     }
@@ -197,11 +197,11 @@ final class ToolbarRegistryTests: XCTestCase {
     func testMovingTheOnlyItemMovesItsToggle() {
         var registry = ToolbarRegistry()
         registry.register(contentsOf: ShellToolbarItems.panelToggles(
-            panels: panelRegistry([.sessions: .left])
+            panels: panelRegistry([.tasks: .left])
         ))
         XCTAssertEqual(ids(registry, .leading), [.panelToggle(.left)])
 
-        fixture.context.layout.move(item: .sessions, to: .bottom)
+        fixture.context.layout.move(item: .tasks, to: .bottom)
         XCTAssertEqual(ids(registry, .leading), [])
         XCTAssertEqual(ids(registry, .trailing), [.panelToggle(.bottom)])
     }
@@ -211,8 +211,8 @@ final class ToolbarRegistryTests: XCTestCase {
     func testToggleStaysVisibleWhenItemsAreUnavailable() {
         var panels = PanelItemRegistry()
         panels.register(PanelItemDescriptor(
-            id: .sessions,
-            title: "Sessions",
+            id: .tasks,
+            title: "Tasks",
             icon: "square",
             defaultSlot: .left,
             isAvailable: { $0.activeRepoPath != nil },

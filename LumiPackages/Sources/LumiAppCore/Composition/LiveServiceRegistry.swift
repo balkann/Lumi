@@ -19,6 +19,9 @@ final class LiveServiceRegistry: ServiceRegistry {
     let workspaces: any WorkspaceServicing
     let agentHistory: any AgentHistoryServicing
     let agentSessionTransfer: any AgentSessionTransferring
+    let deepSeek: any DeepSeekEnvironmentServicing
+    let deepSeekBalance: any DeepSeekBalanceServicing
+    let claudeAccounts: any ClaudeAccountServicing
     let git: any GitServicing
     let plastic: any PlasticServicing
     let commitMessages: any CommitMessageGenerating
@@ -70,18 +73,27 @@ final class LiveServiceRegistry: ServiceRegistry {
         commitMessages = ClaudeCommitMessageService()
         agentHistory = AgentHistoryService()
         agentSessionTransfer = AgentSessionTransferService()
+        let deepSeekEnvironment = DeepSeekEnvironmentService()
+        deepSeek = deepSeekEnvironment
+        // Anahtar tek kaynaktan (env dosyası) okunur — servis onu saklamaz.
+        deepSeekBalance = DeepSeekBalanceService(environment: deepSeekEnvironment)
+        claudeAccounts = ClaudeAccountService(config: configService, paths: paths)
         highlighter = HighlightrEngine(style: HighlightrStyle(
             plainTextColor: Theme.NS.textPrimary,
             font: { LumiFonts.mono(size: $0) }
         ))
         notifications = NotificationService(presenter: notificationPresenter)
         // K38-A: her kullanım kaynağı 5 dk TTL cache dekoratörüyle sarılır
-        // (design/05 §cache "≥5 dk TTL"). En küçük otomatik tazeleme aralığı da
-        // 5 dk olduğundan (`UsageAutoRefresh.allowedIntervals`) döngü cache'e
-        // takılıp boşa dönmez; manuel yenileme cache'i açıkça geçersizler.
+        // (design/05 §cache "≥5 dk TTL"). Otomatik döngü de manuel yenileme de
+        // `UsageStore.refresh()`'ten geçip cache'i açıkça geçersizlediği için
+        // 1 dk'lık aralık (karar 55) TTL'e takılmaz; TTL yalnız art arda gelen
+        // KENDİLİĞİNDEN okumaları (ilk yükleme) sınırlar.
         usageServices = [
             .claude: Self.cached(ClaudeUsageService()),
-            .codex: Self.cached(CodexUsageService()),
+            // Karar 55: Codex probe'u (süreç spawn'ı + RPC) asılabiliyordu;
+            // 30 sn üst sınırı cache'in ALTINDA durur ki zaman aşımı
+            // cache'lenmesin, bir sonraki yenileme yeniden denesin.
+            .codex: Self.cached(TimeoutUsageService(wrapping: CodexUsageService())),
         ]
         activityMonitor = SystemActivityMonitor()
         processSampler = PSProcessSampler()

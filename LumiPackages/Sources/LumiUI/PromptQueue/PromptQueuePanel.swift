@@ -20,16 +20,16 @@ struct PromptQueuePanel: View {
     /// Ölçek dışı geometri (refactor 7.8: magic sayılar isimlendirildi).
     private enum Metrics {
         /// Bir kuyruk satırının yaklaşık yüksekliği.
-        static let rowHeight: CGFloat = 44
+        static var rowHeight: CGFloat { Theme.scaled(44) }
         /// Liste kenar boşluğu payı.
-        static let listPadding: CGFloat = 8
+        static var listPadding: CGFloat { Theme.scaled(8) }
         /// Liste bu yüksekliği geçerse kendi içinde kaydırılır.
-        static let maxListHeight: CGFloat = 180
+        static var maxListHeight: CGFloat { Theme.scaled(180) }
         /// Kapatma butonunun kare kenarı.
-        static let closeSide: CGFloat = 22
+        static var closeSide: CGFloat { Theme.scaled(22) }
         /// Panel gölgesi.
-        static let shadowRadius: CGFloat = 24
-        static let shadowOffsetY: CGFloat = 8
+        static var shadowRadius: CGFloat { Theme.scaled(24) }
+        static var shadowOffsetY: CGFloat { Theme.scaled(8) }
     }
 
     private var prompts: [QueuedPrompt] { store.prompts(for: terminalID) }
@@ -123,7 +123,7 @@ struct PromptQueuePanel: View {
 
     private var composer: some View {
         // 10pt: ölçek dışı ara değer (v1 paritesi korunuyor).
-        HStack(alignment: .bottom, spacing: 10) {
+        HStack(alignment: .bottom, spacing: Theme.scaled(10)) {
             draftField
             // `IconButton` DEĞİL: rengi hover'a değil, `canAdd` durumuna bağlı
             // (accent ↔ muted) — ortak butonun üç rolünden hiçbiri bu değil.
@@ -164,7 +164,7 @@ struct PromptQueuePanel: View {
             }
         }
         // 10pt: ölçek dışı ara değer (v1 paritesi korunuyor).
-        .padding(10)
+        .padding(Theme.scaled(10))
         .background(Theme.bgSurface)
         .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.lg))
         .overlay(

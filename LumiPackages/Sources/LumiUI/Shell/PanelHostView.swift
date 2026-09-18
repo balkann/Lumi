@@ -22,7 +22,7 @@ struct PanelHostView: View {
     @Shell private var shell
 
     /// Overlay yuvasının içerikten ayrılan gölgesi.
-    private static let revealShadowRadius: CGFloat = 18
+    private static var revealShadowRadius: CGFloat { Theme.scaled(18) }
     private static let revealShadowOpacity = 0.45
 
     var body: some View {

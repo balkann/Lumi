@@ -48,7 +48,7 @@ struct RemoteSettingsTab: SettingsTabContent {
             HStack(spacing: Theme.Spacing.sm) {
                 Circle()
                     .fill(stateColor)
-                    .frame(width: 8, height: 8)
+                    .frame(width: Theme.scaled(8), height: Theme.scaled(8))
                 Text(stateLabel)
                     .font(Theme.Typography.bodyMono)
                     .foregroundStyle(Theme.textSecondary)
@@ -63,7 +63,7 @@ struct RemoteSettingsTab: SettingsTabContent {
                         Image(nsImage: qr)
                             .interpolation(.none)
                             .resizable()
-                            .frame(width: 180, height: 180)
+                            .frame(width: Theme.scaled(180), height: Theme.scaled(180))
                             .background(Color.white)
                             .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.lg))
                     }

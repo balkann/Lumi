@@ -17,6 +17,13 @@ final class TerminalGridFitIntegrationTests: XCTestCase {
         )
     }
 
+    /// Backing scale testte sabitlenir (bkz. `TerminalGridFitTests`): CI runner'ının
+    /// 1x sanal ekranında yarım piksellik ortalama artığı tam piksele yuvarlanıyordu.
+    @discardableResult
+    private func fit(_ view: NSView, in host: NSView) -> Bool {
+        TerminalGridFit.fit(view, in: host, scale: 2)
+    }
+
     func testFittedFrameKeepsColsAndRows() {
         // Arrange: hücre boyutunun tam katı olmayan, kasıtlı olarak "kirli" bir host.
         let host = NSView(frame: NSRect(x: 0, y: 0, width: 617, height: 433))
@@ -27,7 +34,7 @@ final class TerminalGridFitIntegrationTests: XCTestCase {
         let expectedRows = view.getTerminal().rows
 
         // Act
-        TerminalGridFit.fit(view, in: host)
+        fit(view, in: host)
 
         // Assert
         XCTAssertEqual(view.getTerminal().cols, expectedCols)
@@ -39,7 +46,7 @@ final class TerminalGridFitIntegrationTests: XCTestCase {
         let view = makeView()
         host.addSubview(view)
 
-        XCTAssertTrue(TerminalGridFit.fit(view, in: host))
+        XCTAssertTrue(fit(view, in: host))
 
         // Üstteki ve alttaki boşluk 1 backing piksel toleransında eşit olmalı —
         // düzeltmeden önce artığın tamamı (bir satır yüksekliğine kadar) alta düşüyordu.
@@ -51,6 +58,6 @@ final class TerminalGridFitIntegrationTests: XCTestCase {
         XCTAssertEqual(leftGap, rightGap, accuracy: 0.5)
 
         // Her layout'ta çağrılır: delta yoksa redraw tetiklenmemeli.
-        XCTAssertFalse(TerminalGridFit.fit(view, in: host))
+        XCTAssertFalse(fit(view, in: host))
     }
 }

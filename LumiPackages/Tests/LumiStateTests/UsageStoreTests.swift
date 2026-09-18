@@ -36,7 +36,7 @@ final class UsageStoreTests: XCTestCase {
 
         let count = await service.fetchCount
         XCTAssertEqual(count, 1)
-        XCTAssertEqual(store.fiveHourPercent, 15)
+        XCTAssertEqual(store.indicatorPercent, 15)
     }
 
     func testRefreshBlockedWithinMinIntervalAndAllowedAfter() async {
@@ -62,14 +62,14 @@ final class UsageStoreTests: XCTestCase {
         let store = UsageStore(service: service, now: { clock.value })
 
         await store.loadInitialIfNeeded()
-        XCTAssertEqual(store.fiveHourPercent, 22)
+        XCTAssertEqual(store.indicatorPercent, 22)
         XCTAssertNil(store.errorMessage)
 
         await service.setOutcome(.failure(.usageUnavailable(detail: "boom")))
         clock.value = Date(timeIntervalSince1970: 2000)
         await store.refresh()
 
-        XCTAssertEqual(store.fiveHourPercent, 22)    // ekran boşaltılmaz
+        XCTAssertEqual(store.indicatorPercent, 22)    // ekran boşaltılmaz
         XCTAssertNotNil(store.errorMessage)
     }
 }

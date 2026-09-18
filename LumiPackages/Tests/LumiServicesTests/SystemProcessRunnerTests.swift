@@ -145,6 +145,27 @@ final class SystemProcessRunnerTests: XCTestCase {
         XCTAssertTrue(exited, "timeout child süreci öldürmedi (pid \(pid))")
     }
 
+    /// Regresyon: süreç ÇIKTI ama pipe'ların yazma ucunu elinde tutan bir
+    /// torun var (Claude login akışındaki OAuth callback sunucusu gibi). EOF
+    /// hiç gelmediği için `notify` koşmaz; timeout yolundaki eski
+    /// `process.isRunning` kapısı da yandığından continuation ASLA resume
+    /// edilmiyor, çağıran süresiz asılıyordu.
+    func testTimeoutReturnsNilWhenGrandchildKeepsPipesOpen() async {
+        let start = Date()
+
+        let output = await runner.run(
+            "/bin/sh",
+            arguments: ["-c", "sleep 5 & exit 0"],
+            timeout: 0.5
+        )
+
+        XCTAssertNil(output)
+        XCTAssertLessThan(
+            Date().timeIntervalSince(start), 3,
+            "timeout, torun pipe'ı açık tutarken de sonuç vermeliydi"
+        )
+    }
+
     // MARK: - Yardımcılar
 
     private static func temporaryPath() -> String {

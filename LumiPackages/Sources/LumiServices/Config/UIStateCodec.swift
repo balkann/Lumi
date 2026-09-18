@@ -48,6 +48,24 @@ enum UIStateCodec {
             fallbackRightOpen: state.rightSidebarOpen
         )
         state.legacyGridColumns = GridLayoutCodec.decodeLegacyColumns(dict["gridColumns"])
+        // Karar 61 (additive): arayüz ölçeği. Yoksa nil → %100.
+        if let value = JSONValue.double(dict["uiScale"]) {
+            state.uiScale = value
+        }
+        // Karar 63 (additive): arayüz yazı tipi. Yoksa/bozuksa nil → `.system`.
+        if let raw = dict["uiFontFamily"] as? String {
+            state.uiFontFamily = UIFontFamily(rawValue: raw)
+        }
+        // Karar 65 (additive): proje → son checkout. Yalnız String/String
+        // çiftleri alınır; bozuk girdiler sessizce atılır (karar 9: okuma
+        // asla düşmez, eksik alan varsayılana iner).
+        if let raw = dict["lastCheckouts"] as? [String: Any] {
+            state.lastCheckouts = raw.compactMapValues { $0 as? String }
+        }
+        // karar 72 (additive): sağ panelin seçili sekmesi. Yoksa nil → Explorer.
+        if let raw = dict["projectToolsTab"] as? String {
+            state.projectToolsTab = raw
+        }
         return state
     }
 
@@ -81,6 +99,25 @@ enum UIStateCodec {
         if let layout = state.panelLayout {
             overlay["panelLayout"] = PanelLayoutCodec.overlay(layout)
             overlay["visibleSlots"] = PanelLayoutCodec.visibleSlotsOverlay(layout)
+        }
+        // Karar 61 (additive): yalnız DOLU iken yazılır — %100'de eski
+        // dosyalarda olmayan bir anahtar üretilmez (karar 9).
+        if let scale = state.uiScale {
+            overlay["uiScale"] = scale
+        }
+        // Karar 63 (additive): yalnız DOLU iken yazılır — varsayılan yüzde eski
+        // dosyalarda olmayan bir anahtar üretilmez (karar 9).
+        if let family = state.uiFontFamily {
+            overlay["uiFontFamily"] = family.rawValue
+        }
+        // Karar 65 (additive): yalnız DOLU iken yazılır.
+        if !state.lastCheckouts.isEmpty {
+            overlay["lastCheckouts"] = state.lastCheckouts
+        }
+        // karar 72 (additive): yalnız DOLU iken yazılır — varsayılan sekmede
+        // eski dosyalarda olmayan bir anahtar üretilmez (karar 9).
+        if let tab = state.projectToolsTab {
+            overlay["projectToolsTab"] = tab
         }
         // legacyGridColumns YAZILMAZ: yalnız okuma yönlü migration girdisi;
         // ham `gridColumns` anahtarı merge'le diskte aynen kalır.
