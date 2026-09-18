@@ -69,6 +69,14 @@ final actor FakeRelayConnection: RelayConnecting {
 
     func sentTypes() -> [String] { sent.map { $0.type } }
 
+    /// Gönderilen `sessions` frame'lerindeki meta `kind` değerleri (Sendable [String]
+    /// döner — actor sınırından [String: Any] geçirmemek için).
+    func sessionKinds() -> [String] {
+        sent.filter { $0.type == "sessions" }
+            .flatMap { ($0.payload["sessions"] as? [[String: Any]]) ?? [] }
+            .compactMap { $0["kind"] as? String }
+    }
+
     /// Verilen tüm tipler gönderilene kadar (kısa timeout) bekler.
     func waitForSent(types: [String]) async throws {
         let deadline = Date().addingTimeInterval(2)

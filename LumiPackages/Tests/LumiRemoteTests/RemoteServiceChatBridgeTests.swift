@@ -5,6 +5,25 @@ import LumiTestSupport
 @testable import LumiRemote
 
 @Suite @MainActor struct RemoteServiceChatBridgeTests {
+    /// Final review #1 regresyonu: start_session kind=chat sonrası chat oturumu
+    /// `sessions` broadcast'ine kind:"chat" ile eklenmeli (yoksa telefon submitText'i
+    /// PTY'ye düşürür → ikinci mesaj ölür).
+    @Test func startChatCommandBroadcastsSessionWithKindChat() async throws {
+        let conn = FakeRelayConnection()
+        let chatSvc = FakeChatSessionService()
+        chatSvc.stub(meta: ChatSessionMeta(id: "cs-created", repoPath: "/repo",
+                                           createdAt: Date(timeIntervalSince1970: 0)), snapshots: [])
+        let svc = RemoteService(paths: .testDefaults(), terminal: FakeTerminalServicing(), repos: FakeRepoService(),
+            connection: conn, chatSource: FakeChatTranscriptSource(events: []),
+            hookEvents: { AsyncStream { _ in } }, chatSessions: chatSvc)
+        await svc.start()
+        await conn.injectInbound(type: "command",
+            payload: ["commandId": "c1", "action": "start_session", "repoPath": "/repo", "kind": "chat"])
+        try await conn.waitForSent(types: ["command_result", "sessions"])
+        #expect(await conn.sessionKinds().contains("chat"))
+        svc.stop()
+    }
+
 
     // MARK: - Köprü diff: snapshot/append/chat_status
 

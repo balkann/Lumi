@@ -46,6 +46,10 @@ public final class AppModel {
     private var models: [String: String] = [:]
     /// commandId → sessionId; start_session için "" (oturum henüz yok).
     private var commandTargets: [String: String] = [:]
+    /// Bu telefonun başlattığı stream-json chat oturumları. `submitText` routing'i
+    /// buna bakar — `sessions` broadcast'i gecikirse bile chat mesajı yanlışlıkla
+    /// PTY input'a düşmez (final review #1: kind broadcast yarışına bağlı olamaz).
+    private var chatSessionIds: Set<String> = []
 
     // MARK: Terminal byte-routing
 
@@ -174,8 +178,10 @@ public final class AppModel {
             guard let target = commandTargets.removeValue(forKey: result.commandId) else { return }
             if target.isEmpty {
                 startState = result.ok ? .succeeded : .failed(result.error ?? "oturum açılamadı")
-                // start_session kind=chat → Mac sessionId döndürür → otomatik chat abone ol.
+                // start_session kind=chat → Mac sessionId döndürür → chat oturumu
+                // olarak işaretle (routing için) + otomatik chat abone ol.
                 if result.ok, let sid = result.sessionId {
+                    chatSessionIds.insert(sid)
                     subscribeChat(sid)
                 }
             } else if !result.ok {
@@ -346,8 +352,9 @@ public final class AppModel {
     /// Task içinde sıralı tutar; ayrı `sendInput` çağrıları Task sırasını garanti
     /// etmez ve Enter metni geçebilir.
     public func submitText(_ sessionId: String, _ text: String) {
-        // Chat oturumu: chat_send frame'i (PTY bypass).
-        if sessions.first(where: { $0.id == sessionId })?.kind == "chat" {
+        // Chat oturumu: chat_send frame'i (PTY bypass). Yerel izlenen chat id'si VEYA
+        // sessions broadcast'inde kind:chat — hangisi önce gelirse (broadcast yarışı).
+        if chatSessionIds.contains(sessionId) || sessions.first(where: { $0.id == sessionId })?.kind == "chat" {
             Task { await client.send(frame: PhoneProtocol.chatSendFrame(sessionId: sessionId, text: text)) }
             return
         }

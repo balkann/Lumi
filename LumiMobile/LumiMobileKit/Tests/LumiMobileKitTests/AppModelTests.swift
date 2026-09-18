@@ -658,6 +658,27 @@ final class AppModelTests: XCTestCase {
     }
 
     /// startChatSession commandResult sessionId → subscribeChat otomatik çağrılır.
+    /// Final review #1 regresyonu: chat oturumu başlatıldıktan sonra kullanıcının
+    /// yazdığı İKİNCİ mesaj `chat_send` olarak gitmeli — `sessions` broadcast'i elle
+    /// enjekte EDİLMEDEN (yerel chatSessionIds routing'i). Aksi halde mesaj sessizce
+    /// PTY input yoluna düşerdi ("ikinci mesaj ölü" bugı).
+    func testSubmitTextRoutesChatSendAfterStartWithoutSessionsBroadcast() async {
+        let (model, client, _) = makeModel()
+        await model.startChatSession(repoPath: "/r/lumi")
+        let commandId = client.commands[0].commandId
+        model.handle(.commandResult(CommandResult(commandId: commandId, ok: true,
+                                                   error: nil, sessionId: "chat-xyz")))
+        // sessions frame'i HİÇ gelmedi; yine de chat_send'e yönlenmeli.
+        model.submitText("chat-xyz", "ikinci mesaj")
+        await awaitFrame(client, containing: "\"type\":\"chat_send\"")
+        let sent = client.sentFrames.first { $0.contains("\"type\":\"chat_send\"") }
+        XCTAssertNotNil(sent, "chat oturumunda submitText chat_send yollamalı (sessions broadcast'i olmadan)")
+        XCTAssertTrue(sent!.contains("ikinci mesaj"))
+        // PTY input yoluna DÜŞMEMELİ:
+        XCTAssertFalse(client.sentFrames.contains { $0.contains("\"type\":\"input\"") },
+                       "chat oturumunda input frame'i gönderilmemeli")
+    }
+
     func testStartChatSessionSubscribesChatOnSuccess() async {
         let (model, client, _) = makeModel()
         await model.startChatSession(repoPath: "/r/lumi")

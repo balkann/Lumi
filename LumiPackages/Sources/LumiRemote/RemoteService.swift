@@ -201,8 +201,13 @@ public final class RemoteService: RemoteServicing {
             case "command":
                 let result = await commandHandler.handle(payload)
                 let ok = result["ok"] as? Bool == true
+                // `result` `sending`; send'den SONRA kullanılamaz → sessionId'yi önce yakala.
+                let createdChatSession = result["sessionId"] != nil
                 cacheModelIfSet(payload, ok: ok)
                 await connection.send(type: "command_result", payload: result)
+                // Chat oturumu yaratıldı → güncel listeyi yayınla ki telefon oturumu
+                // kind:"chat" ile görsün (final review #1).
+                if createdChatSession { await sendSessions() }
             default:
                 break
             }
@@ -237,7 +242,7 @@ public final class RemoteService: RemoteServicing {
     /// cols/rows) ile boyutlandırır.
     private func sendSessions() async {
         let repoNames = await repoNameLookup()
-        let metas: [SessionMeta] = terminal.terminals.map { meta in
+        var metas: [SessionMeta] = terminal.terminals.map { meta in
             let repoName = repoNames[meta.repoPath] ?? (meta.repoPath as NSString).lastPathComponent
             return SessionMeta(
                 id: meta.id.description,
@@ -248,6 +253,16 @@ public final class RemoteService: RemoteServicing {
                 cols: 80,
                 rows: 24
             )
+        }
+        // Stream-json chat oturumları (Faz 2): kind:"chat" ile listeye eklenir —
+        // telefon listede ayırt eder VE submitText'i chat_send'e yönlendirir
+        // (final review #1: kind prod'da yalnız buradan set edilir).
+        for chat in await chatSessions.list() {
+            let repoName = repoNames[chat.repoPath] ?? (chat.repoPath as NSString).lastPathComponent
+            metas.append(SessionMeta(
+                id: chat.id, repoName: repoName, status: "idle",
+                title: nil, model: nil, cols: 80, rows: 24, kind: "chat"
+            ))
         }
         await connection.send(type: "sessions", payload: RemoteProtocol.sessionsPayload(metas))
     }
@@ -275,6 +290,11 @@ public final class RemoteService: RemoteServicing {
             // Önce chat oturumu olup olmadığını kontrol et.
             if let stream = await chatSessions.snapshots(id: raw) {
                 // Chat oturumu → journal köprüsü kur; PTY feed kurma.
+                // Aynı oturuma yeniden abone olununca (MobileChatView .task(id:)
+                // view yeniden görününce yeniden ateşler) eski köprü task'ini İPTAL
+                // et — yoksa iki task aynı diff state'i yazıp mesajları çiftler
+                // (final review #2).
+                chatBridgeTasks[raw]?.cancel()
                 chatBridgeState[raw] = nil   // diff sıfırla
                 let task = Task { [weak self] in
                     for await snap in stream {

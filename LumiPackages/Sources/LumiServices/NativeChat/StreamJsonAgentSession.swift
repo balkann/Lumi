@@ -13,7 +13,9 @@ public actor StreamJsonAgentSession {
     private let journal = ChatJournal()
     private var handle: (any StreamingProcessHandle)?
     private var readTask: Task<Void, Never>?
-    private var snapshotContinuations: [AsyncStream<ChatJournalState>.Continuation] = []
+    // id-anahtarlı: consumer (köprü task'i) iptal edince onTermination ile temizlenir
+    // → uzun-yaşayan oturumda tekrar-abonelikler continuation biriktirmez (final review #3).
+    private var snapshotContinuations: [UUID: AsyncStream<ChatJournalState>.Continuation] = [:]
     private var finished = false
 
     public init(sessionID: String, repoPath: String, environment: [String: String],
@@ -46,13 +48,17 @@ public actor StreamJsonAgentSession {
 
     private func ingest(_ line: String) {
         let snap = journal.reduce(StreamJsonEvent.decode(line))
-        for c in snapshotContinuations { c.yield(snap) }
+        for c in snapshotContinuations.values { c.yield(snap) }
     }
 
     private func finishSnapshots() {
-        for c in snapshotContinuations { c.finish() }
+        for c in snapshotContinuations.values { c.finish() }
         snapshotContinuations.removeAll()
         finished = true
+    }
+
+    private func removeContinuation(_ id: UUID) {
+        snapshotContinuations[id] = nil
     }
 
     public func send(_ text: String) async {
@@ -69,7 +75,12 @@ public actor StreamJsonAgentSession {
             if finished {
                 continuation.finish()
             } else {
-                snapshotContinuations.append(continuation)
+                let id = UUID()
+                snapshotContinuations[id] = continuation
+                // Consumer iptal edince (köprü task cancel) actor'a dönüp temizle.
+                continuation.onTermination = { [weak self] _ in
+                    Task { await self?.removeContinuation(id) }
+                }
             }
         }
     }
