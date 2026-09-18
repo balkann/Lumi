@@ -36,7 +36,7 @@ final class UsageAutoRefreshStoreTests: XCTestCase {
         XCTAssertTrue(didRefresh)
         let count = await service.fetchCount
         XCTAssertEqual(count, 1)
-        XCTAssertEqual(usage.fiveHourPercent, 11)
+        XCTAssertEqual(usage.indicatorPercent, 11)
         store.stop()
     }
 
@@ -55,7 +55,7 @@ final class UsageAutoRefreshStoreTests: XCTestCase {
         XCTAssertFalse(didRefresh)
         let count = await service.fetchCount
         XCTAssertEqual(count, 0)
-        XCTAssertNil(usage.fiveHourPercent)
+        XCTAssertNil(usage.indicatorPercent)
         store.stop()
     }
 

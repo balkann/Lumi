@@ -733,3 +733,17 @@ Yerleşim ve sınırlar:
 - Otomatik tazeleme döngüsü artık somut `UsageStore` listesi değil `AutoRefreshing` yüzü üzerinden çalışır; bakiye store'u aynı aralıkta tazelenir.
 
 - **Sınırlar.** `DeepSeekBalance` + `DeepSeekBalanceParser` + `DeepSeekBalanceServicing`, `DeepSeekBalanceService`, `DeepSeekBalanceStore`, `AutoRefreshing`, `UsageIndicators.deepseek` (+ codec), `UsageFeatureAssembly` kaydı, `DeepSeekBalanceIndicatorView`/`DeepSeekBalanceToolbarItem`, Settings ▸ Usage anahtarı. `DeepSeekAssembly` (env dosyası), `AgentProvider`, terminal kartı kimliği ve kullanım göstergeleri değişmedi.
+
+### 76. Kullanım göstergesi sabit 5 saatlik pencereye bağlı değildir (2026-09-18)
+
+Kullanıcı şikâyeti: Codex kullanım göstergesi çalışmıyor — topbar'da yüzde yerine `—` görünüyor.
+
+Sebep RPC'de ya da probe'da değildi. `codex app-server` 0.154.0 `account/rateLimits/read`'e sorunsuz yanıt veriyor, ama OpenAI'nin yeni plan tiplerinde (bu hesapta `planType: "prolite"`) **5 saatlik oturum penceresi hiç dönmüyor**: `secondary` `null`, `primary` ise `windowDurationMins: 10080` — yani haftalık. `CodexUsageParser` bunu doğru şekilde `weeklyAll` olarak sınıflandırıyor (süre tabanlı eşleme, karar 32), fakat gösterge `UsageSnapshot.fiveHour`'u — yani sabit `.session` türünü — okuduğu için elindeki geçerli veriyi ekrana hiç getiremiyordu. Veri popover'da görünüyor, topbar'da görünmüyordu.
+
+Karar: göstergenin kaynağı "5 saatlik oturum" değil, **birincil pencere**dir. `UsageSnapshot.indicatorLimit` = oturum penceresi varsa o, yoksa raporlanan ilk limit. `UsageStore.fiveHourPercent` → `indicatorPercent` (+ `indicatorLimit`) olarak yeniden adlandırıldı.
+
+Plan tipine ya da `limitId`'ye bakan Codex'e özel bir eşleme bilinçli olarak SEÇİLMEDİ: sağlayıcıların pencere kümesi değişken ve bu kural plan tipinden bağımsız çalışır. Claude tarafı etkilenmez — Claude her zaman bir oturum penceresi döndürdüğü için `indicatorLimit == fiveHour`.
+
+Gösterge artık hangi pencereyi gösterdiğini söyler: tooltip ve VoiceOver etiketi limitin başlığını taşır ("Codex usage — Weekly (all models)"). Çıplak bir "%63" hangi pencereye ait olduğu belirsiz olurdu.
+
+- **Sınırlar.** `UsageSnapshot.indicatorLimit`, `UsageStore.indicatorLimit`/`indicatorPercent`, `UsageIndicatorView`in etiket/tooltip/tint yolu. Parser, probe, cache/timeout sarmalayıcıları ve popover'ın limit listesi değişmedi. Payload'daki `credits` / `spendControlReached` / `rateLimitReachedType` alanları hâlâ kullanılmıyor. Testler: `UsageSnapshotIndicatorTests`, `CodexUsageParserTests.testWeeklyOnlyPlanStillFeedsTheIndicator`.

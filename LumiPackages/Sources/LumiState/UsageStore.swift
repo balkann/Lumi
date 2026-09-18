@@ -48,8 +48,12 @@ public final class UsageStore {
         self.now = now
     }
 
-    /// Topbar göstergesinin gösterdiği değer (5 saatlik oturum yüzdesi).
-    public var fiveHourPercent: Int? { snapshot?.fiveHour?.percentUsed }
+    /// Topbar göstergesinin gösterdiği limit: 5 saatlik oturum varsa o, yoksa
+    /// raporlanan ilk pencere (`UsageSnapshot.indicatorLimit`).
+    public var indicatorLimit: UsageLimit? { snapshot?.indicatorLimit }
+
+    /// Topbar göstergesinin gösterdiği yüzde.
+    public var indicatorPercent: Int? { indicatorLimit?.window.percentUsed }
 
     /// Durum satırının TEK kaynağı (refactor 7.5/7.9). Topbar popover'ı ve
     /// Settings satırı aynı üçlüyü iki farklı kuralla türetiyordu; sıra artık

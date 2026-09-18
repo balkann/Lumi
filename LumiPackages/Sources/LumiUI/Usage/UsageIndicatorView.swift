@@ -3,7 +3,8 @@ import LumiState
 import SwiftUI
 
 /// Topbar'da duran kompakt kullanım göstergesi (design/05, karar 32): sağlayıcı
-/// marka ikonu + 5 saatlik oturum yüzdesi (örn. "15%"). Tıklamada tüm limitleri
+/// marka ikonu + gösterge penceresinin yüzdesi (örn. "15%") — 5 saatlik oturum
+/// varsa o, yoksa raporlanan ilk pencere. Tıklamada tüm limitleri
 /// progress bar + reset süreleriyle gösteren popover açılır; popover'da manuel
 /// refresh butonu vardır. Her açık sağlayıcı için bir örnek çizilir.
 ///
@@ -31,7 +32,7 @@ public struct UsageIndicatorView: View {
         Button { isPresented.toggle() } label: { compact }
             .buttonStyle(.plain)
             .accessibilityLabel(accessibilityLabel)
-            .help("\(store.provider.displayName) usage")
+            .help(helpText)
             .popover(isPresented: $isPresented, arrowEdge: .bottom) {
                 UsagePopover(
                     store: store,
@@ -64,20 +65,29 @@ public struct UsageIndicatorView: View {
     }
 
     private var label: String {
-        if let percent = store.fiveHourPercent { return "\(percent)%" }
+        if let percent = store.indicatorPercent { return "\(percent)%" }
         if store.isLoading { return "…" }
         return "—"
     }
 
+    /// Hangi pencerenin gösterildiği tooltip'te söylenir: Codex'in yeni
+    /// planlarında bu haftalık limittir, "%N" tek başına yanıltıcı olurdu.
+    private var helpText: String {
+        let base = "\(store.provider.displayName) usage"
+        guard let title = store.indicatorLimit?.displayTitle else { return base }
+        return "\(base) — \(title)"
+    }
+
     private var accessibilityLabel: String {
-        guard let percent = store.fiveHourPercent else {
+        guard let percent = store.indicatorPercent else {
             return "\(store.provider.displayName) usage, unavailable"
         }
-        return "\(store.provider.displayName) usage, \(percent) percent"
+        let window = store.indicatorLimit?.displayTitle ?? "usage"
+        return "\(store.provider.displayName) \(window), \(percent) percent"
     }
 
     private var tint: Color {
-        guard let percent = store.fiveHourPercent else { return Theme.textSecondary }
+        guard let percent = store.indicatorPercent else { return Theme.textSecondary }
         return UsageLevel(percent: percent).color
     }
 }

@@ -106,8 +106,17 @@ public struct UsageSnapshot: Sendable, Equatable {
         self.fetchedAt = fetchedAt
     }
 
-    /// En önemli alan (topbar göstergesi): 5 saatlik oturum.
+    /// 5 saatlik oturum penceresi — her sağlayıcıda bulunmaz.
     public var fiveHour: UsageWindow? { window(ofKind: .session) }
+
+    /// Topbar göstergesinin kaynağı: 5 saatlik oturum varsa o, yoksa raporlanan
+    /// İLK limit. Codex'in yeni plan tiplerinde (`prolite`) oturum penceresi hiç
+    /// dönmüyor — yalnız haftalık geliyor — ve göstergeye sabit `.session`
+    /// bağlamak veriyi ekrana hiç getirmiyordu. Claude her zaman bir oturum
+    /// penceresi döndüğü için orada davranış değişmez.
+    public var indicatorLimit: UsageLimit? {
+        limits.first { $0.kind == .session } ?? limits.first
+    }
 
     /// Haftalık toplam.
     public var weekAll: UsageWindow? { window(ofKind: .weeklyAll) }

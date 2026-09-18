@@ -28,6 +28,23 @@ final class CodexUsageParserTests: XCTestCase {
         XCTAssertEqual(snapshot?.mode, .subscription)
     }
 
+    /// codex-cli 0.154.0, `prolite` planı: oturum penceresi HİÇ dönmüyor,
+    /// `primary` haftalık süreyi taşıyor. Gösterge sabit `.session` okuduğu için
+    /// yüzde ekrana hiç gelmiyordu — `indicatorLimit` bu boşluğu kapatır.
+    func testWeeklyOnlyPlanStillFeedsTheIndicator() {
+        let data = responseLine(
+            primary: #"{"usedPercent":63,"windowDurationMins":10080,"resetsAt":1790279950}"#,
+            secondary: "null"
+        )
+
+        let snapshot = CodexUsageParser.parse(responseLine: data)
+
+        XCTAssertNil(snapshot?.fiveHour)
+        XCTAssertEqual(snapshot?.limits.map(\.id), ["week.all"])
+        XCTAssertEqual(snapshot?.indicatorLimit?.window.percentUsed, 63)
+        XCTAssertEqual(snapshot?.indicatorLimit?.kind, .weeklyAll)
+    }
+
     func testCarriesWindowDurationIntoTheWindow() {
         // Süre yalnız sınıflandırmada kullanılıp atılmaz: tempo çizgisi
         // (karar 74) pencere uzunluğunu bilmek zorunda.
