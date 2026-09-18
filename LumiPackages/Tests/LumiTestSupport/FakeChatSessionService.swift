@@ -18,6 +18,8 @@ public final class FakeChatSessionService: ChatSessionServicing, @unchecked Send
     public var sentText: [(id: String, text: String)] { lock.withLock { _sentText } }
     /// close(id:) çağrılan oturum id'leri (delete_session testleri).
     public var closed: [String] { lock.withLock { _closed } }
+    /// create(repoPath:)'e geçirilen repoPath değerleri (workspace/worktree testleri).
+    public var createdRepoPaths: [String] { created.map(\.repoPath) }
 
     /// Test kurulumu: `create`'in döndüreceği meta + `snapshots(id:)`'in sırayla
     /// yayıp bitireceği journal durumları.

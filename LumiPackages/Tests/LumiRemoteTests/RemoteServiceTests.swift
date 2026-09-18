@@ -414,4 +414,64 @@ final class FakeTerminalServicing: TerminalServicing {
         #expect(result["ok"] as? Bool == false)
         #expect(result["error"] as? String == "unknown_repo")
     }
+
+    // MARK: - start_session workspace/worktree dalı (Task 2)
+
+    @Test @MainActor
+    func startSessionNewBranchCreatesWorkspaceThenChat() async throws {
+        let repo = Repo(name: "R", path: "/tmp/r", isGitRepo: true, source: .projectsRoot)
+        let repoSvc = FakeRepoService(repos: [repo])
+        let ws = FakeWorkspaceService()
+        let wsPath = "/tmp/r-worktrees/feature-x"
+        let created = ProjectWorkspace(projectPath: "/tmp/r", path: wsPath, name: "feature-x",
+            branch: "feature-x", scm: .git)
+        await ws.setCreateOutcome(.success(WorkspaceCreateResult(workspace: created, warning: nil)))
+        let chat = FakeChatSessionService()
+        let handler = RemoteCommandHandler(
+            terminal: FakeTerminalServicing(), trust: NoopClaudeWorkspaceTrust(),
+            chatSessions: chat, repos: repoSvc, workspaces: ws)
+
+        let result = await handler.handle([
+            "action": "start_session", "kind": "chat", "repoPath": "/tmp/r",
+            "prompt": "selam", "branchMode": "new", "branchName": "feature-x", "commandId": "c1"])
+
+        #expect(result["ok"] as? Bool == true)
+        let calls = await ws.createCalls
+        #expect(calls.count == 1)
+        #expect(calls.first?.request.branchMode == .new)
+        #expect(calls.first?.request.branchName == "feature-x")
+        #expect(chat.createdRepoPaths == [wsPath])
+    }
+
+    @Test @MainActor
+    func startSessionCurrentModeSkipsWorkspaceCreate() async throws {
+        let repo = Repo(name: "R", path: "/tmp/r", isGitRepo: true, source: .projectsRoot)
+        let ws = FakeWorkspaceService()
+        let chat = FakeChatSessionService()
+        let handler = RemoteCommandHandler(
+            terminal: FakeTerminalServicing(), trust: NoopClaudeWorkspaceTrust(),
+            chatSessions: chat, repos: FakeRepoService(repos: [repo]), workspaces: ws)
+        let result = await handler.handle([
+            "action": "start_session", "kind": "chat", "repoPath": "/tmp/r",
+            "prompt": "", "branchMode": "current", "commandId": "c1"])
+        #expect(result["ok"] as? Bool == true)
+        #expect(await ws.createCalls.isEmpty)
+        #expect(chat.createdRepoPaths == ["/tmp/r"])
+    }
+
+    @Test @MainActor
+    func startSessionWorkspaceCreateFailureSurfacesError() async throws {
+        let repo = Repo(name: "R", path: "/tmp/r", isGitRepo: true, source: .projectsRoot)
+        let ws = FakeWorkspaceService()
+        await ws.setCreateOutcome(.failure(WorkspaceFailure("kirli worktree")))
+        let chat = FakeChatSessionService()
+        let handler = RemoteCommandHandler(
+            terminal: FakeTerminalServicing(), trust: NoopClaudeWorkspaceTrust(),
+            chatSessions: chat, repos: FakeRepoService(repos: [repo]), workspaces: ws)
+        let result = await handler.handle([
+            "action": "start_session", "kind": "chat", "repoPath": "/tmp/r",
+            "prompt": "", "branchMode": "existing", "branchName": "dev", "commandId": "c1"])
+        #expect(result["ok"] as? Bool == false)
+        #expect(chat.createdRepoPaths.isEmpty)
+    }
 }

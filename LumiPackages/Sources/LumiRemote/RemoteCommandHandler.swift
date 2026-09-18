@@ -82,7 +82,29 @@ final class RemoteCommandHandler {
 
         if kind == "chat" {
             // Chat oturumu: ChatSessionService aracılığıyla oluştur (terminal PTY değil).
-            let meta = await chatSessions.create(repoPath: repoPath)
+            // branchMode != "current" ise önce workspace/worktree oluştur.
+            var chatRepoPath = repoPath
+            let mode = payload["branchMode"] as? String
+            if let mode, mode != "current" {
+                guard let repo = await repoFor(repoPath) else {
+                    return ["commandId": commandId, "ok": false, "error": "unknown_repo"]
+                }
+                let branchMode = WorkspaceBranchMode(rawValue: mode) ?? .new
+                let branchName = payload["branchName"] as? String
+                let wsName = (payload["workspaceName"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+                    ?? branchName ?? "workspace"
+                let request = WorkspaceCreateRequest(
+                    project: repo, name: wsName, branchName: branchName,
+                    branchMode: branchMode, baseBranch: payload["baseBranch"] as? String,
+                    copyLibrary: false, knownProjectPaths: await repos.repos().map(\.path))
+                do {
+                    let created = try await workspaces.create(request)
+                    chatRepoPath = created.workspace.path
+                } catch {
+                    return ["commandId": commandId, "ok": false, "error": "\(error)"]
+                }
+            }
+            let meta = await chatSessions.create(repoPath: chatRepoPath)
             if !prompt.isEmpty {
                 await chatSessions.send(id: meta.id, text: prompt)
             }
