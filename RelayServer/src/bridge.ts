@@ -93,6 +93,7 @@ export class Bridge {
       case 'unsubscribe':
       case 'input':
       case 'prompt_respond':
+      case 'chat_send':
         if (room.mac) {
           room.mac.send(envelope(env.type, env.payload))
         }

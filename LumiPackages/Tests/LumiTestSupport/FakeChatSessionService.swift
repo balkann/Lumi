@@ -8,6 +8,7 @@ public final class FakeChatSessionService: ChatSessionServicing, @unchecked Send
     private let lock = NSLock()
     private var _created: [ChatSessionMeta] = []
     private var _sentText: [(id: String, text: String)] = []
+    private var _closed: [String] = []
     private var stubbedMeta: ChatSessionMeta?
     private var stubbedSnapshots: [ChatJournalState] = []
 
@@ -15,6 +16,8 @@ public final class FakeChatSessionService: ChatSessionServicing, @unchecked Send
 
     public var created: [ChatSessionMeta] { lock.withLock { _created } }
     public var sentText: [(id: String, text: String)] { lock.withLock { _sentText } }
+    /// close(id:) çağrılan oturum id'leri (delete_session testleri).
+    public var closed: [String] { lock.withLock { _closed } }
 
     /// Test kurulumu: `create`'in döndüreceği meta + `snapshots(id:)`'in sırayla
     /// yayıp bitireceği journal durumları.
@@ -34,7 +37,7 @@ public final class FakeChatSessionService: ChatSessionServicing, @unchecked Send
 
     public func list() async -> [ChatSessionMeta] { created }
 
-    public func close(id: String) async {}
+    public func close(id: String) async { lock.withLock { _closed.append(id) } }
 
     public func send(id: String, text: String) async {
         lock.withLock { _sentText.append((id: id, text: text)) }

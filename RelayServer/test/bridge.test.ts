@@ -207,6 +207,19 @@ test('mac prompt → telefon broadcast; telefon prompt_respond → mac forward',
   expect(mac.last().payload.optionId).toBe('allow')
 })
 
+test('telefon chat_send → mac forward (regresyon: relay bunu düşürüyordu → mesaj Mac\'e ulaşmıyordu)', () => {
+  const { bridge } = setup()
+  const phone = new FakeClient()
+  const phoneSession = bridge.handleHello(phone, env('hello', { role: 'phone', token: TOKEN }))!
+  const mac = new FakeClient()
+  bridge.handleHello(mac, env('hello', { role: 'mac', token: TOKEN }))
+
+  bridge.handleMessage(phoneSession, env('chat_send', { sessionId: 's1', text: 'merhaba' }))
+  expect(mac.last().type).toBe('chat_send')
+  expect(mac.last().payload.sessionId).toBe('s1')
+  expect(mac.last().payload.text).toBe('merhaba')
+})
+
 test('mac chat_status → telefonlara broadcast', () => {
   const { bridge } = setup()
   const phone = new FakeClient()

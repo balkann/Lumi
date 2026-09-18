@@ -39,6 +39,14 @@ final class RemoteCommandHandler {
                 try self.terminal.write(id: id, text: sequence)
             })
         case "delete_session":
+            // Chat oturumu mu? Öyleyse chatSessions üzerinden kapat — chat oturumları
+            // terminal PTY kaydında YOK, `session(from:)` onları bulamaz ve
+            // session_not_found döndürür ("chatte silemiyorum" regresyonu).
+            let rawId = payload["sessionId"] as? String ?? ""
+            if await chatSessions.list().contains(where: { $0.id == rawId }) {
+                await chatSessions.close(id: rawId)
+                return ["commandId": commandId, "ok": true]
+            }
             return result(commandId, run: {
                 let id = try self.session(from: payload)
                 try self.terminal.kill(id: id)

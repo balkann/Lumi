@@ -99,6 +99,45 @@ struct RemoteCommandHandlerTests {
         #expect(chatSvc.sentText.isEmpty)
     }
 
+    // MARK: - delete_session (chat oturumu)
+
+    /// REGRESYON ("chatte silemiyorum"): chat oturumu terminal PTY kaydında yok;
+    /// delete_session onu chatSessions.close ile kapatmalı, terminal.kill ile değil
+    /// (aksi halde session_not_found dönüyordu).
+    @Test func deleteSessionClosesChatSession() async throws {
+        let term = FakeTerminalService()
+        let trust = FakeClaudeWorkspaceTrust()
+        let chatSvc = FakeChatSessionService()
+        let meta = ChatSessionMeta(id: "cs-del-1", repoPath: "/repo", createdAt: Date())
+        chatSvc.stub(meta: meta, snapshots: [])
+        let handler = RemoteCommandHandler(terminal: term, trust: trust, chatSessions: chatSvc)
+        // Önce chat oturumu yarat (list() bunu döndürür).
+        _ = await handler.handle([
+            "action": "start_session", "kind": "chat", "repoPath": "/repo", "commandId": "c1"
+        ])
+        let result = await handler.handle([
+            "action": "delete_session", "sessionId": "cs-del-1", "commandId": "c2"
+        ])
+        #expect(result["ok"] as? Bool == true)
+        #expect(chatSvc.closed == ["cs-del-1"])
+    }
+
+    /// Chat kaydında olmayan id → terminal yoluna düşer → session_not_found (davranış korunur).
+    @Test func deleteSessionUnknownIdFallsThroughToTerminalNotFound() async throws {
+        let term = FakeTerminalService()
+        let trust = FakeClaudeWorkspaceTrust()
+        let chatSvc = FakeChatSessionService()
+        let handler = RemoteCommandHandler(terminal: term, trust: trust, chatSessions: chatSvc)
+        let result = await handler.handle([
+            "action": "delete_session",
+            "sessionId": "11111111-1111-1111-1111-111111111111",
+            "commandId": "c3"
+        ])
+        #expect(result["ok"] as? Bool == false)
+        #expect(result["error"] as? String == "session_not_found")
+        #expect(chatSvc.closed.isEmpty)
+    }
+
     // MARK: - chat_send (via RemoteService frame router)
     // chat_send, RemoteService.handleInbound'da yönlendirilir; handler doğrudan
     // bu frame'i işlemez. Handler seviyesi için RemoteServiceChatBridgeTests kullanılır.
