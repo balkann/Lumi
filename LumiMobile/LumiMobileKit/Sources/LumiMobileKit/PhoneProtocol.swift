@@ -23,7 +23,7 @@ public enum ServerMessage: Sendable, Equatable {
 public enum CommandAction: Sendable, Equatable {
     case sendText(sessionId: String, text: String)
     case pressKey(sessionId: String, key: String)
-    case startSession(repoPath: String, personaId: String?, prompt: String)
+    case startSession(repoPath: String, personaId: String?, prompt: String, kind: String? = nil)
     case getHistory(sessionId: String)
     case deleteSession(sessionId: String)
     case setModel(sessionId: String, model: String)
@@ -177,11 +177,12 @@ public enum PhoneProtocol {
             payload["action"] = "press_key"
             payload["sessionId"] = sessionId
             payload["key"] = key
-        case .startSession(let repoPath, let personaId, let prompt):
+        case .startSession(let repoPath, let personaId, let prompt, let kind):
             payload["action"] = "start_session"
             payload["repoPath"] = repoPath
             payload["prompt"] = prompt
             if let personaId { payload["personaId"] = personaId }
+            if let kind { payload["kind"] = kind }
         case .getHistory(let sessionId):
             payload["action"] = "get_history"
             payload["sessionId"] = sessionId

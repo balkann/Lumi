@@ -304,7 +304,7 @@ final class AppModelTests: XCTestCase {
 
         await model.startSession(repoPath: "/r/lumi", personaId: nil, prompt: "merhaba")
         XCTAssertEqual(model.startState, .sending)
-        guard case .startSession(let repoPath, let personaId, let prompt) = client.commands[0].action else { return XCTFail() }
+        guard case .startSession(let repoPath, let personaId, let prompt, _) = client.commands[0].action else { return XCTFail() }
         XCTAssertEqual(repoPath, "/r/lumi")
         XCTAssertNil(personaId)
         XCTAssertEqual(prompt, "merhaba")
@@ -541,5 +541,116 @@ final class AppModelTests: XCTestCase {
         model.subscribeChat("s1")
         await awaitFrame(client, containing: "\"mode\":\"chat\"")
         XCTAssertTrue(client.sentFrames.contains { $0.contains("\"mode\":\"chat\"") })
+    }
+
+    // MARK: chat_send routing (Faz 2 Task 4)
+
+    /// Chat türü oturumda submitText → chat_send frame'i (PTY input DEĞİL).
+    func testSubmitTextSendsChatSendFrameForChatSession() async {
+        let (model, client, _) = makeModel()
+        // Chat oturumu olarak işaretle (kind = "chat")
+        model.handle(.sessions([
+            SessionMeta(id: "s1", repoName: "lumi", status: "working",
+                        cols: 80, rows: 24, kind: "chat")
+        ]))
+        model.subscribeChat("s1")
+        model.submitText("s1", "merhaba")
+        // chat_send frame'ini bekle
+        await awaitFrame(client, containing: "\"type\":\"chat_send\"")
+        let chatSend = client.sentFrames.first { $0.contains("\"type\":\"chat_send\"") }
+        XCTAssertNotNil(chatSend, "chat oturumunda submitText chat_send frame'i göndermeli")
+        XCTAssertTrue(chatSend!.contains("merhaba"), "chat_send içinde metin olmalı")
+        // PTY input frame'i gönderilmemeli
+        XCTAssertFalse(client.sentFrames.contains { $0.contains("\"type\":\"input\"") },
+                       "chat oturumunda PTY input frame'i GÖNDERİLMEMELİ")
+    }
+
+    /// Terminal oturumunda submitText mevcut PTY yolunu korumalı (chat_send değil).
+    func testSubmitTextKeepsTerminalRouteForTerminalSession() async {
+        let (model, client, _) = makeModel()
+        // Terminal oturumu (kind yok)
+        model.handle(.sessions([meta("s1", repo: "lumi", "working")]))
+        model.subscribe("s1")
+        model.submitSettle = .zero
+        model.submitText("s1", "ls")
+        await awaitFrame(client, containing: "\"type\":\"input\"")
+        XCTAssertTrue(client.sentFrames.contains { $0.contains("\"type\":\"input\"") },
+                      "terminal oturumunda input frame'i gönderilmeli")
+        XCTAssertFalse(client.sentFrames.contains { $0.contains("\"type\":\"chat_send\"") },
+                       "terminal oturumunda chat_send frame'i GÖNDERİLMEMELİ")
+    }
+
+    // MARK: chatStreamingText (Faz 2 Task 4)
+
+    /// chat_status streamingText → chatStreamingText working+leading → görünür.
+    func testChatStreamingTextVisibleWhenWorkingAndLeading() {
+        let (model, _, _) = makeModel()
+        // Bir assistant mesajı var
+        let m1 = ChatMessage(id: "m1", role: .assistant,
+                             blocks: [.text("Selam", presentation: nil)],
+                             timestampMs: nil, turnId: nil)
+        model.handle(.chat(sessionId: "s1", messages: [m1]))
+        // Streaming metni son assistant metnini geçiyor → görünür
+        model.handle(.chatStatus(sessionId: "s1",
+            status: ChatTurnStatus(working: true, startedAtMs: 10, tool: nil,
+                                   streamingText: "Selam dünya")))
+        XCTAssertEqual(model.chatStreamingText("s1"), "Selam dünya")
+    }
+
+    /// chat_status streamingText ≤ son assistant metni → nil (transcript yerleşti).
+    func testChatStreamingTextNilWhenCaughtUp() {
+        let (model, _, _) = makeModel()
+        let m1 = ChatMessage(id: "m1", role: .assistant,
+                             blocks: [.text("Selam dünya", presentation: nil)],
+                             timestampMs: nil, turnId: nil)
+        model.handle(.chat(sessionId: "s1", messages: [m1]))
+        model.handle(.chatStatus(sessionId: "s1",
+            status: ChatTurnStatus(working: true, startedAtMs: 10, tool: nil,
+                                   streamingText: "Selam")))
+        XCTAssertNil(model.chatStreamingText("s1"), "streaming kısa — transcript yerleşti, nil döner")
+    }
+
+    /// working=false → streaming nil.
+    func testChatStreamingTextNilWhenIdle() {
+        let (model, _, _) = makeModel()
+        model.handle(.chatStatus(sessionId: "s1",
+            status: ChatTurnStatus(working: false, startedAtMs: nil, tool: nil,
+                                   streamingText: "x")))
+        XCTAssertNil(model.chatStreamingText("s1"), "idle → nil")
+    }
+
+    // MARK: startChatSession (Faz 2 Task 4)
+
+    /// startChatSession start_session komutunu kind=chat ile gönderir.
+    func testStartChatSessionSendsKindChat() async {
+        let (model, client, _) = makeModel()
+        await model.startChatSession(repoPath: "/r/lumi")
+        XCTAssertEqual(model.startState, .sending)
+        XCTAssertEqual(client.commands.count, 1)
+        guard case .startSession(let repoPath, _, _, _) = client.commands[0].action else {
+            return XCTFail("startChatSession startSession action göndermeli")
+        }
+        XCTAssertEqual(repoPath, "/r/lumi")
+        // kind=chat payload'da olmalı — commandFrame'in JSON çıktısını kontrol et
+        let frame = PhoneProtocol.commandFrame(client.commands[0])
+        XCTAssertTrue(frame.contains("\"kind\":\"chat\""), "start_session payload'ında kind:chat olmalı")
+    }
+
+    /// startChatSession commandResult sessionId → subscribeChat otomatik çağrılır.
+    func testStartChatSessionSubscribesChatOnSuccess() async {
+        let (model, client, _) = makeModel()
+        await model.startChatSession(repoPath: "/r/lumi")
+        let commandId = client.commands[0].commandId
+        // Mac sessionId ile ok döndürür
+        model.handle(.commandResult(CommandResult(commandId: commandId, ok: true,
+                                                   error: nil, sessionId: "new-session-42")))
+        XCTAssertEqual(model.startState, .succeeded)
+        // subscribeChat frame'i gönderilmeli
+        await awaitFrame(client, containing: "\"mode\":\"chat\"")
+        let sub = client.sentFrames.first {
+            $0.contains("\"type\":\"subscribe\"") && $0.contains("\"mode\":\"chat\"")
+        }
+        XCTAssertNotNil(sub, "startChatSession başarıyla döndükten sonra chat subscribe gönderilmeli")
+        XCTAssertTrue(sub!.contains("new-session-42"), "subscribe new-session-42 için olmalı")
     }
 }

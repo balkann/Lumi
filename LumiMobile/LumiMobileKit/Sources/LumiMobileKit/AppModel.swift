@@ -182,6 +182,10 @@ public final class AppModel {
             guard let target = commandTargets.removeValue(forKey: result.commandId) else { return }
             if target.isEmpty {
                 startState = result.ok ? .succeeded : .failed(result.error ?? "oturum açılamadı")
+                // start_session kind=chat → Mac sessionId döndürür → otomatik chat abone ol.
+                if result.ok, let sid = result.sessionId {
+                    subscribeChat(sid)
+                }
             } else if !result.ok {
                 lastCommandError[target] = result.error ?? "komut iletilemedi"
             }
@@ -339,17 +343,25 @@ public final class AppModel {
     /// test'ler hızlandırmak için sıfırlayabilir.
     public var submitSettle: Duration = .milliseconds(500)
 
-    /// Serbest metin gönderimi (chat composer / terminal metin çubuğu): metni bir
-    /// `input` frame'iyle yollar, ajanın paste'i sindirmesi için `submitSettle`
-    /// bekler, sonra Enter'ı (CR) AYRI bir `input` frame'iyle yollar.
+    /// Serbest metin gönderimi (chat composer / terminal metin çubuğu):
+    /// - Chat oturumu (kind = "chat"): `chat_send` frame'i gönderir (PTY input değil).
+    /// - Terminal oturumu: metni bir `input` frame'iyle yollar, ajanın paste'i
+    ///   sindirmesi için `submitSettle` bekler, sonra Enter'ı (CR) AYRI bir
+    ///   `input` frame'iyle yollar.
     ///
-    /// Neden ayrı: tek write'taki birleşik `metin\r`, Claude Code TUI'sinde paste
-    /// ingest'i tamamlanmadan gelen Enter olarak yutulur ve submit tetiklenmez —
-    /// metin input satırında görünür ama gönderilmez (orca
+    /// Terminal yolu neden ayrı: tek write'taki birleşik `metin\r`, Claude Code
+    /// TUI'sinde paste ingest'i tamamlanmadan gelen Enter olarak yutulur ve submit
+    /// tetiklenmez — metin input satırında görünür ama gönderilmez (orca
     /// `runtime-terminal-writer` paritesi: text → settle → CR). İki write'ı TEK
     /// Task içinde sıralı tutar; ayrı `sendInput` çağrıları Task sırasını garanti
     /// etmez ve Enter metni geçebilir.
     public func submitText(_ sessionId: String, _ text: String) {
+        // Chat oturumu: chat_send frame'i (PTY bypass).
+        if sessions.first(where: { $0.id == sessionId })?.kind == "chat" {
+            Task { await client.send(frame: PhoneProtocol.chatSendFrame(sessionId: sessionId, text: text)) }
+            return
+        }
+        // Terminal oturumu: metin → settle → CR (orca runtime-terminal-writer paritesi).
         Task {
             if !text.isEmpty {
                 await client.send(frame: PhoneProtocol.inputFrame(sessionId: sessionId, data: Data(text.utf8)))
@@ -434,8 +446,36 @@ public final class AppModel {
         await dispatch(target: "", action: .startSession(repoPath: repoPath, personaId: personaId, prompt: prompt))
     }
 
+    /// Faz 2: saf chat oturumu başlatır (kind=chat). Mac commandResult'ta sessionId
+    /// döndürür; `commandResult` handler otomatik olarak `subscribeChat` çağırır.
+    public func startChatSession(repoPath: String) async {
+        startState = .sending
+        await dispatch(target: "", action: .startSession(repoPath: repoPath, personaId: nil, prompt: "", kind: "chat"))
+    }
+
     public func resetStartState() {
         startState = .idle
+    }
+
+    // MARK: Streaming metni (Faz 2 Task 4)
+
+    /// Verilen oturum için canlı streaming metnini döndürür (orca gate paritesi).
+    /// working değilse / streaming son assistant metnini geçmiyorsa nil — transcript
+    /// yerleşince overlay düşer (spec Faz 2 §E).
+    public func chatStreamingText(_ sessionId: String) -> String? {
+        let status = turnStatus[sessionId] ?? .idle
+        let lastAssistant = chatMessages(sessionId).last(where: { $0.role == .assistant })
+        let lastText: String
+        if let msg = lastAssistant {
+            lastText = msg.blocks.compactMap {
+                if case .text(let t, _) = $0 { return t } else { return nil }
+            }.joined()
+        } else {
+            lastText = ""
+        }
+        return LumiMobileKit.chatStreamingText(working: status.working,
+                                               streaming: status.streamingText,
+                                               lastAssistantText: lastText)
     }
 
     public func deleteSession(sessionId: String) async {

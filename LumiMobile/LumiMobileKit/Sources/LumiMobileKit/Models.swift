@@ -221,10 +221,13 @@ public struct CommandResult: Decodable, Sendable, Equatable {
     public let commandId: String
     public let ok: Bool
     public let error: String?
+    /// start_session kind=chat'ta Mac'in döndürdüğü yeni oturum kimliği (Faz 2).
+    public let sessionId: String?
 
-    public init(commandId: String, ok: Bool, error: String?) {
+    public init(commandId: String, ok: Bool, error: String?, sessionId: String? = nil) {
         self.commandId = commandId
         self.ok = ok
         self.error = error
+        self.sessionId = sessionId
     }
 }
