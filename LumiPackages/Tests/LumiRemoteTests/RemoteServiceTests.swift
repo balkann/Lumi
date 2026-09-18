@@ -380,4 +380,38 @@ final class FakeTerminalServicing: TerminalServicing {
         try await conn.waitForNoSent(type: "scrollback", after: 0, for: .milliseconds(150))
         svc.stop()
     }
+
+    @Test @MainActor
+    func listBranchesReturnsWorkspaceBranches() async throws {
+        let term = FakeTerminalServicing()
+        let conn = FakeRelayConnection()
+        let repo = Repo(name: "R", path: "/tmp/r", isGitRepo: true, source: .projectsRoot)
+        let repoSvc = FakeRepoService(repos: [repo])
+        let ws = FakeWorkspaceService()
+        await ws.setBranches(.success([WorkspaceBranch(name: "main"), WorkspaceBranch(name: "dev")]))
+        let svc = RemoteService(paths: .testDefaults(), terminal: term, repos: repoSvc,
+            connection: conn, chatSource: FakeChatTranscriptSource(events: []), workspaces: ws)
+        _ = svc
+
+        let result = await RemoteCommandHandler(
+            terminal: term, trust: NoopClaudeWorkspaceTrust(),
+            chatSessions: NoopChatSessionService(), repos: repoSvc, workspaces: ws
+        ).handle(["action": "list_branches", "repoPath": "/tmp/r", "commandId": "c1"])
+
+        #expect(result["ok"] as? Bool == true)
+        #expect(result["branches"] as? [String] == ["main", "dev"])
+        #expect(await ws.branchCalls.map(\.0) == ["/tmp/r"])
+    }
+
+    @Test @MainActor
+    func listBranchesUnknownRepoFails() async throws {
+        let repoSvc = FakeRepoService(repos: [])
+        let ws = FakeWorkspaceService()
+        let result = await RemoteCommandHandler(
+            terminal: FakeTerminalServicing(), trust: NoopClaudeWorkspaceTrust(),
+            chatSessions: NoopChatSessionService(), repos: repoSvc, workspaces: ws
+        ).handle(["action": "list_branches", "repoPath": "/nope", "commandId": "c1"])
+        #expect(result["ok"] as? Bool == false)
+        #expect(result["error"] as? String == "unknown_repo")
+    }
 }

@@ -31,6 +31,7 @@ public actor FakeRepoService: RepoServicing {
     public private(set) var unwatchCalls: [String] = []
 
     public init() {}
+    public init(repos: [Repo]) { self.reposToReturn = repos }
 
     public func setCapabilities(_ value: ProjectCapabilities, for path: String) {
         projectCapabilities[path] = value

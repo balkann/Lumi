@@ -83,13 +83,16 @@ public final class RemoteService: RemoteServicing {
         turnClock: @escaping @Sendable () -> Date = { Date() },
         keystrokeScheduler: any KeystrokeScheduling = LiveKeystrokeScheduler(),
         transcriptLocator: any TranscriptLocating = NoopTranscriptLocating(),
-        chatSessions: any ChatSessionServicing = NoopChatSessionService()
+        chatSessions: any ChatSessionServicing = NoopChatSessionService(),
+        workspaces: any WorkspaceServicing = NoopWorkspaceServicing()
     ) {
         self.configService = RemoteConfigService(paths: paths)
         self.terminal = terminal
         self.repos = repos
         self.connection = connection ?? RelayConnection()
-        self.commandHandler = RemoteCommandHandler(terminal: terminal, trust: trust, chatSessions: chatSessions)
+        self.commandHandler = RemoteCommandHandler(
+            terminal: terminal, trust: trust, chatSessions: chatSessions,
+            repos: repos, workspaces: workspaces)
         self.chatSource = chatSource
         self.hookEvents = hookEvents
         self.turnClock = turnClock
