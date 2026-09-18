@@ -469,6 +469,26 @@ public final class AppModel {
             streaming: gatedStreaming[sessionId])
     }
 
+    /// Sezgisel soru kartı: chat'te AskUserQuestion tool'u yok → AI seçenekleri düz
+    /// metin listesi olarak sunar. Son assistant mesajını (turn bittiyse) ayrıştırıp
+    /// tıklanabilir seçenekler döndürür (orca heuristic yolu); yanıt sürerken nil.
+    public func heuristicQuestion(_ sessionId: String) -> ChatHeuristicQuestion? {
+        if turnStatus[sessionId]?.working == true { return nil }
+        guard let last = chatMessages(sessionId).last(where: { $0.role == .assistant }) else { return nil }
+        let text = last.blocks.compactMap { block -> String? in
+            if case .text(let t, _) = block { return t } else { return nil }
+        }.joined(separator: "\n")
+        return parseAgentQuestion(text)
+    }
+
+    /// Sezgisel soru cevabı: seçili index'ler → metin → normal chat mesajı (submitText).
+    public func answerHeuristicQuestion(_ sessionId: String, _ question: ChatHeuristicQuestion,
+                                        selectedIndexes: [Int]) {
+        let answer = formatChatQuestionAnswer(question, selectedIndexes: selectedIndexes)
+        guard !answer.isEmpty else { return }
+        submitText(sessionId, answer)
+    }
+
     /// Optimistic kullanıcı yankısı ekler (orca pending-echo append).
     private func appendChatPending(_ sessionId: String, text: String) {
         let messages = chatBySession[sessionId] ?? []

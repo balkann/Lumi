@@ -70,6 +70,13 @@ struct MobileChatView: View {
                     // Her pending prompt için taze @State (seçim/free-text/sending sızmasın);
                     // art arda farklı prompt'larda bayat seçim/takılı buton olmaz.
                     .id(pending.itemId)
+                } else if let hq = model.heuristicQuestion(sessionId) {
+                    // Hook prompt'u yoksa: AI'ın metindeki seçeneklerini tıklanabilir kart yap.
+                    MobileHeuristicQuestionCard(question: hq) { indexes in
+                        model.answerHeuristicQuestion(sessionId, hq, selectedIndexes: indexes)
+                    }
+                    // Farklı soru → taze seçim state'i.
+                    .id(hq.options.joined(separator: "|"))
                 }
                 composer
             }
