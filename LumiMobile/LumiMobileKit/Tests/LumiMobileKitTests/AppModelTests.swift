@@ -109,6 +109,27 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(got, "SCROLL".data(using: .utf8))
     }
 
+    /// Terminal-mirror replay tamponu view bağlı değilken cap'te (2048) kalır ve EN
+    /// YENİ chunk'lar korunur (head-drop). Uzun-oturum bellek koruması — Faz1'de
+    /// eklenen replayBufferCap davranışını kilitler (ChatLiveStripTests sökülünce
+    /// buraya taşındı; artık terminal `subscribe` yoluyla exercise edilir).
+    func testTerminalReplayBufferIsCappedWhenViewUnattached() async {
+        let (model, _, _) = makeModel()
+        model.subscribe("s1")
+        let cap = 2048
+        for i in 0..<(cap + 10) {
+            model.handle(.data(TerminalChunk(sessionId: "s1", seq: i, bytes: Data("\(i)".utf8))))
+        }
+        var got: [TerminalChunk] = []
+        for await chunk in model.terminalStream("s1") {
+            got.append(chunk)
+            if got.count == cap { break }
+        }
+        XCTAssertEqual(got.count, cap)
+        XCTAssertEqual(got.first?.seq, 10)       // en eski 10 düştü
+        XCTAssertEqual(got.last?.seq, cap + 9)   // en yeniler korundu
+    }
+
     /// subscribe/unsubscribe/sendInput frame'i bir Task içinde async gönderir; oluşana dek bekler.
     private func awaitFrame(_ client: FakeRelayClient, containing needle: String) async {
         for _ in 0..<200 where !client.sentFrames.contains(where: { $0.contains(needle) }) {
