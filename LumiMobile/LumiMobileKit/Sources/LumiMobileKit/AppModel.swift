@@ -498,6 +498,9 @@ public final class AppModel {
             folded: folded, incoming: preview, streamLive: working)
         streamingGates[sessionId] = newGate
         gatedStreaming[sessionId] = streaming
+        // Teşhis: her chat olayında render listesinin boyutu — vanish'in model mi
+        // (items düşüyor) yoksa view mı (items sabit ama ekran boş) olduğunu ayırt eder.
+        DiagLog.shared.log("chat", "render sid=\(sessionId.prefix(8)) msgs=\(chatBySession[sessionId]?.count ?? 0) pend=\(pendingBySession[sessionId]?.count ?? 0) stream=\(streaming != nil) items=\(chatRenderMessages(sessionId).count) working=\(working)")
     }
 
     // MARK: Türetilmiş durum

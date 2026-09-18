@@ -51,6 +51,34 @@ import LumiTestSupport
         svc.stop()
     }
 
+    // MARK: - İçerik güncellemesi (aynı id, büyüyen metin) yeniden gönderilir
+
+    /// KRİTİK (vanish kök nedeni): partial assistant snapshot'ları aynı id ile büyür.
+    /// Yalnız yeni id göndermek güncellemeleri düşürüyordu → canlıda bayat/kısa mesaj,
+    /// reopen düzeltiyordu. Değişen mesaj chat_append ile YENİDEN gönderilmeli.
+    @Test func updatedMessageContentReemittedAsChatAppend() async throws {
+        let conn = FakeRelayConnection()
+        let chatSvc = FakeChatSessionService()
+        let meta = ChatSessionMeta(id: "cs-upd", repoPath: "/repo", createdAt: Date())
+        let partial = ChatMessage(id: "m1", role: .assistant,
+                                  blocks: [.text("Sel", presentation: nil)], timestampMs: nil, turnId: "m1")
+        let full = ChatMessage(id: "m1", role: .assistant,
+                               blocks: [.text("Selam dünya, nasılsın", presentation: nil)], timestampMs: nil, turnId: "m1")
+        chatSvc.stub(meta: meta, snapshots: [
+            { var s = ChatJournalState(); s.messages = [partial]; return s }(),  // → chat (ilk)
+            { var s = ChatJournalState(); s.messages = [full]; return s }(),     // → chat_append (güncelleme)
+        ])
+        let svc = RemoteService(paths: .testDefaults(), terminal: FakeTerminalServicing(), repos: FakeRepoService(),
+            connection: conn, chatSource: FakeChatTranscriptSource(events: []),
+            hookEvents: { AsyncStream { _ in } }, chatSessions: chatSvc)
+        await svc.start()
+        await conn.injectInbound(type: "subscribe", payload: ["sessionId": "cs-upd", "mode": "chat"])
+        try await conn.waitForSent(types: ["chat", "chat_append"])
+        #expect(await conn.chatAppendTexts().contains("Selam dünya, nasılsın"),
+                "aynı id'nin güncellenmiş içeriği chat_append ile yeniden gönderilmeli")
+        svc.stop()
+    }
+
     // MARK: - İlk mesaj snapshot olarak `chat` frame'i gönderir
 
     @Test func firstMessageEmittedAsChatSnapshot() async throws {

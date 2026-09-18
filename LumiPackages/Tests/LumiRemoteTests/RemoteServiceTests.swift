@@ -67,6 +67,15 @@ final actor FakeRelayConnection: RelayConnecting {
         sent.filter { $0.type == type }.count
     }
 
+    /// Tüm `chat_append` frame'lerindeki mesaj metin bloklarının düz listesi
+    /// (içerik-güncelleme testi; Sendable [String] döner).
+    func chatAppendTexts() -> [String] {
+        sent.filter { $0.type == "chat_append" }
+            .flatMap { ($0.payload["messages"] as? [[String: Any]]) ?? [] }
+            .flatMap { ($0["blocks"] as? [[String: Any]]) ?? [] }
+            .compactMap { $0["text"] as? String }
+    }
+
     func sentTypes() -> [String] { sent.map { $0.type } }
 
     /// Gönderilen `sessions` frame'lerindeki meta `kind` değerleri (Sendable [String]

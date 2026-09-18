@@ -391,29 +391,28 @@ public final class RemoteService: RemoteServicing {
         let isFirstEmit = chatBridgeState[sessionId] == nil
         var prev = chatBridgeState[sessionId] ?? ChatBridgeState()
 
-        // Mesaj diff
-        let prevIds = prev.messageIds
-        let newMessages = snap.messages.filter { !prevIds.contains($0.id) }
+        // Mesaj diff: YENİ (id) veya İÇERİĞİ DEĞİŞMİŞ mesajlar. chat_append telefonda
+        // id'ye göre upsert eder → değişmiş mesaj yeniden gönderilince yerinde güncellenir.
+        let changed = snap.messages.filter { prev.sentMessages[$0.id] != $0 }
         if isFirstEmit {
             // İlk yayın: her koşulda tam snapshot (boş mesaj listesiyle dahi telefonu uyandırır)
             rlog("chat-bridge: initial snapshot sid=\(sessionId.prefix(8)) count=\(snap.messages.count)")
             await connection.send(type: "chat",
                 payload: RemoteProtocol.chatPayload(sessionId: sessionId, messages: snap.messages))
-            prev.messageIds = Set(snap.messages.map { $0.id })
-        } else if !newMessages.isEmpty {
-            if prev.messageIds.isEmpty {
+        } else if !changed.isEmpty {
+            if prev.sentMessages.isEmpty {
                 // İlk mesajlar (ilk emit'ten sonra geldiyse): tam snapshot
                 rlog("chat-bridge: snapshot sid=\(sessionId.prefix(8)) count=\(snap.messages.count)")
                 await connection.send(type: "chat",
                     payload: RemoteProtocol.chatPayload(sessionId: sessionId, messages: snap.messages))
             } else {
-                // Ek mesajlar: append
-                rlog("chat-bridge: append sid=\(sessionId.prefix(8)) +\(newMessages.count)")
+                // Yeni + güncellenmiş mesajlar: append (upsert)
+                rlog("chat-bridge: append sid=\(sessionId.prefix(8)) +\(changed.count)")
                 await connection.send(type: "chat_append",
-                    payload: RemoteProtocol.chatAppendPayload(sessionId: sessionId, messages: newMessages))
+                    payload: RemoteProtocol.chatAppendPayload(sessionId: sessionId, messages: changed))
             }
-            prev.messageIds = Set(snap.messages.map { $0.id })
         }
+        prev.sentMessages = Dictionary(snap.messages.map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
 
         // streamingText / turnActive değişimi → chat_status
         let streamChanged = snap.streamingText != prev.lastStreaming
@@ -676,7 +675,11 @@ public final class RemoteService: RemoteServicing {
 
 /// Oturum başına diff hesaplamak için tutulan son-bilinen durum.
 private struct ChatBridgeState {
-    var messageIds: Set<String> = []
+    /// id → en son gönderilen mesaj (içerik dahil). Yalnız `Set<String>` id tutmak
+    /// içerik GÜNCELLEMELERİNİ düşürüyordu: partial assistant snapshot'ları aynı id ile
+    /// büyür; ilk (kısa) sürüm gidip güncellemeler gitmiyordu → canlıda bayat mesaj,
+    /// reopen (tam snapshot) düzeltiyordu. Mesajı tutup eşitlikle diff'liyoruz.
+    var sentMessages: [String: ChatMessage] = [:]
     var lastStreaming: String? = nil
     var lastWorking: Bool = false
 }
