@@ -695,4 +695,45 @@ final class AppModelTests: XCTestCase {
         XCTAssertNotNil(sub, "startChatSession başarıyla döndükten sonra chat subscribe gönderilmeli")
         XCTAssertTrue(sub!.contains("new-session-42"), "subscribe new-session-42 için olmalı")
     }
+
+    // MARK: isChatSession görünüm yönlendirmesi (Faz 2.1)
+
+    /// REGRESYON: terminal oturumu (kind yok) chat oturumu SAYILMAMALI. Eskiden
+    /// TerminalSessionView her oturumu chat modunda açıp terminal oturumunu ölü
+    /// chat'te "yükleniyor"da bırakıyordu. isChatSession=false → mirror görünümü.
+    func testIsChatSessionFalseForTerminalSession() {
+        let (model, _, _) = makeModel()
+        model.handle(.sessions([meta("s1", repo: "lumi", "working")]))
+        XCTAssertFalse(model.isChatSession("s1"),
+                       "terminal oturumu (kind yok) chat sayılmamalı → mirror görünümü")
+    }
+
+    /// Telefonun başlattığı chat oturumu → isChatSession true (yerel chatSessionIds;
+    /// sessions broadcast'i elle enjekte EDİLMEDEN → chat view'a yönlenir).
+    func testIsChatSessionTrueAfterPhoneStartedChat() async {
+        let (model, client, _) = makeModel()
+        await model.startChatSession(repoPath: "/r/lumi")
+        let commandId = client.commands[0].commandId
+        model.handle(.commandResult(CommandResult(commandId: commandId, ok: true,
+                                                   error: nil, sessionId: "chat-xyz")))
+        XCTAssertTrue(model.isChatSession("chat-xyz"),
+                      "telefonun başlattığı chat oturumu isChatSession=true olmalı")
+    }
+
+    /// Dışarıda başlatılıp kind:chat ile yayınlanan chat oturumu → isChatSession true.
+    func testIsChatSessionTrueForChatKindBroadcast() {
+        let (model, _, _) = makeModel()
+        model.handle(.sessions([
+            SessionMeta(id: "s1", repoName: "lumi", status: "working",
+                        cols: 80, rows: 24, kind: "chat")
+        ]))
+        XCTAssertTrue(model.isChatSession("s1"),
+                      "kind:chat yayınlanan oturum chat sayılmalı")
+    }
+
+    /// Bilinmeyen/mevcut olmayan oturum id'si → false (güvenli varsayılan: mirror).
+    func testIsChatSessionFalseForUnknownSession() {
+        let (model, _, _) = makeModel()
+        XCTAssertFalse(model.isChatSession("yok"))
+    }
 }

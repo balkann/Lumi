@@ -352,10 +352,17 @@ public final class AppModel {
     /// Task içinde sıralı tutar; ayrı `sendInput` çağrıları Task sırasını garanti
     /// etmez ve Enter metni geçebilir.
     public func submitText(_ sessionId: String, _ text: String) {
-        // Chat oturumu: chat_send frame'i (PTY bypass). Yerel izlenen chat id'si VEYA
-        // sessions broadcast'inde kind:chat — hangisi önce gelirse (broadcast yarışı).
-        if chatSessionIds.contains(sessionId) || sessions.first(where: { $0.id == sessionId })?.kind == "chat" {
-            Task { await client.send(frame: PhoneProtocol.chatSendFrame(sessionId: sessionId, text: text)) }
+        // Chat oturumu: chat_send frame'i (PTY bypass). Tek kaynak: isChatSession
+        // (yerel izlenen chat id'si VEYA sessions broadcast'inde kind:chat).
+        let isChat = isChatSession(sessionId)
+        // Faz 2.1 teşhis: hangi dalın çalıştığı + frame'in kuyruğa girdiği cihaz logunda
+        // görünsün (kanıt: "sohbet yükleniyor + mesaj gitmiyor" — Mac'e chat_send/input 0 ulaştı).
+        DiagLog.shared.log("model", "submitText sid=\(sessionId.prefix(8)) chat=\(isChat) len=\(text.count)")
+        if isChat {
+            Task {
+                let ok = await client.send(frame: PhoneProtocol.chatSendFrame(sessionId: sessionId, text: text))
+                DiagLog.shared.log("model", "out chat_send sid=\(sessionId.prefix(8)) ok=\(ok)")
+            }
             return
         }
         // Terminal oturumu: metin → settle → CR (orca runtime-terminal-writer paritesi).
@@ -364,7 +371,8 @@ public final class AppModel {
                 await client.send(frame: PhoneProtocol.inputFrame(sessionId: sessionId, data: Data(text.utf8)))
                 try? await Task.sleep(for: submitSettle)
             }
-            await client.send(frame: PhoneProtocol.inputFrame(sessionId: sessionId, data: Data([0x0D])))
+            let ok = await client.send(frame: PhoneProtocol.inputFrame(sessionId: sessionId, data: Data([0x0D])))
+            DiagLog.shared.log("model", "out input+CR sid=\(sessionId.prefix(8)) ok=\(ok)")
         }
     }
 
@@ -434,6 +442,17 @@ public final class AppModel {
 
     public func session(_ id: String) -> SessionMeta? {
         sessions.first { $0.id == id }
+    }
+
+    /// Oturum stream-json chat oturumu mu? Görünüm yönlendirmesi (chat view vs
+    /// terminal-mirror) ve `submitText` routing'i BUNU tek kaynak olarak kullanır:
+    /// bu telefonun başlattığı chat (yerel izlenen `chatSessionIds`) VEYA `sessions`
+    /// broadcast'inde kind:chat — hangisi önce gelirse (broadcast yarışı). Terminal
+    /// oturumları (kind nil/"terminal") false döner → mirror görünümü (Faz 2.1: eskiden
+    /// TerminalSessionView her oturumu chat modunda açıyordu → terminal oturumu ölü
+    /// chat'te "yükleniyor"da takılıyordu).
+    public func isChatSession(_ id: String) -> Bool {
+        chatSessionIds.contains(id) || sessions.first(where: { $0.id == id })?.kind == "chat"
     }
 
     // MARK: Komutlar

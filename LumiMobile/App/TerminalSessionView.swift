@@ -14,11 +14,16 @@ struct TerminalSessionView: View {
     @State private var buffer = TerminalFeedBuffer()
     /// Klavye yüksekliğini izler; alt çubuğu manuel olarak klavyenin üstüne taşır (bug #1).
     @StateObject private var keyboard = KeyboardObserver()
-    @State private var showChat = true
 
     var body: some View {
+        // Faz 2.1: görünüm oturum TÜRÜNE göre seçilir (reaktif — `isChatSession`
+        // `chatSessionIds`/`sessions`'a bakar). Chat oturumu → chat view; terminal
+        // oturumu → mirror. Eski `showChat=true` default'u terminal oturumlarını da
+        // ölü chat modunda açıp "yükleniyor"da bırakıyordu (regresyon). stream-json
+        // sonrası iki tür için de geçerli tek bir alternatif görünüm kalmadığından
+        // manuel toggle kaldırıldı.
         Group {
-            if showChat {
+            if model.isChatSession(sessionId) {
                 MobileChatView(model: model, sessionId: sessionId)
             } else {
                 terminalBody
@@ -28,13 +33,6 @@ struct TerminalSessionView: View {
         .navigationTitle(model.session(sessionId)?.repoName ?? "Oturum")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    showChat.toggle()
-                } label: {
-                    Image(systemName: showChat ? "terminal" : "bubble.left.and.bubble.right")
-                }
-            }
             ToolbarItem(placement: .topBarTrailing) { toolbarItems }
         }
     }

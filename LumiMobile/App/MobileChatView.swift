@@ -11,6 +11,7 @@ struct MobileChatView: View {
 
     @StateObject private var keyboard = KeyboardObserver()
     @State private var draft = ""
+    @FocusState private var composerFocused: Bool
 
     private var turns: [FoldedTurn] { foldChatMessages(model.chatMessages(sessionId)) }
 
@@ -21,7 +22,10 @@ struct MobileChatView: View {
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: 10) {
                             if turns.isEmpty {
-                                Text("Sohbet yükleniyor…")
+                                // Faz 2.1: chat oturumu artık yalnız kind=chat için açılıyor
+                                // (TerminalSessionView tür yönlendirmesi). Boş chat = "henüz
+                                // mesaj yok" → yanıltıcı "yükleniyor" yerine eyleme çağıran metin.
+                                Text("Sohbet boş — aşağıya yazıp başlat.")
                                     .foregroundStyle(.secondary)
                                     .frame(maxWidth: .infinity)
                                     .padding(.top, 40)
@@ -75,6 +79,9 @@ struct MobileChatView: View {
         .ignoresSafeArea(.keyboard, edges: .bottom)
         .animation(.easeOut(duration: 0.25), value: keyboard.height)
         .task(id: sessionId) { model.subscribeChat(sessionId) }
+        // Boş chat açılışında composer'a odaklan → "ne yapmalıyım" belirsizliği
+        // kalkar, kullanıcı hemen yazmaya başlar (Faz 2.1 §4).
+        .onAppear { if turns.isEmpty { composerFocused = true } }
     }
 
     private var composer: some View {
@@ -84,6 +91,7 @@ struct MobileChatView: View {
                 TextField("Mesaj…", text: $draft, axis: .vertical)
                     .textFieldStyle(.roundedBorder)
                     .lineLimit(1...5)
+                    .focused($composerFocused)
                 Button {
                     guard !draft.isEmpty else { return }
                     // Metni yaz → settle → Enter'ı AYRI yolla (submitText). Tek
