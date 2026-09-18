@@ -299,7 +299,10 @@ final class FakeTerminalServicing: TerminalServicing {
         svc.stop()
     }
 
-    @Test func subscribeChatModeSendsChatThenAppend() async throws {
+    /// Faz 2 söküm: mode=chat + terminal UUID → chat oturumu yok (NoopChatSessionService nil döndürür).
+    /// Eski davranış: transcript-tail başlatılır + feed açılır → SÖKÜLDÜ.
+    /// Yeni davranış: boş chat + idle status; scrollback/feed KURULMAZ.
+    @Test func subscribeChatModeForTerminalUUIDEmitsEmptyChatAndIdle() async throws {
         let conn = FakeRelayConnection()
         let term = FakeTerminalServicing()
         let uuid = UUID()
@@ -307,58 +310,56 @@ final class FakeTerminalServicing: TerminalServicing {
                                 createdAt: Date(), claudeSessionID: uuid.uuidString)
         term.metas.append(meta)
         let sid = meta.id.description
-        let m1 = ChatMessage(id: "m1", role: .user, blocks: [.text("hi", presentation: nil)],
-                             timestampMs: nil, turnId: nil)
-        let m2 = ChatMessage(id: "m2", role: .assistant, blocks: [.text("yo", presentation: nil)],
-                             timestampMs: nil, turnId: nil)
-        let chat = FakeChatTranscriptSource(events: [.snapshot([m1]), .append([m2])])
         let svc = RemoteService(paths: .testDefaults(), terminal: term, repos: FakeRepoService(),
-                                connection: conn, chatSource: chat)
+                                connection: conn, chatSource: FakeChatTranscriptSource(events: []))
         await svc.start()
 
         await conn.injectInbound(type: "subscribe", payload: ["sessionId": sid, "mode": "chat"])
-        try await conn.waitForSent(types: ["chat", "chat_append"])
+        try await conn.waitForSent(types: ["chat", "chat_status"])
+        // Scrollback artık chat modu için kurulmaz (söküm)
+        try await conn.waitForNoSent(type: "scrollback", after: 0, for: .milliseconds(150))
+        svc.stop()
+    }
 
-        // Feed EK kanaldır; chat içeriği ham PTY'ye düşmez (spec 2026-09-17).
+    /// Faz 2 söküm: terminal UUID + mode=chat → chatSubscription artık KULLANILMIYOR
+    /// (chatBridgeTasks string-keyli). Terminal modu exit → feed task iptal edilir.
+    @Test func exitedEventCancelsFeedTaskForTerminalMode() async throws {
+        let conn = FakeRelayConnection()
+        let term = FakeTerminalServicing()
+        let uuid = UUID()
+        let meta = TerminalMeta(id: TerminalID(raw: uuid), name: "T", repoPath: "/repo",
+                                createdAt: Date(), claudeSessionID: uuid.uuidString)
+        term.metas.append(meta)
+        let sid = meta.id.description
+        let svc = RemoteService(paths: .testDefaults(), terminal: term, repos: FakeRepoService(),
+                                connection: conn, chatSource: FakeChatTranscriptSource(events: []))
+        await svc.start()
+        // Terminal mode subscribe → feed başlar
+        await conn.injectInbound(type: "subscribe", payload: ["sessionId": sid])
         try await conn.waitForSent(types: ["scrollback"])
-        svc.stop()
-    }
+        let tid = TerminalID(raw: uuid)
+        #expect(svc.hasActiveSubscription(tid) == true)
 
-    @Test func exitedCancelsChatSubscription() async throws {
-        let conn = FakeRelayConnection()
-        let term = FakeTerminalServicing()
-        let uuid = UUID()
-        let meta = TerminalMeta(id: TerminalID(raw: uuid), name: "T", repoPath: "/repo",
-                                createdAt: Date(), claudeSessionID: uuid.uuidString)
-        term.metas.append(meta)
-        let sid = meta.id.description
-        let m1 = ChatMessage(id: "m1", role: .user, blocks: [.text("hi", presentation: nil)],
-                             timestampMs: nil, turnId: nil)
-        let chat = FakeChatTranscriptSource(events: [.snapshot([m1])], keepOpen: true)
-        let svc = RemoteService(paths: .testDefaults(), terminal: term, repos: FakeRepoService(),
-                                connection: conn, chatSource: chat)
-        await svc.start()
-        await conn.injectInbound(type: "subscribe", payload: ["sessionId": sid, "mode": "chat"])
-        try await conn.waitForSent(types: ["chat"])
-        #expect(svc.hasActiveChatSubscription(TerminalID(raw: uuid)) == true)
-
-        term.emit(.exited(TerminalID(raw: uuid), code: 0))
+        term.emit(.exited(tid, code: 0))
         try await Task.sleep(for: .milliseconds(50))
-        #expect(svc.hasActiveChatSubscription(TerminalID(raw: uuid)) == false)
+        #expect(svc.hasActiveSubscription(tid) == false)
         svc.stop()
     }
 
-    @Test func chatModeWithoutSessionIDSendsChatUnavailable() async throws {
+    /// Faz 2 söküm: mode=chat + terminal UUID (claudeSessionID yok) → boş chat + idle.
+    /// Feed başlamaz (scrollback gelmez).
+    @Test func chatModeForTerminalWithoutClaudeSessionSendsEmptyChat() async throws {
         let conn = FakeRelayConnection()
         let term = FakeTerminalServicing()
         term.scrollback = ("X".data(using: .utf8)!, 80, 24)
-        let sid = makeSession(term)  // no claudeSessionID
+        let sid = makeSession(term)  // claudeSessionID yok
         let svc = RemoteService(paths: .testDefaults(), terminal: term, repos: FakeRepoService(),
                                 connection: conn, chatSource: FakeChatTranscriptSource(events: []))
         await svc.start()
         await conn.injectInbound(type: "subscribe", payload: ["sessionId": sid, "mode": "chat"])
-        // Yeni davranış: PTY'ye düşmez; boş chat + idle durumu yayınlar. Feed EK kanaldır.
-        try await conn.waitForSent(types: ["chat", "chat_status", "scrollback"])
+        // Boş chat + idle (scrollback gelmez)
+        try await conn.waitForSent(types: ["chat", "chat_status"])
+        try await conn.waitForNoSent(type: "scrollback", after: 0, for: .milliseconds(150))
         svc.stop()
     }
 }

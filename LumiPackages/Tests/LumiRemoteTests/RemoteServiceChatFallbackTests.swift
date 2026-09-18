@@ -4,31 +4,47 @@ import LumiKit
 import LumiTestSupport
 @testable import LumiRemote
 
+/// Faz 2 sonrası: eski transcript-tail chat yolu SÖKÜLDÜ.
+/// Artık `mode=chat` yalnız chat oturumları (ChatSessionServicing) için geçerli.
+/// Terminal oturumlarına mode=chat subscribe → boş chat + idle; feed kurulmaz.
+///
+/// DEĞİŞTİRİLEN TESTLER (Faz 2 söküm):
+/// - chatSubscribeWithoutClaudeSessionEmitsChatUnavailablePlusFeed:
+///     Eski: PTY feed de başlatılırdı. Yeni: feed BAŞLATILMAZ; sadece boş chat + idle.
+/// - chatSubscribeAlsoStreamsFeed: KALDIRILDI (Faz 2 söküm).
+///     Eski: chat mode terminale de feed başlatırdı. Yeni: terminal feed yalnız terminal mode'da.
+/// - externalSessionResolvesViaLocatorThenStreamsChat: KALDIRILDI (Faz 2 söküm).
+///     Eski: awaitTranscript/locator döngüsü. Yeni: chatSessions.snapshots nil → sessiz.
 @Suite @MainActor struct RemoteServiceChatFallbackTests {
-    @Test func chatSubscribeWithoutClaudeSessionEmitsChatUnavailablePlusFeed() async throws {
+
+    /// Terminal UUID'si ile mode=chat subscribe → boş chat + idle (feed yok).
+    /// Eski test adı: chatSubscribeWithoutClaudeSessionEmitsChatUnavailablePlusFeed.
+    /// Sökülen davranış: feed (scrollback/data) artık chat modu için kurulmaz.
+    @Test func chatSubscribeForTerminalUUIDEmitsEmptyChatAndIdle() async throws {
         let conn = FakeRelayConnection()
         let term = FakeTerminalServicing()
-        let hooks = FakeAgentHookServer()
         let uuid = UUID()
-        // claudeSessionID YOK (dış/taze oturum) → eski kod PTY'ye düşerdi.
         term.metas.append(TerminalMeta(id: TerminalID(raw: uuid), name: "T",
             repoPath: "/no/transcript/repo", createdAt: Date(), claudeSessionID: nil))
         let sid = TerminalID(raw: uuid).description
+        // chatSessions no-op: snapshots her zaman nil → köprü kurulmaz, terminal path devreye girer
         let svc = RemoteService(paths: .testDefaults(), terminal: term, repos: FakeRepoService(),
-            connection: conn, chatSource: FakeChatTranscriptSource(events: []), hookEvents: { hooks.events() })
+            connection: conn, chatSource: FakeChatTranscriptSource(events: []),
+            hookEvents: { AsyncStream { _ in } })
         await svc.start()
         await conn.injectInbound(type: "subscribe", payload: ["sessionId": sid, "mode": "chat"])
-        try await conn.waitForSent(types: ["chat_status"])
-        // Feed EK kanaldır; chat içeriği ham PTY'ye düşmez.
-        try await conn.waitForSent(types: ["scrollback"])
-        #expect(await conn.sentTypes().contains("chat"))
+        // Boş chat + idle status beklenir
+        try await conn.waitForSent(types: ["chat", "chat_status"])
+        // Feed kurulmaz (scrollback gelmez)
+        try await conn.waitForNoSent(type: "scrollback", after: 0, for: .milliseconds(150))
         svc.stop()
     }
 
-    @Test func chatSubscribeAlsoStreamsFeed() async throws {
+    /// Terminal modu (mode=terminal veya mode yoksa) → scrollback + data feed kurulur.
+    /// Davranış söküm kapsamı dışında; regression koruma.
+    @Test func terminalModeSubscribeStartsFeed() async throws {
         let conn = FakeRelayConnection()
         let term = FakeTerminalServicing()
-        let hooks = FakeAgentHookServer()
         let uuid = UUID()
         let id = TerminalID(raw: uuid)
         term.metas.append(TerminalMeta(id: id, name: "T", repoPath: "/repo",
@@ -36,37 +52,13 @@ import LumiTestSupport
         let sid = id.description
         let svc = RemoteService(paths: .testDefaults(), terminal: term, repos: FakeRepoService(),
             connection: conn, chatSource: FakeChatTranscriptSource(events: []),
-            hookEvents: { hooks.events() })
+            hookEvents: { AsyncStream { _ in } })
         await svc.start()
-        await conn.injectInbound(type: "subscribe", payload: ["sessionId": sid, "mode": "chat"])
-        // Chat kanalı kurulur VE feed kanalı da kurulur.
-        try await conn.waitForSent(types: ["scrollback", "chat_status"])
+        await conn.injectInbound(type: "subscribe", payload: ["sessionId": sid, "mode": "terminal"])
+        try await conn.waitForSent(types: ["scrollback"])
+        // Terminal çıktısı data olarak gelir
         term.emitOutput(id, Data("token".utf8))
         try await conn.waitForSent(types: ["data"])
-        svc.stop()
-    }
-
-    @Test func externalSessionResolvesViaLocatorThenStreamsChat() async throws {
-        let conn = FakeRelayConnection()
-        let term = FakeTerminalServicing()
-        let hooks = FakeAgentHookServer()
-        let uuid = UUID()
-        term.metas.append(TerminalMeta(id: TerminalID(raw: uuid), name: "T",
-            repoPath: "/repo", createdAt: Date(), claudeSessionID: nil))   // dış oturum
-        let sid = TerminalID(raw: uuid).description
-        let chat = FakeChatTranscriptSource(events: [
-            .snapshot([ChatMessage(id: "m1", role: .assistant,
-                                   blocks: [.text("hi", presentation: nil)],
-                                   timestampMs: nil, turnId: nil)])
-        ])
-        let locator = FakeTranscriptLocating(returning: "found-session")
-        let svc = RemoteService(paths: .testDefaults(), terminal: term, repos: FakeRepoService(),
-            connection: conn, chatSource: chat, hookEvents: { hooks.events() },
-            transcriptLocator: locator)
-        await svc.start()
-        await conn.injectInbound(type: "subscribe", payload: ["sessionId": sid, "mode": "chat"])
-        try await conn.waitForCount(type: "chat", atLeast: 2)   // 1: boş, 2: locator sonrası snapshot
-        try await conn.waitForSent(types: ["scrollback"])
         svc.stop()
     }
 }

@@ -30,8 +30,16 @@ public final class RemoteService: RemoteServicing {
     private let commandHandler: RemoteCommandHandler
     private let broadcaster = EventBroadcaster<RemoteEvent>()
     private let chatSource: any ChatTranscriptSourcing
+    /// Faz 2: Chat oturumu servisi (journal köprüsü için).
+    private let chatSessions: any ChatSessionServicing
     /// Session başına chat tail task'ı (mode=chat aboneliği).
     private var chatSubscriptions: [TerminalID: Task<Void, Never>] = [:]
+    /// Chat köprüsü diff durumu — oturum başına son yayınlanan mesaj id'leri ve akış bilgisi.
+    private var chatBridgeState: [String: ChatBridgeState] = [:]
+    /// Chat oturumu → köprü task (TerminalID olmayan sessionId keyi).
+    private var chatBridgeTasks: [String: Task<Void, Never>] = [:]
+    /// Mode=chat subscribe olan terminal ID'leri (hook-tabanlı turn-status guard'ı için).
+    private var chatModeTerminals: Set<TerminalID> = []
 
     /// Faz 2: hook olay akışı + session başına turn-status reducer'ları.
     /// FACTORY olmak zorunda: AsyncStream tek geçişlidir — init'te sabit stream
@@ -74,18 +82,20 @@ public final class RemoteService: RemoteServicing {
         hookEvents: @escaping () -> AsyncStream<AgentHookEvent> = { AsyncStream { _ in } },
         turnClock: @escaping @Sendable () -> Date = { Date() },
         keystrokeScheduler: any KeystrokeScheduling = LiveKeystrokeScheduler(),
-        transcriptLocator: any TranscriptLocating = NoopTranscriptLocating()
+        transcriptLocator: any TranscriptLocating = NoopTranscriptLocating(),
+        chatSessions: any ChatSessionServicing = NoopChatSessionService()
     ) {
         self.configService = RemoteConfigService(paths: paths)
         self.terminal = terminal
         self.repos = repos
         self.connection = connection ?? RelayConnection()
-        self.commandHandler = RemoteCommandHandler(terminal: terminal, trust: trust)
+        self.commandHandler = RemoteCommandHandler(terminal: terminal, trust: trust, chatSessions: chatSessions)
         self.chatSource = chatSource
         self.hookEvents = hookEvents
         self.turnClock = turnClock
         self.keystrokeScheduler = keystrokeScheduler
         self.transcriptLocator = transcriptLocator
+        self.chatSessions = chatSessions
     }
 
     public func events() -> AsyncStream<RemoteEvent> { broadcaster.stream() }
@@ -137,6 +147,10 @@ public final class RemoteService: RemoteServicing {
         subscriptions.removeAll()
         for task in chatSubscriptions.values { task.cancel() }
         chatSubscriptions.removeAll()
+        for task in chatBridgeTasks.values { task.cancel() }
+        chatBridgeTasks.removeAll()
+        chatBridgeState.removeAll()
+        chatModeTerminals.removeAll()
         hookTask?.cancel(); hookTask = nil
         turnReducers.removeAll()
         promptJournals.removeAll()
@@ -182,6 +196,8 @@ public final class RemoteService: RemoteServicing {
                 handleInput(payload)
             case "prompt_respond":
                 handlePromptRespond(payload)
+            case "chat_send":
+                await handleChatSend(payload)
             case "command":
                 let result = await commandHandler.handle(payload)
                 let ok = result["ok"] as? Bool == true
@@ -199,6 +215,7 @@ public final class RemoteService: RemoteServicing {
         switch event {
         case .spawned, .exited, .statusChanged:
             if case let .exited(id, _) = event {
+                chatModeTerminals.remove(id)
                 cancelSubscription(id)
                 cancelChatSubscription(id)
                 modelCache[id] = nil
@@ -251,40 +268,43 @@ public final class RemoteService: RemoteServicing {
     // MARK: - Subscribe / Unsubscribe
 
     private func handleSubscribe(_ payload: [String: Any]) async {
-        guard let raw = RemoteProtocol.decodeSubscribe(payload),
-              let id = terminalID(from: raw) else { return }
-
-        cancelSubscription(id)
-        cancelChatSubscription(id)
+        guard let raw = RemoteProtocol.decodeSubscribe(payload) else { return }
 
         if RemoteProtocol.decodeSubscribeMode(payload) == "chat" {
-            let meta = terminal.terminals.first(where: { $0.id == id })
-            guard let meta else { return }
-            // Canlı terminal şeridi: chat modunda PTY feed'i de yayınlanır (spec 2026-09-17).
-            await startFeedEmission(id: id, raw: raw)
-            guard let claudeSessionID = meta.claudeSessionID else {
-                rlog("chat subscribe: claudeSessionID yok, PTY'ye DÜŞMÜYOR — chat-unavailable: repo=\(meta.repoPath)")
-                // Ham-PTY'ye düşme. Boş chat + working:false durumu; Task 3 transcript keşfi bağlar.
-                await connection.send(type: "chat",
-                    payload: RemoteProtocol.chatPayload(sessionId: raw, messages: []))
-                await emitTurnStatus(id: id, status: .idle)
-                chatSubscriptions[id] = Task { [weak self] in await self?.awaitTranscript(id: id, raw: raw, meta: meta) }
+            // Chat modu: raw, bir ChatSessionMeta.id olabilir (UUID string) veya terminal UUID.
+            // Önce chat oturumu olup olmadığını kontrol et.
+            if let stream = await chatSessions.snapshots(id: raw) {
+                // Chat oturumu → journal köprüsü kur; PTY feed kurma.
+                chatBridgeState[raw] = nil   // diff sıfırla
+                let task = Task { [weak self] in
+                    for await snap in stream {
+                        guard !Task.isCancelled else { break }
+                        await self?.emitChatDiff(sessionId: raw, snap: snap)
+                    }
+                }
+                // raw = chat oturum ID'si; chatSubscriptions için dummy terminal key kullanma,
+                // bunun yerine chatBridgeTasks dict'te (sessionId string → Task) tut.
+                // Ancak mevcut cancelChatSubscription TerminalID tabanlı — chat oturumları
+                // için chatBridgeTasks ayrı tutulur.
+                chatBridgeTasks[raw] = task
+                rlog("chat subscribe: chat oturumu köprüsü kuruldu sid=\(raw.prefix(8))")
                 return
             }
-            let encoded = meta.repoPath.replacingOccurrences(of: "[^a-zA-Z0-9]", with: "-", options: .regularExpression)
-            let path = FileManager.default.homeDirectoryForCurrentUser
-                .appendingPathComponent(".claude/projects/\(encoded)/\(claudeSessionID).jsonl").path
-            rlog("chat subscribe: sid=\(raw.prefix(8)) claudeSessionID=\(claudeSessionID) repo=\(meta.repoPath) → \(path) exists=\(FileManager.default.fileExists(atPath: path))")
-            let stream = chatSource.stream(sessionID: claudeSessionID, repoPath: meta.repoPath)
-            let task = Task { [weak self] in
-                for await event in stream {
-                    guard !Task.isCancelled else { break }
-                    await self?.emitChat(sessionId: raw, event: event)
-                }
-            }
-            chatSubscriptions[id] = task
+            // Terminal ID olarak dene
+            guard let id = terminalID(from: raw) else { return }
+            cancelSubscription(id)
+            cancelChatSubscription(id)
+            // Chat modu ama chat oturumu değil → eski transcript-tail SÖKÜLDÜ (Faz 2).
+            // Sessizce boş chat + idle döndür; terminal oturumları mirror-only.
+            // Hook-tabanlı turn-status bu terminal için aktif (register et).
+            chatModeTerminals.insert(id)
+            rlog("chat subscribe: chat oturumu yok sid=\(raw.prefix(8)) — boş chat + idle")
+            await connection.send(type: "chat",
+                payload: RemoteProtocol.chatPayload(sessionId: raw, messages: []))
+            await emitTurnStatus(id: id, status: .idle)
+            // Mevcut turn-status ve prompt'ları yayınla (yeniden bağlantı senaryosu)
             let snapshot = turnReducers[id]?.status ?? .idle
-            await emitTurnStatus(id: id, status: snapshot)
+            if snapshot != .idle { await emitTurnStatus(id: id, status: snapshot) }
             for item in (promptJournals[id]?.items ?? []) where item.state == .pending {
                 await emitPrompt(id: id, prompt: item)
             }
@@ -292,6 +312,9 @@ public final class RemoteService: RemoteServicing {
         }
 
         // terminal mode (mevcut davranış)
+        guard let id = terminalID(from: raw) else { return }
+        cancelSubscription(id)
+        cancelChatSubscription(id)
         await startFeedEmission(id: id, raw: raw)
     }
 
@@ -339,6 +362,59 @@ public final class RemoteService: RemoteServicing {
         chatSubscriptions[id] = nil
     }
 
+    // MARK: - Chat oturumu journal köprüsü (Faz 2)
+
+    /// Her journal snapshot'ını diff'leyerek chat/chat_append/chat_status frame'lerine çevirir.
+    /// İlk yayında tüm mesajlar → `chat` snapshot; sonraki snapshot'larda yalnız yeni mesajlar
+    /// → `chat_append`; streamingText/turnActive değişince → `chat_status`.
+    private func emitChatDiff(sessionId: String, snap: ChatJournalState) async {
+        var prev = chatBridgeState[sessionId] ?? ChatBridgeState()
+
+        // Mesaj diff
+        let prevIds = prev.messageIds
+        let newMessages = snap.messages.filter { !prevIds.contains($0.id) }
+        if !newMessages.isEmpty {
+            if prev.messageIds.isEmpty {
+                // İlk mesajlar: tam snapshot
+                rlog("chat-bridge: snapshot sid=\(sessionId.prefix(8)) count=\(snap.messages.count)")
+                await connection.send(type: "chat",
+                    payload: RemoteProtocol.chatPayload(sessionId: sessionId, messages: snap.messages))
+            } else {
+                // Ek mesajlar: append
+                rlog("chat-bridge: append sid=\(sessionId.prefix(8)) +\(newMessages.count)")
+                await connection.send(type: "chat_append",
+                    payload: RemoteProtocol.chatAppendPayload(sessionId: sessionId, messages: newMessages))
+            }
+            prev.messageIds = Set(snap.messages.map { $0.id })
+        }
+
+        // streamingText / turnActive değişimi → chat_status
+        let streamChanged = snap.streamingText != prev.lastStreaming
+        let workingChanged = snap.turnActive != prev.lastWorking
+        if streamChanged || workingChanged {
+            let status = ChatTurnStatus(
+                working: snap.turnActive,
+                startedAtMs: nil,
+                tool: nil,
+                streamingText: snap.streamingText
+            )
+            rlog("chat-bridge: status sid=\(sessionId.prefix(8)) working=\(snap.turnActive) streaming=\(snap.streamingText?.prefix(20) ?? "-")")
+            await connection.send(type: "chat_status",
+                payload: RemoteProtocol.chatStatusPayload(sessionId: sessionId, status: status))
+            prev.lastStreaming = snap.streamingText
+            prev.lastWorking = snap.turnActive
+        }
+
+        chatBridgeState[sessionId] = prev
+    }
+
+    /// `chat_send` frame'i: telefon → chat oturumuna metin gönderir.
+    private func handleChatSend(_ payload: [String: Any]) async {
+        guard let (sessionId, text) = RemoteProtocol.decodeChatSend(payload) else { return }
+        rlog("chat_send: sid=\(sessionId.prefix(8)) text=\(text.prefix(40))")
+        await chatSessions.send(id: sessionId, text: text)
+    }
+
     /// Dış/taze oturum: transcript belirene kadar sınırlı poll (10 × 500ms).
     /// Bulanursa chatSource.stream üzerinden emitChat akışına geçer.
     private func awaitTranscript(id: TerminalID, raw: String, meta: TerminalMeta) async {
@@ -381,8 +457,8 @@ public final class RemoteService: RemoteServicing {
         }()
         let changedPrompts = journal.reduce(event)
         // TANI (Faz 3.1 kart hatası): her hook olayının prompt yoluna etkisi.
-        rlog("hook: kind=\(event.kind) tool=\(event.toolName ?? "-") isLead=\(event.isLead) hasInput=\(event.toolInput != nil) sub=\(chatSubscriptions[id] != nil) changedPrompts=\(changedPrompts.count)")
-        guard chatSubscriptions[id] != nil else { return }
+        rlog("hook: kind=\(event.kind) tool=\(event.toolName ?? "-") isLead=\(event.isLead) hasInput=\(event.toolInput != nil) sub=\(chatModeTerminals.contains(id)) changedPrompts=\(changedPrompts.count)")
+        guard chatModeTerminals.contains(id) else { return }
         if let status { await emitTurnStatus(id: id, status: status) }
         for item in changedPrompts {
             rlog("prompt emit: kind=\(item.kind) state=\(item.state) itemId=\(item.itemId.prefix(12)) opts=\(item.options.count)")
@@ -499,10 +575,17 @@ public final class RemoteService: RemoteServicing {
     }
 
     private func handleUnsubscribe(_ payload: [String: Any]) {
-        guard let raw = RemoteProtocol.decodeSubscribe(payload),
-              let id = terminalID(from: raw) else { return }
-        cancelSubscription(id)
-        cancelChatSubscription(id)
+        guard let raw = RemoteProtocol.decodeSubscribe(payload) else { return }
+        // Chat oturumu bridge task'ını iptal et
+        chatBridgeTasks[raw]?.cancel()
+        chatBridgeTasks[raw] = nil
+        chatBridgeState[raw] = nil
+        // Terminal aboneliğini iptal et
+        if let id = terminalID(from: raw) {
+            chatModeTerminals.remove(id)
+            cancelSubscription(id)
+            cancelChatSubscription(id)
+        }
     }
 
     private func cancelSubscription(_ id: TerminalID) {
@@ -555,4 +638,18 @@ public final class RemoteService: RemoteServicing {
         state = newState
         broadcaster.send(.stateChanged(newState))
     }
+
+    /// Test hook'u — verilen chat sessionId'si için aktif köprü task'ı var mı.
+    func hasActiveChatBridgeTask(_ sessionId: String) -> Bool {
+        chatBridgeTasks[sessionId] != nil
+    }
+}
+
+// MARK: - Chat köprüsü yardımcı tipler
+
+/// Oturum başına diff hesaplamak için tutulan son-bilinen durum.
+private struct ChatBridgeState {
+    var messageIds: Set<String> = []
+    var lastStreaming: String? = nil
+    var lastWorking: Bool = false
 }

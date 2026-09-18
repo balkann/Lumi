@@ -27,7 +27,8 @@ final class RemoteFeatureAssembly: FeatureAssembly {
             chatSource: TranscriptChatSource(),
             trust: ClaudeWorkspaceTrust(),
             hookEvents: { services.agentHooks.events() },
-            transcriptLocator: TranscriptLocator()
+            transcriptLocator: TranscriptLocator(),
+            chatSessions: services.chatSessions
         )
         remoteStore = RemoteStore(service: remoteService)
     }

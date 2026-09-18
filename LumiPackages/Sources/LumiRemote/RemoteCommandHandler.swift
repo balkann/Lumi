@@ -12,10 +12,13 @@ func shellQuoted(_ s: String) -> String {
 final class RemoteCommandHandler {
     private let terminal: any TerminalServicing
     private let trust: any ClaudeWorkspaceTrusting
+    private let chatSessions: any ChatSessionServicing
 
-    init(terminal: any TerminalServicing, trust: any ClaudeWorkspaceTrusting) {
+    init(terminal: any TerminalServicing, trust: any ClaudeWorkspaceTrusting,
+         chatSessions: any ChatSessionServicing = NoopChatSessionService()) {
         self.terminal = terminal
         self.trust = trust
+        self.chatSessions = chatSessions
     }
 
     func handle(_ payload: [String: Any]) async -> sending [String: Any] {
@@ -59,10 +62,22 @@ final class RemoteCommandHandler {
     private func startSession(_ payload: [String: Any], commandId: Any) async -> sending [String: Any] {
         let repoPath = payload["repoPath"] as? String ?? ""
         let prompt = payload["prompt"] as? String ?? ""
+        let kind = payload["kind"] as? String
+
+        if kind == "chat" {
+            // Chat oturumu: ChatSessionService aracılığıyla oluştur (terminal PTY değil).
+            let meta = await chatSessions.create(repoPath: repoPath)
+            if !prompt.isEmpty {
+                await chatSessions.send(id: meta.id, text: prompt)
+            }
+            return ["commandId": commandId, "ok": true, "sessionId": meta.id]
+        }
+
+        // Terminal oturumu (varsayılan): PTY spawn.
         do {
             // Remote'tan başlatılan claude, ilk-açılış güven menüsünde takılmasın:
             // çalışma alanını spawn'dan ÖNCE güvenli işaretle (telefon chat modu bu
-            // menüyü gösteremez → transcript yazılmaz → chat "yükleniyor"da kalır).
+            // menüyü göremedez → transcript yazılmaz → chat "yükleniyor"da kalır).
             trust.markTrusted(repoPath: repoPath)
             let command = prompt.isEmpty ? "claude" : "claude " + shellQuoted(prompt)
             _ = try terminal.spawn(repoPath: repoPath, task: nil, command: command)
