@@ -48,6 +48,11 @@ public final class AppModel {
     private var commandTargets: [String: String] = [:]
     /// delete_session komut id'leri — commandResult'ta yerel liste temizliği için.
     private var deleteCommandIds: Set<String> = []
+    /// Branch yükleme durumu (list_branches komutu için).
+    public private(set) var branchesForRepo: [String] = []
+    public private(set) var branchesLoading = false
+    public private(set) var branchesError: String?
+    private var branchRequestIds: Set<String> = []
     /// Bu telefonun başlattığı stream-json chat oturumları. `submitText` routing'i
     /// buna bakar — `sessions` broadcast'i gecikirse bile chat mesajı yanlışlıkla
     /// PTY input'a düşmez (final review #1: kind broadcast yarışına bağlı olamaz).
@@ -190,6 +195,12 @@ public final class AppModel {
             route(chunk)
 
         case .commandResult(let result):
+            if branchRequestIds.remove(result.commandId) != nil {
+                branchesLoading = false
+                if result.ok { branchesForRepo = result.branches ?? [] }
+                else { branchesError = result.error ?? "dallar yüklenemedi" }
+                return
+            }
             let wasDelete = deleteCommandIds.remove(result.commandId) != nil
             guard let target = commandTargets.removeValue(forKey: result.commandId) else { return }
             if target.isEmpty {
@@ -582,9 +593,30 @@ public final class AppModel {
 
     /// Faz 2: saf chat oturumu başlatır (kind=chat). Mac commandResult'ta sessionId
     /// döndürür; `commandResult` handler otomatik olarak `subscribeChat` çağırır.
-    public func startChatSession(repoPath: String) async {
+    public func startChatSession(repoPath: String, branchMode: String? = nil,
+                                 branchName: String? = nil, baseBranch: String? = nil,
+                                 workspaceName: String? = nil) async {
         startState = .sending
-        await dispatch(target: "", action: .startSession(repoPath: repoPath, personaId: nil, prompt: "", kind: "chat"))
+        await dispatch(target: "", action: .startSession(
+            repoPath: repoPath, personaId: nil, prompt: "", kind: "chat",
+            branchMode: branchMode, branchName: branchName,
+            baseBranch: baseBranch, workspaceName: workspaceName))
+    }
+
+    /// Branch listesi yükler (list_branches komutu). Yanıt commandResult'ta branchesForRepo'ya işlenir.
+    public func loadBranches(repoPath: String) async {
+        branchesForRepo = []
+        branchesError = nil
+        branchesLoading = true
+        commandCounter += 1
+        let commandId = "ph-\(commandCounter)"
+        branchRequestIds.insert(commandId)
+        let ok = await client.send(command: OutgoingCommand(commandId: commandId, action: .listBranches(repoPath: repoPath)))
+        if !ok {
+            branchRequestIds.remove(commandId)
+            branchesLoading = false
+            branchesError = "bağlantı yok"
+        }
     }
 
     public func resetStartState() {

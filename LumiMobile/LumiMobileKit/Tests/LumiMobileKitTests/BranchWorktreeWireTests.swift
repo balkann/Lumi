@@ -2,7 +2,7 @@ import Testing
 import Foundation
 @testable import LumiMobileKit
 
-@Suite struct BranchWorktreeWireTests {
+@Suite @MainActor struct BranchWorktreeWireTests {
     @Test func startSessionEncodesWorkspaceFields() throws {
         let cmd = OutgoingCommand(commandId: "c1", action: .startSession(
             repoPath: "/tmp/r", personaId: nil, prompt: "hi", kind: "chat",
@@ -31,5 +31,25 @@ import Foundation
         let msg = PhoneProtocol.decodeServerMessage(json)
         guard case .commandResult(let r) = msg else { Issue.record("beklenen commandResult"); return }
         #expect(r.branches == ["main", "dev"])
+    }
+
+    // MARK: AppModel branch state
+
+    private func makeModelWithFakeClient() -> (AppModel, FakeRelayClient) {
+        let client = FakeRelayClient()
+        let store = InMemorySecureStore()
+        store.write(PairingInfo(relayUrl: "wss://r.example", token: "0123456789abcdef"))
+        return (AppModel(client: client, store: store), client)
+    }
+
+    @Test func loadBranchesPopulatesStateOnResult() async {
+        let (model, client) = makeModelWithFakeClient()
+        await model.loadBranches(repoPath: "/tmp/r")
+        #expect(model.branchesLoading == true)
+        // Mac yanıtı simüle: son gönderilen commandId'yi al
+        let cid = client.commands.last!.commandId
+        model.handle(.commandResult(CommandResult(commandId: cid, ok: true, error: nil, branches: ["main", "dev"])))
+        #expect(model.branchesForRepo == ["main", "dev"])
+        #expect(model.branchesLoading == false)
     }
 }
