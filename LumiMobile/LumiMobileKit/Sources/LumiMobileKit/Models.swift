@@ -223,11 +223,14 @@ public struct CommandResult: Decodable, Sendable, Equatable {
     public let error: String?
     /// start_session kind=chat'ta Mac'in döndürdüğü yeni oturum kimliği (Faz 2).
     public let sessionId: String?
+    /// list_branches komutuna yanıt olarak Mac'in döndürdüğü branch listesi.
+    public let branches: [String]?
 
-    public init(commandId: String, ok: Bool, error: String?, sessionId: String? = nil) {
+    public init(commandId: String, ok: Bool, error: String?, sessionId: String? = nil, branches: [String]? = nil) {
         self.commandId = commandId
         self.ok = ok
         self.error = error
         self.sessionId = sessionId
+        self.branches = branches
     }
 }

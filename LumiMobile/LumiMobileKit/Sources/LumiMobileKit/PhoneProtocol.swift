@@ -23,7 +23,10 @@ public enum ServerMessage: Sendable, Equatable {
 public enum CommandAction: Sendable, Equatable {
     case sendText(sessionId: String, text: String)
     case pressKey(sessionId: String, key: String)
-    case startSession(repoPath: String, personaId: String?, prompt: String, kind: String? = nil)
+    case startSession(repoPath: String, personaId: String?, prompt: String, kind: String? = nil,
+                      branchMode: String? = nil, branchName: String? = nil,
+                      baseBranch: String? = nil, workspaceName: String? = nil)
+    case listBranches(repoPath: String)
     case getHistory(sessionId: String)
     case deleteSession(sessionId: String)
     case setModel(sessionId: String, model: String)
@@ -177,12 +180,20 @@ public enum PhoneProtocol {
             payload["action"] = "press_key"
             payload["sessionId"] = sessionId
             payload["key"] = key
-        case .startSession(let repoPath, let personaId, let prompt, let kind):
+        case .startSession(let repoPath, let personaId, let prompt, let kind,
+                           let branchMode, let branchName, let baseBranch, let workspaceName):
             payload["action"] = "start_session"
             payload["repoPath"] = repoPath
             payload["prompt"] = prompt
             if let personaId { payload["personaId"] = personaId }
             if let kind { payload["kind"] = kind }
+            if let branchMode { payload["branchMode"] = branchMode }
+            if let branchName { payload["branchName"] = branchName }
+            if let baseBranch { payload["baseBranch"] = baseBranch }
+            if let workspaceName { payload["workspaceName"] = workspaceName }
+        case .listBranches(let repoPath):
+            payload["action"] = "list_branches"
+            payload["repoPath"] = repoPath
         case .getHistory(let sessionId):
             payload["action"] = "get_history"
             payload["sessionId"] = sessionId
