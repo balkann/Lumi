@@ -747,3 +747,17 @@ Plan tipine ya da `limitId`'ye bakan Codex'e özel bir eşleme bilinçli olarak 
 Gösterge artık hangi pencereyi gösterdiğini söyler: tooltip ve VoiceOver etiketi limitin başlığını taşır ("Codex usage — Weekly (all models)"). Çıplak bir "%63" hangi pencereye ait olduğu belirsiz olurdu.
 
 - **Sınırlar.** `UsageSnapshot.indicatorLimit`, `UsageStore.indicatorLimit`/`indicatorPercent`, `UsageIndicatorView`in etiket/tooltip/tint yolu. Parser, probe, cache/timeout sarmalayıcıları ve popover'ın limit listesi değişmedi. Payload'daki `credits` / `spendControlReached` / `rateLimitReachedType` alanları hâlâ kullanılmıyor. Testler: `UsageSnapshotIndicatorTests`, `CodexUsageParserTests.testWeeklyOnlyPlanStillFeedsTheIndicator`.
+
+### 77. Dikkat isteyen terminalin başlığı sarıya döner (2026-09-18)
+
+Orca'da seçili olmayan bir sekme çalışmayı bitirip soru sorduğunda ya da turn'ünü kapattığında sekme başlığı sarıya döner; kullanıcı hangi ajanın kendisini beklediğini listeye bakarak görür. Lumi'de sekme şeridi yok (karar 55), o yüzden aynı bilgi iki yüzeye iner: **terminal kartının kendi başlığı** ve **Projects panelindeki ajan satırının başlığı**.
+
+Kural `LumiKit.TerminalAttention.isNeeded(status:isAwaitingDecision:isSelected:)` içinde, view'sız ve tek yerdedir — iki yüzey zamanla ayrışmasın diye:
+
+- `waitingUnseen` → vurgulanır. "Görüldü mü?" bilgisi zaten durum makinesindedir (`StatusStateMachine` odak kazanınca `waitingFocused`'a geçer), ayrıca bir "okundu" seti tutulmaz.
+- `waitingSeen` → vurgulanmaz. Kullanıcı beklemeyi odaktayken gördü, sonra başka yere geçti; tekrar sarıya döndürmek "yeni bir şey oldu" yalanı olurdu.
+- Karar bekleme (`awaitingDecisionIDs`) ayrı bir sinyaldir — durum `working` kalır — ve yalnız terminal SEÇİLİ DEĞİLKEN vurgulanır; seçili terminalde izin promptu zaten ekrandadır.
+
+Durum noktası (`StatusDot`) ve ajan glifi (`AgentActivityIcon`) değişmedi: nokta "ne durumda", başlık rengi "sana bakması gerek" sorusunu yanıtlar. Sidebar'da vurgu hover rengini EZER — sarı bir "ilgilenilmedi" bilgisidir, imleç üstünden geçtiği için kaybolmamalı.
+
+- **Sınırlar.** `TerminalAttention`, `TerminalCardHeader.needsAttention` (+ `TerminalCardView`/`TerminalGridView`/`TerminalsRouteView` bağlantısı), `AgentRow.Model.needsAttention`. Maximize edilen kart her zaman aktif sayıldığı için hiç vurgulanmaz. Minimize şeridi ve maximize switcher'ındaki `TerminalChipStrip` chip'leri kapsam dışıdır (durum noktalarını taşımaya devam ederler). Bildirimler (`NotificationService`), sıralama (`AgentActivityState.sortRank`) ve `TerminalMeta` formatı (karar 9) değişmedi. Testler: `TerminalAttentionTests`.

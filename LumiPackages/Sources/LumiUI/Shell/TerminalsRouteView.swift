@@ -57,6 +57,7 @@ public struct TerminalsRouteView: View {
                     layout: shell.layout.gridLayout(for: repoPath),
                     activeTerminalID: shell.terminals.activeTerminalID,
                     stalledIDs: shell.terminals.stalledIDs,
+                    awaitingDecisionIDs: shell.terminals.awaitingDecisionIDs,
                     viewProvider: shell.viewProvider,
                     promptQueue: shell.promptQueue,
                     onFocus: { shell.terminals.focus($0) },

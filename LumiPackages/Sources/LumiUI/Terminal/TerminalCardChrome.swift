@@ -68,6 +68,9 @@ struct TerminalCardHeader: View {
     let meta: TerminalMeta
     let isActive: Bool
     let isStalled: Bool
+    /// Karar 77: seçili değilken turn'ü kapanmış ya da karar bekleyen terminal —
+    /// başlık sarıya döner ki göz taramada yakalasın.
+    var needsAttention = false
     let style: Style
     let promptQueue: PromptQueueStore
     @Binding var isQueueOpen: Bool
@@ -91,8 +94,11 @@ struct TerminalCardHeader: View {
             }
             Text(meta.displayTitle)
                 .font(Theme.Typography.mono(style.titleSize))
-                .foregroundStyle(isActive ? Theme.textPrimary : Theme.textSecondary)
+                .foregroundStyle(titleColor)
                 .lineLimit(1)
+                .accessibilityLabel(
+                    needsAttention ? "\(meta.displayTitle), needs attention" : meta.displayTitle
+                )
             Spacer()
             PromptQueueToggleButton(
                 count: promptQueue.count(for: meta.id),
@@ -130,6 +136,11 @@ struct TerminalCardHeader: View {
         .onTapGesture { onTap?() }
         // Başlığa çift tık zoom'u çevirir (grid → maximize, maximize → grid)
         .simultaneousGesture(TapGesture(count: 2).onEnded(onZoom))
+    }
+
+    private var titleColor: Color {
+        if needsAttention { return Theme.warning }
+        return isActive ? Theme.textPrimary : Theme.textSecondary
     }
 }
 

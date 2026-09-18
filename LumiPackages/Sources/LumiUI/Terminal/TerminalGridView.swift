@@ -11,6 +11,8 @@ struct TerminalGridView: View {
     /// Feed watchdog'ın donmuş işaretlediği terminaller (design/00 Ek A §A.2-10).
     /// Varsayılan boş: host bağlanana dek rozet çıkmaz.
     var stalledIDs: Set<TerminalID> = []
+    /// Karar bekleyen terminaller (karar 77 vurgusunun ikinci kaynağı).
+    var awaitingDecisionIDs: Set<TerminalID> = []
     let viewProvider: any TerminalViewProviding
     let promptQueue: PromptQueueStore
     let onFocus: (TerminalID) -> Void
@@ -49,6 +51,11 @@ struct TerminalGridView: View {
                         meta: meta,
                         isActive: activeTerminalID == meta.id,
                         isStalled: stalledIDs.contains(meta.id),
+                        needsAttention: TerminalAttention.isNeeded(
+                            status: meta.status,
+                            isAwaitingDecision: awaitingDecisionIDs.contains(meta.id),
+                            isSelected: activeTerminalID == meta.id
+                        ),
                         viewProvider: viewProvider,
                         promptQueue: promptQueue,
                         onFocus: { onFocus(meta.id) },
@@ -70,6 +77,7 @@ struct TerminalCardView: View {
     let meta: TerminalMeta
     let isActive: Bool
     var isStalled = false
+    var needsAttention = false
     let viewProvider: any TerminalViewProviding
     let promptQueue: PromptQueueStore
     let onFocus: () -> Void
@@ -90,6 +98,7 @@ struct TerminalCardView: View {
                 meta: meta,
                 isActive: isActive,
                 isStalled: isStalled,
+                needsAttention: needsAttention,
                 style: .grid,
                 promptQueue: promptQueue,
                 isQueueOpen: $isQueueOpen,

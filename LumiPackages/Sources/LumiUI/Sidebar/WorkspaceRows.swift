@@ -167,9 +167,18 @@ struct CheckoutRow: View {
     /// yeni etkinlik üstte (Orca `smart` sıralaması).
     private var agents: [AgentRow.Model] {
         shell.terminals.terminals(in: checkout.path)
-            .map { AgentRow.Model(meta: $0, state: AgentActivityState(
-                status: $0.status, isAwaitingDecision: shell.terminals.awaitingDecisionIDs.contains($0.id)
-            )) }
+            .map { meta in
+                let isAwaitingDecision = shell.terminals.awaitingDecisionIDs.contains(meta.id)
+                return AgentRow.Model(
+                    meta: meta,
+                    state: AgentActivityState(status: meta.status, isAwaitingDecision: isAwaitingDecision),
+                    needsAttention: TerminalAttention.isNeeded(
+                        status: meta.status,
+                        isAwaitingDecision: isAwaitingDecision,
+                        isSelected: shell.terminals.activeTerminalID == meta.id
+                    )
+                )
+            }
             .sorted { lhs, rhs in
                 lhs.state.sortRank != rhs.state.sortRank
                     ? lhs.state.sortRank < rhs.state.sortRank
@@ -225,6 +234,8 @@ struct AgentRow: View {
     struct Model {
         let meta: TerminalMeta
         let state: AgentActivityState
+        /// Karar 77: seçili değilken turn'ü kapanmış / karar bekleyen ajan.
+        var needsAttention = false
     }
 
     let agent: Model
@@ -239,7 +250,7 @@ struct AgentRow: View {
                     TerminalIdentityIcon(provider: agent.meta.provider, size: .caption)
                     Text(agent.meta.displayTitle)
                         .font(Theme.Typography.captionMono)
-                        .foregroundStyle(isHovering ? Theme.textPrimary : Theme.textSecondary)
+                        .foregroundStyle(titleColor(isHovering: isHovering))
                         .lineLimit(1)
                         .truncationMode(.tail)
                     Spacer(minLength: 0)
@@ -257,11 +268,22 @@ struct AgentRow: View {
             }
             .buttonStyle(.plain)
         }
-        .accessibilityLabel("\(agent.state.title): \(agent.meta.displayTitle)")
+        .accessibilityLabel(
+            agent.needsAttention
+                ? "\(agent.state.title): \(agent.meta.displayTitle), needs attention"
+                : "\(agent.state.title): \(agent.meta.displayTitle)"
+        )
         .contextMenu {
             Button("Focus Session", action: onSelect)
             Button("Close Session", role: .destructive) { shell.terminals.close(agent.meta.id) }
         }
+    }
+
+    /// Vurgu hover'ı EZER: sarı "ilgilenilmedi" bilgisidir, imleç oradan
+    /// geçtiği için kaybolmamalı.
+    private func titleColor(isHovering: Bool) -> Color {
+        if agent.needsAttention { return Theme.warning }
+        return isHovering ? Theme.textPrimary : Theme.textSecondary
     }
 }
 
