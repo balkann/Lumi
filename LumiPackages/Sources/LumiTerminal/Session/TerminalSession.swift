@@ -55,6 +55,7 @@ final class TerminalSession {
         task: String?,
         claudeSessionID: String? = nil,
         provider: AgentProvider? = nil,
+        environment: [String: String] = [:],
         hookEndpoint: AgentHookEndpoint? = nil,
         font: NSFont,
         ptySpawner: any PTYSpawning = SystemPTYSpawner(),
@@ -81,7 +82,9 @@ final class TerminalSession {
             executable: ShellResolver.defaultShell(),
             args: ["-l"],
             cwd: repoPath,
-            env: TerminalEnvironment.childEnvironment(hookEndpoint: hookEndpoint, terminalID: id),
+            env: TerminalEnvironment.childEnvironment(
+                overrides: environment, hookEndpoint: hookEndpoint, terminalID: id
+            ),
             cols: Self.initialCols,
             rows: Self.initialRows,
             queue: queue

@@ -108,6 +108,12 @@ public final class FakeTerminalService: TerminalServicing {
         hookEndpoints.append(endpoint)
     }
 
+    public private(set) var launchEnvironments: [AgentProvider: [String: String]] = [:]
+
+    public func setLaunchEnvironment(_ environment: [String: String], for provider: AgentProvider) {
+        launchEnvironments[provider] = environment
+    }
+
     public func applyAgentHookEvent(_ event: AgentHookEvent) {
         appliedHookEvents.append(event)
     }

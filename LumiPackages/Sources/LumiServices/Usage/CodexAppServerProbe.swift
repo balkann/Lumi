@@ -42,9 +42,10 @@ enum CodexAppServerProbe {
     static func requestResponseLine(
         binary: String,
         method: String,
-        timeout: TimeInterval
+        timeout: TimeInterval,
+        codexHome: String? = nil
     ) async throws -> Data {
-        let session = try ProbeSession(binary: binary)
+        let session = try ProbeSession(binary: binary, codexHome: codexHome)
         // İptalde de süreç kapatılır: `awaitResponse` iptali yutuyordu ve
         // çağıran vazgeçtikten sonra probe 30 sn boyunca yoklamaya devam
         // ediyordu (arka planda görünmez bir codex süreciyle birlikte).
@@ -87,9 +88,14 @@ private final class ProbeSession: @unchecked Sendable {
     /// `waitUntilExit` yalnız gerçekten başlatılmış süreçte çağrılabilir.
     private var didLaunch = false
 
-    init(binary: String) throws {
+    init(binary: String, codexHome: String?) throws {
         process.executableURL = URL(fileURLWithPath: binary)
         process.arguments = CodexAppServerProbe.readOnlyArguments
+        if let codexHome {
+            var environment = ProcessInfo.processInfo.environment
+            environment["CODEX_HOME"] = codexHome
+            process.environment = environment
+        }
         process.standardInput = stdinPipe
         process.standardOutput = stdoutPipe
         process.standardError = stderrPipe

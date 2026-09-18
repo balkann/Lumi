@@ -69,6 +69,7 @@ struct ShellContextFixture {
             deepSeek: DeepSeekStore(service: FakeDeepSeekEnvironmentService(), toasts: toasts),
             deepSeekBalance: DeepSeekBalanceStore(service: FakeDeepSeekBalanceService()),
             claudeAccounts: ClaudeAccountStore(service: FakeClaudeAccountService(), toasts: toasts),
+            codexAccounts: CodexAccountStore(service: FakeCodexAccountService(), toasts: toasts),
             terminalLinks: TerminalLinkActionStore(
                 terminals: shared.terminals, repos: repos, workspaces: ProjectWorkspaceStore(service: workspaces, config: config, repos: repos, toasts: toasts)
             ),

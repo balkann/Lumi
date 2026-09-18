@@ -80,6 +80,8 @@ public final class ShellContext {
     public let deepSeekBalance: DeepSeekBalanceStore
     /// Claude hesapları (karar 56) — Settings ▸ Accounts + usage popover'ı.
     public let claudeAccounts: ClaudeAccountStore
+    /// Codex isolated-home account selection.
+    public let codexAccounts: CodexAccountStore
     /// Terminal link eylemleri (karar 57) — tık noktasındaki popover.
     public let terminalLinks: TerminalLinkActionStore
     /// Alt bar store'ları (karar 43).
@@ -113,6 +115,7 @@ public final class ShellContext {
         deepSeek: DeepSeekStore,
         deepSeekBalance: DeepSeekBalanceStore,
         claudeAccounts: ClaudeAccountStore,
+        codexAccounts: CodexAccountStore,
         terminalLinks: TerminalLinkActionStore,
         computerAwake: ComputerAwakeStore,
         resourceUsage: ResourceUsageStore,
@@ -140,6 +143,7 @@ public final class ShellContext {
         self.deepSeek = deepSeek
         self.deepSeekBalance = deepSeekBalance
         self.claudeAccounts = claudeAccounts
+        self.codexAccounts = codexAccounts
         self.terminalLinks = terminalLinks
         self.computerAwake = computerAwake
         self.resourceUsage = resourceUsage

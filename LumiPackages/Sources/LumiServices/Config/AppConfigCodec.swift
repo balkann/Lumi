@@ -51,6 +51,10 @@ enum AppConfigCodec {
         config.claudeAccountSelection = ClaudeAccountCodec.decodeSelection(
             dict["activeClaudeAccountId"], accounts: config.claudeAccounts
         )
+        config.codexAccounts = CodexAccountCodec.decodeList(dict["codexAccounts"])
+        config.codexAccountSelection = CodexAccountCodec.decodeSelection(
+            dict["activeCodexAccountId"], accounts: config.codexAccounts
+        )
         config.indexShortcutStyle = IndexShortcutStyle.normalized(
             dict["indexShortcutStyle"] as? String
         )
@@ -78,12 +82,14 @@ enum AppConfigCodec {
             "agentHooksEnabled": config.agentHooksEnabled,
             "terminalLinkActionsEnabled": config.terminalLinkActionsEnabled,
             "claudeAccounts": ClaudeAccountCodec.overlayList(config.claudeAccounts),
+            "codexAccounts": CodexAccountCodec.overlayList(config.codexAccounts),
             "indexShortcutStyle": config.indexShortcutStyle.rawValue,
             "workspaces": ProjectWorkspaceCodec.overlayList(config.workspaces),
         ]
         // Sistem varsayılanı `null` olarak yazılır: anahtarı silmek, ham-dict
         // merge'inde eski seçimi diskte bırakırdı (karar 9).
         overlay["activeClaudeAccountId"] = config.claudeAccountSelection.accountID ?? NSNull()
+        overlay["activeCodexAccountId"] = config.codexAccountSelection.accountID ?? NSNull()
         return overlay
     }
 

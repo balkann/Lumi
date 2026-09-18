@@ -43,6 +43,8 @@ public protocol TerminalSessionControlling: AnyObject, Sendable {
     /// Karar 45: hook sunucusunun uç noktası. Sonraki spawn'ların PTY env'ine
     /// (`LUMI_AGENT_HOOK_*`) yazılır; `nil` = hook'lar kapalı, env eklenmez.
     func setAgentHookEndpoint(_ endpoint: AgentHookEndpoint?)
+    /// Environment applied only to future sessions of a provider.
+    func setLaunchEnvironment(_ environment: [String: String], for provider: AgentProvider)
     /// Karar 45: sunucudan gelen hook olayını ilgili oturumun durum
     /// makinesine iletir. Tanınmayan terminal kimliği sessizce düşer (kapanmış
     /// terminalin geç gelen hook'u).

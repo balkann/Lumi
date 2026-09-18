@@ -31,6 +31,7 @@ public final class TerminalSessionManager: TerminalServicing {
     /// Karar 45: hook sunucusunun uç noktası; sonraki spawn'ların PTY env'ine
     /// yazılır. `nil` = hook'lar kapalı.
     private var hookEndpoint: AgentHookEndpoint?
+    private var launchEnvironments: [AgentProvider: [String: String]] = [:]
     /// Terminal alt sisteminin tek uygulama-seviyesi NSEvent monitörü (refactor 4.7):
     /// klavye eşlemesi, kart odağı, tekerlek/hover. Enjekte edilir ki testler gerçek
     /// bir global monitör kurmadan (ya da kurulumu doğrulayarak) koşabilsin.
@@ -91,12 +92,14 @@ public final class TerminalSessionManager: TerminalServicing {
         // Karar 23: claude komutuna --session-id enjeksiyonu (veya mevcut
         // flag'ten çıkarım) — ID meta'da taşınır, quit'te resume için persist edilir.
         let prepared = ClaudeSessionCommand.prepare(command: command)
+        let provider = AgentProvider.detect(launchCommand: prepared.command)
         let session = try TerminalSession(
             repoPath: repoPath,
             name: "Terminal \(spawnCounter)",
             task: task,
             claudeSessionID: prepared.sessionID,
-            provider: AgentProvider.detect(launchCommand: prepared.command),
+            provider: provider,
+            environment: provider.flatMap { launchEnvironments[$0] } ?? [:],
             hookEndpoint: hookEndpoint,
             font: font
         )
@@ -150,6 +153,10 @@ public final class TerminalSessionManager: TerminalServicing {
 
     public func setAgentHookEndpoint(_ endpoint: AgentHookEndpoint?) {
         hookEndpoint = endpoint
+    }
+
+    public func setLaunchEnvironment(_ environment: [String: String], for provider: AgentProvider) {
+        launchEnvironments[provider] = environment
     }
 
     /// Kapanmış terminalin geç gelen hook'u sessizce düşer.

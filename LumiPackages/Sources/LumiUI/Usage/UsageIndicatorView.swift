@@ -12,19 +12,22 @@ import SwiftUI
 /// VoiceOver için erişilemezdi.
 public struct UsageIndicatorView: View {
     private let store: UsageStore
-    /// Claude hesap değiştirici (karar 56). Yalnız Claude göstergesine
-    /// verilir; nil ise popover eski hâliyle çizilir.
+    /// Sağlayıcının hesap değiştiricisi. İlgili store nil ise popover
+    /// hesap bölümü olmadan çizilir.
     private let accounts: ClaudeAccountStore?
+    private let codexAccounts: CodexAccountStore?
     private let openAccountSettings: (() -> Void)?
     @State private var isPresented = false
 
     public init(
         store: UsageStore,
         accounts: ClaudeAccountStore? = nil,
+        codexAccounts: CodexAccountStore? = nil,
         openAccountSettings: (() -> Void)? = nil
     ) {
         self.store = store
         self.accounts = accounts
+        self.codexAccounts = codexAccounts
         self.openAccountSettings = openAccountSettings
     }
 
@@ -37,6 +40,7 @@ public struct UsageIndicatorView: View {
                 UsagePopover(
                     store: store,
                     accounts: accounts,
+                    codexAccounts: codexAccounts,
                     openAccountSettings: openAccountSettings.map { open in
                         { isPresented = false; open() }
                     }
@@ -96,6 +100,7 @@ public struct UsageIndicatorView: View {
 private struct UsagePopover: View {
     let store: UsageStore
     var accounts: ClaudeAccountStore?
+    var codexAccounts: CodexAccountStore?
     var openAccountSettings: (() -> Void)?
 
     /// Popover'ın sabit genişliği ve iç kenar payı; ikisi de ölçek dışı ara
@@ -201,6 +206,13 @@ private struct UsagePopover: View {
             VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
                 Rectangle().fill(Theme.border).frame(height: Theme.Stroke.hairline)
                 ClaudeAccountSwitcher(store: accounts, openSettings: openAccountSettings)
+                    .padding(.horizontal, Metrics.inset)
+                    .padding(.bottom, Metrics.rowInset)
+            }
+        } else if let codexAccounts {
+            VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+                Rectangle().fill(Theme.border).frame(height: Theme.Stroke.hairline)
+                CodexAccountSwitcher(store: codexAccounts, openSettings: openAccountSettings)
                     .padding(.horizontal, Metrics.inset)
                     .padding(.bottom, Metrics.rowInset)
             }

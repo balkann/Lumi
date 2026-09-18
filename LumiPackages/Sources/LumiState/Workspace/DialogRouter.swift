@@ -60,6 +60,16 @@ public struct RemoveClaudeAccountDialogState: Equatable, Sendable {
     }
 }
 
+public struct RemoveCodexAccountDialogState: Equatable, Sendable {
+    public let account: CodexAccount
+    public let isActive: Bool
+
+    public init(account: CodexAccount, isActive: Bool) {
+        self.account = account
+        self.isActive = isActive
+    }
+}
+
 /// Kabuğun modal/overlay durumu — TEK alan (refactor 5.2).
 ///
 /// Önceden beş bağımsız bayrak vardı (`isRepoSelectorOpen`, `isSettingsOpen`,
@@ -78,6 +88,7 @@ public enum ActiveDialog: Equatable, Sendable {
     case deleteWorkspace(DeleteWorkspaceDialogState)
     case deleteAgentSession(DeleteAgentSessionDialogState)
     case removeClaudeAccount(RemoveClaudeAccountDialogState)
+    case removeCodexAccount(RemoveCodexAccountDialogState)
     case quit(terminalCount: Int)
 
     public var isPresented: Bool { self != .none }
@@ -88,7 +99,8 @@ public enum ActiveDialog: Equatable, Sendable {
         switch self {
         case .none: false
         case .repoSelector, .sidebarProjectSelector, .createWorkspace, .settings, .onboarding, .closeTab,
-             .deleteWorkspace, .deleteAgentSession, .removeClaudeAccount, .quit: true
+             .deleteWorkspace, .deleteAgentSession, .removeClaudeAccount, .removeCodexAccount,
+             .quit: true
         }
     }
 }
@@ -129,6 +141,11 @@ public final class DialogRouter {
 
     public var removeClaudeAccountDialog: RemoveClaudeAccountDialogState? {
         guard case .removeClaudeAccount(let state) = active else { return nil }
+        return state
+    }
+
+    public var removeCodexAccountDialog: RemoveCodexAccountDialogState? {
+        guard case .removeCodexAccount(let state) = active else { return nil }
         return state
     }
 

@@ -25,6 +25,7 @@ final class ConfigCodecIntegrityTests: XCTestCase {
     ///   durur; sum type'ın adı değil seçilen hesabın kimliği yazılır (K56).
     private static let configKeyMapping: [String: String] = [
         "claudeAccountSelection": "activeClaudeAccountId",
+        "codexAccountSelection": "activeCodexAccountId",
     ]
     private static let uiStateKeyMapping: [String: String] = [:]
 
@@ -199,6 +200,17 @@ final class ConfigCodecIntegrityTests: XCTestCase {
             ),
         ],
         claudeAccountSelection: .account(ConfigCodecIntegrityTests.accountID),
+        codexAccounts: [
+            CodexAccount(
+                id: ConfigCodecIntegrityTests.accountID,
+                email: "codex@example.com",
+                workspaceName: "Personal",
+                createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+                updatedAt: Date(timeIntervalSince1970: 1_700_000_100),
+                lastAuthenticatedAt: Date(timeIntervalSince1970: 1_700_000_200)
+            ),
+        ],
+        codexAccountSelection: .account(ConfigCodecIntegrityTests.accountID),
         workspaces: [ProjectWorkspace(projectPath: "/p", path: "/w", name: "Feature", branch: "feature", scm: .git)],
         sidebarProjectPaths: ["/tmp/selected", "/tmp/another"]
     )

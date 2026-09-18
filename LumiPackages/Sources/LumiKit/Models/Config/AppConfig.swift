@@ -59,6 +59,10 @@ public struct AppConfig: Sendable, Equatable {
     /// Hangi Claude hesabının `~/.claude` yüzeyine materialize edildiği
     /// (karar 56). Additive (karar 9): yoksa `systemDefault`.
     public var claudeAccountSelection: ClaudeAccountSelection
+    /// Managed Codex identities. Credentials live in isolated homes on disk.
+    public var codexAccounts: [CodexAccount]
+    /// Home used by Codex terminals opened after a switch.
+    public var codexAccountSelection: CodexAccountSelection
     /// Hangi Claude hesabının `~/.claude` yüzeyine materialize edildiği
     /// (karar 56). Additive (karar 9): yoksa `systemDefault`.
     public var workspaces: [ProjectWorkspace]
@@ -94,6 +98,8 @@ public struct AppConfig: Sendable, Equatable {
         terminalLinkActionsEnabled: true,
         claudeAccounts: [],
         claudeAccountSelection: .systemDefault,
+        codexAccounts: [],
+        codexAccountSelection: .systemDefault,
         workspaces: [],
         sidebarProjectPaths: []
     )
@@ -118,6 +124,8 @@ public struct AppConfig: Sendable, Equatable {
         terminalLinkActionsEnabled: Bool = true,
         claudeAccounts: [ClaudeAccount] = [],
         claudeAccountSelection: ClaudeAccountSelection = .systemDefault,
+        codexAccounts: [CodexAccount] = [],
+        codexAccountSelection: CodexAccountSelection = .systemDefault,
         workspaces: [ProjectWorkspace] = [],
         sidebarProjectPaths: [String] = []
     ) {
@@ -141,6 +149,8 @@ public struct AppConfig: Sendable, Equatable {
         self.terminalLinkActionsEnabled = terminalLinkActionsEnabled
         self.claudeAccounts = claudeAccounts
         self.claudeAccountSelection = claudeAccountSelection
+        self.codexAccounts = codexAccounts
+        self.codexAccountSelection = codexAccountSelection
         self.workspaces = workspaces
     }
 }

@@ -18,10 +18,12 @@ import LumiKit
 enum TerminalEnvironment {
     static func childEnvironment(
         base: [String: String] = ProcessInfo.processInfo.environment,
+        overrides: [String: String] = [:],
         hookEndpoint: AgentHookEndpoint? = nil,
         terminalID: TerminalID? = nil
     ) -> [String: String] {
         var environment = base
+        environment.merge(overrides) { _, new in new }
         environment["TERM"] = "xterm-256color"
         environment["COLORTERM"] = "truecolor"
         if environment["LANG"] == nil {

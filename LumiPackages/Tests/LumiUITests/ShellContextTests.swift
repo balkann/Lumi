@@ -271,6 +271,7 @@ final class ShellContextTests: XCTestCase {
             deepSeek: context.deepSeek,
             deepSeekBalance: context.deepSeekBalance,
             claudeAccounts: context.claudeAccounts,
+            codexAccounts: context.codexAccounts,
             terminalLinks: context.terminalLinks,
             computerAwake: context.computerAwake,
             resourceUsage: context.resourceUsage,

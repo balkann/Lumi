@@ -765,3 +765,13 @@ Vurgu iki katmanlıdır: **başlık rengi** (yakından okunur) + **kenarlık** (
 Durum noktası (`StatusDot`) ve ajan glifi (`AgentActivityIcon`) değişmedi: nokta "ne durumda", başlık rengi "sana bakması gerek" sorusunu yanıtlar. Sidebar'da vurgu hover rengini EZER — sarı bir "ilgilenilmedi" bilgisidir, imleç üstünden geçtiği için kaybolmamalı.
 
 - **Sınırlar.** `TerminalAttention`, `TerminalCardChrome.needsAttention` (kenarlık) + `TerminalCardHeader.needsAttention` (başlık) + `TerminalCardView`/`TerminalGridView`/`TerminalsRouteView` bağlantısı, `AgentRow.Model.needsAttention` (başlık + kenar çubuğu). `Panel` bileşeni değişmedi — kenarlık rengi zaten parametreliydi. Maximize edilen kart her zaman aktif sayıldığı için hiç vurgulanmaz. Minimize şeridi ve maximize switcher'ındaki `TerminalChipStrip` chip'leri kapsam dışıdır (durum noktalarını taşımaya devam ederler). Bildirimler (`NotificationService`), sıralama (`AgentActivityState.sortRank`) ve `TerminalMeta` formatı (karar 9) değişmedi. Testler: `TerminalAttentionTests`.
+
+### 78. Codex hesapları ayrı CODEX_HOME'larda yaşar (2026-09-18)
+
+Orca'nın güncel Codex hesap akışı incelendi. Claude'daki gibi tek aktif auth yüzeyini yeniden yazmak Codex için seçilmedi: yeni hesaplar `~/.lumi/codex-accounts/<uuid>/home` altında kendi `auth.json` dosyasıyla yaşar. `System default`, Lumi'nin başladığı ortamdaki `CODEX_HOME`'u; bu yoksa `~/.codex`'i kullanır ve Lumi bu dizindeki kimlik bilgisini değiştirmez.
+
+Settings ▸ Accounts ve Codex kullanım popover'ı hesap ekleme, yeniden doğrulama, silme ve seçim yüzlerini sunar. `codex login`, yönetilen home ile yalıtılmış biçimde çalışır; kimlik `auth.json` içindeki ID token'dan okunur. `config.toml`, sistem home'undan yönetilen home'lara kopyalanır; boş ya da eksik kaynak son çalışan kopyayı silmez.
+
+Seçim terminal servisinin sağlayıcı başına launch environment'ına `CODEX_HOME` olarak bağlanır. Yalnız seçimden sonra açılan Codex terminalleri yeni hesabı kullanır; çalışan PTY'lerin ortamı değişmez. Codex app-server kullanım sorgusu aynı seçili home'u çözer ve hesap değişince cache geçersizleştirilerek yenilenir. Aktif hesabı silmek seçimi System default'a düşürür; silme yalnız doğrulanmış UUID altındaki yönetilen dizini kaldırır.
+
+- **Sınırlar.** `CodexAccountServicing`/`CodexAccountService`, `CodexAccountStore`, `CodexAccountsAssembly`, `CodexAccountsSettingsSection`, Codex usage popover'ı, `TerminalSessionControlling.setLaunchEnvironment`, additive `codexAccounts`/`activeCodexAccountId` config anahtarları. Canlı terminalleri otomatik yeniden başlatma ve Orca'nın Windows/WSL yolları kapsam dışıdır; Lumi macOS uygulamasıdır.

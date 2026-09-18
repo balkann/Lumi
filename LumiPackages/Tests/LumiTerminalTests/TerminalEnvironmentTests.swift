@@ -86,4 +86,11 @@ final class TerminalEnvironmentTests: XCTestCase {
         XCTAssertEqual(env["PATH"], "/usr/bin")
         XCTAssertEqual(env["HOME"], "/Users/test")
     }
+
+    func testLaunchOverridesReplaceInheritedCodexHome() {
+        let env = TerminalEnvironment.childEnvironment(
+            base: ["CODEX_HOME": "/system"], overrides: ["CODEX_HOME": "/managed"]
+        )
+        XCTAssertEqual(env["CODEX_HOME"], "/managed")
+    }
 }
