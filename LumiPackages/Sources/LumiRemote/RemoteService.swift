@@ -365,17 +365,24 @@ public final class RemoteService: RemoteServicing {
     // MARK: - Chat oturumu journal köprüsü (Faz 2)
 
     /// Her journal snapshot'ını diff'leyerek chat/chat_append/chat_status frame'lerine çevirir.
-    /// İlk yayında tüm mesajlar → `chat` snapshot; sonraki snapshot'larda yalnız yeni mesajlar
-    /// → `chat_append`; streamingText/turnActive değişince → `chat_status`.
+    /// İlk yayında (boş olsa bile) tüm mesajlar → `chat` snapshot; sonraki snapshot'larda
+    /// yalnız yeni mesajlar → `chat_append`; streamingText/turnActive değişince → `chat_status`.
     private func emitChatDiff(sessionId: String, snap: ChatJournalState) async {
+        let isFirstEmit = chatBridgeState[sessionId] == nil
         var prev = chatBridgeState[sessionId] ?? ChatBridgeState()
 
         // Mesaj diff
         let prevIds = prev.messageIds
         let newMessages = snap.messages.filter { !prevIds.contains($0.id) }
-        if !newMessages.isEmpty {
+        if isFirstEmit {
+            // İlk yayın: her koşulda tam snapshot (boş mesaj listesiyle dahi telefonu uyandırır)
+            rlog("chat-bridge: initial snapshot sid=\(sessionId.prefix(8)) count=\(snap.messages.count)")
+            await connection.send(type: "chat",
+                payload: RemoteProtocol.chatPayload(sessionId: sessionId, messages: snap.messages))
+            prev.messageIds = Set(snap.messages.map { $0.id })
+        } else if !newMessages.isEmpty {
             if prev.messageIds.isEmpty {
-                // İlk mesajlar: tam snapshot
+                // İlk mesajlar (ilk emit'ten sonra geldiyse): tam snapshot
                 rlog("chat-bridge: snapshot sid=\(sessionId.prefix(8)) count=\(snap.messages.count)")
                 await connection.send(type: "chat",
                     payload: RemoteProtocol.chatPayload(sessionId: sessionId, messages: snap.messages))

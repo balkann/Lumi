@@ -77,7 +77,7 @@ final class RemoteCommandHandler {
         do {
             // Remote'tan başlatılan claude, ilk-açılış güven menüsünde takılmasın:
             // çalışma alanını spawn'dan ÖNCE güvenli işaretle (telefon chat modu bu
-            // menüyü göremedez → transcript yazılmaz → chat "yükleniyor"da kalır).
+            // menüyü göremez → transcript yazılmaz → chat "yükleniyor"da kalır).
             trust.markTrusted(repoPath: repoPath)
             let command = prompt.isEmpty ? "claude" : "claude " + shellQuoted(prompt)
             _ = try terminal.spawn(repoPath: repoPath, task: nil, command: command)

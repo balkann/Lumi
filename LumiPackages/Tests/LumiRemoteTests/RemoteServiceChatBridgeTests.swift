@@ -122,19 +122,36 @@ import LumiTestSupport
         let conn = FakeRelayConnection()
         let chatSvc = FakeChatSessionService()
         let meta = ChatSessionMeta(id: "cs5", repoPath: "/repo", createdAt: Date())
-        chatSvc.stub(meta: meta, snapshots: [])
+        chatSvc.stub(meta: meta, snapshots: [ChatJournalState()])
         let svc = RemoteService(paths: .testDefaults(), terminal: FakeTerminalServicing(), repos: FakeRepoService(),
             connection: conn, chatSource: FakeChatTranscriptSource(events: []),
             hookEvents: { AsyncStream { _ in } }, chatSessions: chatSvc)
         await svc.start()
         await conn.injectInbound(type: "subscribe", payload: ["sessionId": "cs5", "mode": "chat"])
-        // Biraz bekle
+        // Subscribe sonrası köprü task'ı aktif olmalı
         try await Task.sleep(for: .milliseconds(50))
+        #expect(await svc.hasActiveChatBridgeTask("cs5") == true)
         await conn.injectInbound(type: "unsubscribe", payload: ["sessionId": "cs5"])
+        // Unsubscribe sonrası köprü task'ı iptal edilmiş olmalı
         try await Task.sleep(for: .milliseconds(50))
-        // Chat abonesinin kaldırıldığını test hook'u ile doğrula
-        // (terminalID UUID parse edilemeyeceğinden hasActiveChatSubscription kullanamayız;
-        //  sadece hata yoksa geçer)
+        #expect(await svc.hasActiveChatBridgeTask("cs5") == false)
+        svc.stop()
+    }
+
+    // MARK: - İlk snapshot boş olsa da chat frame yayılır (Fix I-2)
+
+    @Test func chatSessionSubscribeEmitsInitialChatFrameEvenWhenEmpty() async throws {
+        let conn = FakeRelayConnection()
+        let chatSvc = FakeChatSessionService()
+        chatSvc.stub(meta: ChatSessionMeta(id: "cs9", repoPath: "/repo", createdAt: Date()),
+                     snapshots: [ChatJournalState()])   // yalnızca boş snapshot
+        let svc = RemoteService(paths: .testDefaults(), terminal: FakeTerminalServicing(), repos: FakeRepoService(),
+            connection: conn, chatSource: FakeChatTranscriptSource(events: []),
+            hookEvents: { AsyncStream { _ in } }, chatSessions: chatSvc)
+        await svc.start()
+        await conn.injectInbound(type: "subscribe", payload: ["sessionId": "cs9", "mode": "chat"])
+        // Boş olsa da ilk chat snapshot frame'i gelmeli
+        try await conn.waitForSent(types: ["chat"])
         svc.stop()
     }
 }
