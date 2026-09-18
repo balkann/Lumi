@@ -46,6 +46,10 @@ public protocol ServiceRegistry: AnyObject {
     var agentHooks: any AgentHookServing { get }
     var agentHookInstaller: any AgentHookInstalling { get }
 
+    /// Stream-json chat lane oturum yöneticisi (Yol B Faz 2). Chat oturumları
+    /// PTY'siz `claude --output-format stream-json` child'larıdır.
+    var chatSessions: any ChatSessionServicing { get }
+
     /// Sağlayıcı başına kullanım servisi (karar 32). Sözlük yerine fonksiyon:
     /// yeni sağlayıcı eklendiğinde çağıranlar `nil` ele almak zorunda kalmaz.
     func usage(for provider: AgentProvider) -> any UsageServicing
