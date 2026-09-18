@@ -366,6 +366,29 @@ final class AppModelTests: XCTestCase {
         XCTAssertNil(model.lastCommandError["s1"])
     }
 
+    /// Silme başarılı → oturum telefon listesinden hemen kalkar (Mac chat silmede
+    /// sessions yayınlamıyor; "silemiyorum" regresyonu).
+    func testDeleteSessionRemovesFromListOnSuccess() async {
+        let (model, client, _) = makeModel()
+        model.handle(.sessions([meta("s1", repo: "r", "idle")]))
+        await model.deleteSession(sessionId: "s1")
+        let cid = client.commands.last!.commandId
+        model.handle(.commandResult(CommandResult(commandId: cid, ok: true, error: nil)))
+        XCTAssertFalse(model.sessions.contains { $0.id == "s1" },
+                       "silme başarılıysa oturum listeden kalkmalı")
+    }
+
+    /// Hayalet oturum (Mac restart sonrası): session_not_found da yerel listeden kaldırır.
+    func testDeleteSessionRemovesOnSessionNotFound() async {
+        let (model, client, _) = makeModel()
+        model.handle(.sessions([meta("s1", repo: "r", "idle")]))
+        await model.deleteSession(sessionId: "s1")
+        let cid = client.commands.last!.commandId
+        model.handle(.commandResult(CommandResult(commandId: cid, ok: false, error: "session_not_found")))
+        XCTAssertFalse(model.sessions.contains { $0.id == "s1" },
+                       "hayalet oturum (session_not_found) da listeden kalkmalı")
+    }
+
     func testDeleteSessionDispatchesCommand() async {
         let (model, client, _) = makeModel()
         model.handle(.sessions([meta("s1", repo: "lumi", "idle")]))

@@ -46,6 +46,8 @@ public final class AppModel {
     private var models: [String: String] = [:]
     /// commandId → sessionId; start_session için "" (oturum henüz yok).
     private var commandTargets: [String: String] = [:]
+    /// delete_session komut id'leri — commandResult'ta yerel liste temizliği için.
+    private var deleteCommandIds: Set<String> = []
     /// Bu telefonun başlattığı stream-json chat oturumları. `submitText` routing'i
     /// buna bakar — `sessions` broadcast'i gecikirse bile chat mesajı yanlışlıkla
     /// PTY input'a düşmez (final review #1: kind broadcast yarışına bağlı olamaz).
@@ -156,6 +158,7 @@ public final class AppModel {
         models = [:]
         lastCommandError = [:]
         commandTargets = [:]
+        deleteCommandIds = []
         startState = .idle
     }
 
@@ -187,6 +190,7 @@ public final class AppModel {
             route(chunk)
 
         case .commandResult(let result):
+            let wasDelete = deleteCommandIds.remove(result.commandId) != nil
             guard let target = commandTargets.removeValue(forKey: result.commandId) else { return }
             if target.isEmpty {
                 startState = result.ok ? .succeeded : .failed(result.error ?? "oturum açılamadı")
@@ -195,6 +199,15 @@ public final class AppModel {
                 if result.ok, let sid = result.sessionId {
                     chatSessionIds.insert(sid)
                     subscribeChat(sid)
+                }
+            } else if wasDelete {
+                // Silme: Mac chat oturumu silinince güncel `sessions` yayınlamıyor →
+                // telefon listesi takılıyordu ("silemiyorum"). Başarıda VEYA hayalet
+                // oturumda (session_not_found, Mac restart sonrası) yereli hemen temizle.
+                if result.ok || result.error == "session_not_found" {
+                    removeSessionLocally(target)
+                } else {
+                    lastCommandError[target] = result.error ?? "oturum silinemedi"
                 }
             } else if !result.ok {
                 lastCommandError[target] = result.error ?? "komut iletilemedi"
@@ -510,6 +523,25 @@ public final class AppModel {
         sessions.first { $0.id == id }
     }
 
+    /// Silinen oturumu telefon durumundan tamamen çıkarır (Mac chat silmede
+    /// `sessions` yayınlamadığı için — liste + chat/pending/streaming/terminal state).
+    private func removeSessionLocally(_ id: String) {
+        sessions.removeAll { $0.id == id }
+        chatSessionIds.remove(id)
+        terminalSinks[id]?.finish()
+        terminalSinks[id] = nil
+        replayBuffers[id] = nil
+        chatBySession[id] = nil
+        pendingBySession[id] = nil
+        streamingGates[id] = nil
+        gatedStreaming[id] = nil
+        turnStatus[id] = nil
+        prompts[id] = nil
+        models[id] = nil
+        lastCommandError[id] = nil
+        if activeSessionId == id { activeSessionId = nil; activeChatMode = false }
+    }
+
     /// Oturum stream-json chat oturumu mu? Görünüm yönlendirmesi (chat view vs
     /// terminal-mirror) ve `submitText` routing'i BUNU tek kaynak olarak kullanır:
     /// bu telefonun başlattığı chat (yerel izlenen `chatSessionIds`) VEYA `sessions`
@@ -623,6 +655,7 @@ public final class AppModel {
         commandCounter += 1
         let commandId = "ph-\(commandCounter)"
         commandTargets[commandId] = target
+        if case .deleteSession = action { deleteCommandIds.insert(commandId) }
         if !target.isEmpty {
             lastCommandError[target] = nil
         }
