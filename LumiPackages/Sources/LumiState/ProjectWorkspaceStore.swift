@@ -114,6 +114,25 @@ public final class ProjectWorkspaceStore {
         }
     }
 
+    /// Moves a project beside another visible project and persists the same
+    /// order used by the sidebar and indexed project shortcuts.
+    public func moveProject(_ projectPath: String, relativeTo targetPath: String) async {
+        guard projectPath != targetPath else { return }
+        do {
+            try await config.updateConfig { config in
+                guard let sourceIndex = config.sidebarProjectPaths.firstIndex(of: projectPath),
+                      let targetIndex = config.sidebarProjectPaths.firstIndex(of: targetPath) else { return }
+                let movingDown = sourceIndex < targetIndex
+                let moved = config.sidebarProjectPaths.remove(at: sourceIndex)
+                guard let shiftedTargetIndex = config.sidebarProjectPaths.firstIndex(of: targetPath) else { return }
+                config.sidebarProjectPaths.insert(moved, at: shiftedTargetIndex + (movingDown ? 1 : 0))
+            }
+            updateSidebarProjects(await config.config().sidebarProjectPaths)
+        } catch {
+            toasts.show(.error, title: "Projects could not be reordered", message: error.localizedDescription)
+        }
+    }
+
     public func selectProject(_ repo: Repo) async {
         guard !isCreating else { return }
         clearForm()

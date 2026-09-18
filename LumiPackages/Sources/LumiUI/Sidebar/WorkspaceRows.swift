@@ -19,6 +19,13 @@ enum Checkout: Identifiable {
 
     var title: String {
         switch self {
+        case .original: "main"
+        case .workspace(let workspace): workspace.name
+        }
+    }
+
+    var actionTitle: String {
+        switch self {
         case .original(let repo): repo.name
         case .workspace(let workspace): workspace.name
         }
@@ -49,7 +56,7 @@ struct CheckoutRow: View {
                 Button { shell.navigation.openTab(checkout.path) } label: {
                     HStack(spacing: Theme.Spacing.sm) {
                         icon
-                        Text(checkout.title)
+                        Text(displayTitle)
                             .font(Theme.Typography.labelMono)
                             .foregroundStyle(isActive ? Theme.accentPrimary : Theme.textSecondary)
                             .lineLimit(1)
@@ -62,7 +69,7 @@ struct CheckoutRow: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(isMissing)
-                .accessibilityLabel("Open \(checkout.title)")
+                .accessibilityLabel("Open \(checkout.actionTitle)")
                 // Karar 55: top bar tab şeridi kalktı; sekme kapatma satırın
                 // kendisinde yaşar (yalnız açık bir sekmede, hover/aktifken).
                 if isOpenTab {
@@ -83,12 +90,12 @@ struct CheckoutRow: View {
     private var closeTabButton: some View {
         IconButton(
             systemName: "xmark",
-            label: "Close \(checkout.title) tab",
+            label: "Close \(checkout.actionTitle) tab",
             size: .micro,
             side: Theme.Spacing.xl,
             role: .destructive
         ) {
-            shell.requestCloseTab(checkout.path, repoName: checkout.title)
+            shell.requestCloseTab(checkout.path, repoName: checkout.actionTitle)
         }
     }
 
@@ -106,7 +113,7 @@ struct CheckoutRow: View {
     private var trailing: some View {
         switch checkout {
         case .original:
-            Badge(text: "primary", style: .neutral)
+            EmptyView()
         case .workspace(let workspace):
             Text(workspace.branch)
                 .font(Theme.Typography.captionMono)
@@ -217,6 +224,21 @@ struct CheckoutRow: View {
     }
 
     // MARK: - Türevler
+
+    private var displayTitle: String {
+        switch checkout {
+        case .original(let repo):
+            if let branch = shell.git.branches[repo.path]?.first(where: { $0.isCurrent }) {
+                return branch.name
+            }
+            if let branch = shell.plastic.workspaces[repo.path]?.branch {
+                return PlasticBranchName.display(branch)
+            }
+            return checkout.title
+        case .workspace:
+            return checkout.title
+        }
+    }
 
     private var isActive: Bool { shell.navigation.activeRepoPath == checkout.path }
 
