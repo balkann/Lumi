@@ -20,9 +20,16 @@ public enum UsageOutputParser {
             guard let colon = line.firstIndex(of: ":") else { continue }
             let label = String(line[..<colon]).trimmingCharacters(in: .whitespaces)
             let value = String(line[line.index(after: colon)...])
-            guard isLimitValue(value), let window = parseWindow(value, now: now) else { continue }
+            guard isLimitValue(value) else { continue }
+            // Pencere boyu etikete bağlıdır (karar 74) → önce sınıflandır.
+            let kind = classify(label)
+            guard let window = parseWindow(
+                value,
+                now: now,
+                duration: ClaudeUsageWindows.duration(for: kind)
+            ) else { continue }
 
-            let limit = UsageLimit(kind: classify(label), rawLabel: label, window: window)
+            let limit = UsageLimit(kind: kind, rawLabel: label, window: window)
             // Aynı limit iki kez gelirse yerinde güncellenir (sıra korunur).
             if let existing = limits.firstIndex(where: { $0.id == limit.id }) {
                 limits[existing] = limit
@@ -78,7 +85,7 @@ public enum UsageOutputParser {
     }
 
     /// Değer kısmından yüzde + reset çıkarır. İkisi de yoksa nil (pencere değil).
-    private static func parseWindow(_ value: String, now: Date) -> UsageWindow? {
+    private static func parseWindow(_ value: String, now: Date, duration: TimeInterval?) -> UsageWindow? {
         let percent = parsePercent(value)
         let reset = parseReset(value, now: now)
         if percent == nil, reset == nil { return nil }
@@ -86,7 +93,8 @@ public enum UsageOutputParser {
             percentUsed: percent,
             resetsAt: reset?.date,
             resetsRaw: reset?.raw ?? "",
-            timezone: reset?.timezone
+            timezone: reset?.timezone,
+            duration: duration
         )
     }
 

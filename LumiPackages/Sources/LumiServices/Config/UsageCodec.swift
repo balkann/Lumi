@@ -32,7 +32,9 @@ enum UsageIndicatorsCodec {
 
         return UsageIndicators(
             claude: JSONValue.bool(dict["claude"]) ?? defaults.claude,
-            codex: JSONValue.bool(dict["codex"]) ?? defaults.codex
+            codex: JSONValue.bool(dict["codex"]) ?? defaults.codex,
+            // Additive anahtar (karar 75): eski config'lerde yoktur → default.
+            deepseek: JSONValue.bool(dict["deepseek"]) ?? defaults.deepseek
         )
     }
 
@@ -40,6 +42,7 @@ enum UsageIndicatorsCodec {
         [
             "claude": indicators.claude,
             "codex": indicators.codex,
+            "deepseek": indicators.deepseek,
         ]
     }
 }

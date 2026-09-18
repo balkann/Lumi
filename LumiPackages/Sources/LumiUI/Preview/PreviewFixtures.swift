@@ -53,6 +53,7 @@ public extension ShellContext {
             ),
             usage: [:],
             deepSeek: DeepSeekStore(service: PreviewDeepSeekEnvironmentService(), toasts: shared.toasts),
+            deepSeekBalance: .preview,
             claudeAccounts: ClaudeAccountStore(
                 service: PreviewClaudeAccountService(), toasts: shared.toasts
             ),
@@ -336,12 +337,16 @@ private struct PreviewUsageService: UsageServicing {
         )
     }
 
+    /// 5 saatlik pencerenin 3 saati kalmış → tempo çizgisi %40'ta durur
+    /// (karar 74); yalnız Codex gerçekte süre bildirir, preview ikisinde de
+    /// çizgiyi gösterir.
     private func window(_ percent: Int) -> UsageWindow {
         UsageWindow(
             percentUsed: percent,
             resetsAt: Date().addingTimeInterval(3 * 60 * 60),
             resetsRaw: "in 3h",
-            timezone: nil
+            timezone: nil,
+            duration: 5 * 60 * 60
         )
     }
 }
@@ -440,6 +445,32 @@ public extension UsageStore {
         )
         Task { await store.loadInitialIfNeeded() }
         return store
+    }
+}
+
+public extension DeepSeekBalanceStore {
+    /// Dolu bir bakiyeyle kurulur (karar 75 preview'ları).
+    @MainActor
+    static var preview: DeepSeekBalanceStore {
+        let store = DeepSeekBalanceStore(service: PreviewDeepSeekBalanceService())
+        store.setEnabled(true)
+        Task { await store.loadInitialIfNeeded() }
+        return store
+    }
+}
+
+/// Ağsız sahte bakiye (karar 75).
+private struct PreviewDeepSeekBalanceService: DeepSeekBalanceServicing {
+    func fetch() async throws -> DeepSeekBalance {
+        DeepSeekBalance(
+            isAvailable: true,
+            accounts: [
+                DeepSeekBalance.Account(
+                    currency: "USD", total: 1.69, granted: 0, toppedUp: 1.69
+                )
+            ],
+            fetchedAt: Date()
+        )
     }
 }
 

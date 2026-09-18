@@ -9,12 +9,18 @@ import Foundation
 public struct UsageIndicators: Sendable, Equatable {
     public var claude: Bool
     public var codex: Bool
+    /// DeepSeek BAKİYE göstergesi (karar 75). Sağlayıcı listesinin dışındadır:
+    /// DeepSeek bir `AgentProvider` değil, Claude Code'un yönlendirildiği bir
+    /// endpoint'tir (karar 54) ve gösterdiği şey kullanım yüzdesi değil paradır.
+    /// Varsayılan kapalı; anahtar kurulu değilse zaten hiç çizilmez.
+    public var deepseek: Bool
 
-    public static let defaults = UsageIndicators(claude: true, codex: false)
+    public static let defaults = UsageIndicators(claude: true, codex: false, deepseek: false)
 
-    public init(claude: Bool, codex: Bool) {
+    public init(claude: Bool, codex: Bool, deepseek: Bool = false) {
         self.claude = claude
         self.codex = codex
+        self.deepseek = deepseek
     }
 
     public func isEnabled(_ provider: AgentProvider) -> Bool {
@@ -27,9 +33,14 @@ public struct UsageIndicators: Sendable, Equatable {
     /// Immutable setter — mevcut değeri değiştirmez, yeni kopya döner.
     public func setting(_ enabled: Bool, for provider: AgentProvider) -> UsageIndicators {
         switch provider {
-        case .claude: return UsageIndicators(claude: enabled, codex: codex)
-        case .codex: return UsageIndicators(claude: claude, codex: enabled)
+        case .claude: return UsageIndicators(claude: enabled, codex: codex, deepseek: deepseek)
+        case .codex: return UsageIndicators(claude: claude, codex: enabled, deepseek: deepseek)
         }
+    }
+
+    /// DeepSeek göstergesinin immutable setter'ı (sağlayıcı ekseninden ayrı).
+    public func settingDeepSeek(_ enabled: Bool) -> UsageIndicators {
+        UsageIndicators(claude: claude, codex: codex, deepseek: enabled)
     }
 
     /// Topbar'ın çizeceği göstergeler — `AgentProvider.allCases` sırasında.

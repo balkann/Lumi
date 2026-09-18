@@ -28,6 +28,31 @@ final class CodexUsageParserTests: XCTestCase {
         XCTAssertEqual(snapshot?.mode, .subscription)
     }
 
+    func testCarriesWindowDurationIntoTheWindow() {
+        // Süre yalnız sınıflandırmada kullanılıp atılmaz: tempo çizgisi
+        // (karar 74) pencere uzunluğunu bilmek zorunda.
+        let data = responseLine(
+            primary: #"{"usedPercent":12,"windowDurationMins":300,"resetsAt":1788536879}"#,
+            secondary: #"{"usedPercent":40,"windowDurationMins":10080,"resetsAt":1789123679}"#
+        )
+
+        let snapshot = CodexUsageParser.parse(responseLine: data)
+
+        XCTAssertEqual(snapshot?.fiveHour?.duration, 300 * 60)
+        XCTAssertEqual(snapshot?.weekAll?.duration, 10080 * 60)
+    }
+
+    func testOmitsDurationWhenServerDoesNotReportIt() {
+        let data = responseLine(
+            primary: #"{"usedPercent":12,"resetsAt":1788536879}"#,
+            secondary: #"{"usedPercent":40,"resetsAt":1789123679}"#
+        )
+
+        let snapshot = CodexUsageParser.parse(responseLine: data)
+
+        XCTAssertNil(snapshot?.fiveHour?.duration)
+    }
+
     func testClassifiesByDurationNotByOrder() {
         // Sunucu pencereleri ters sırada verirse süre kazanır.
         let data = responseLine(

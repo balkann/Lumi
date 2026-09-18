@@ -26,6 +26,8 @@ public protocol ServiceRegistry: AnyObject {
     var agentSessionTransfer: any AgentSessionTransferring { get }
     /// DeepSeek env dosyası kurulumu (karar 54).
     var deepSeek: any DeepSeekEnvironmentServicing { get }
+    /// DeepSeek bakiye okuması (karar 75).
+    var deepSeekBalance: any DeepSeekBalanceServicing { get }
     /// Claude hesap yönetimi (karar 56).
     var claudeAccounts: any ClaudeAccountServicing { get }
 

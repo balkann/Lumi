@@ -10,6 +10,11 @@ final class UsageFeatureAssembly: FeatureAssembly, ShellContributing {
     let bootstrapPhase = BootstrapPhase.config
 
     private(set) var usageStores: [AgentProvider: UsageStore] = [:]
+    /// DeepSeek bakiye göstergesi (karar 75). Sağlayıcı göstergeleriyle aynı
+    /// feature'a aittir — kapı, ilk yükleme, otomatik tazeleme ve toolbar
+    /// sırası burada tek yerde kurulur; `DeepSeekAssembly` yalnız env dosyasını
+    /// yönetir.
+    private(set) var deepSeekBalance: DeepSeekBalanceStore!
     private(set) var usageAutoRefresh: UsageAutoRefreshStore!
     private var services: (any ServiceRegistry)!
     /// Tek-atımlı ilk yükleme: her tetiklemede öncekinin yerini alır (dizide
@@ -30,8 +35,9 @@ final class UsageFeatureAssembly: FeatureAssembly, ShellContributing {
             )
         }
         usageStores = stores
+        deepSeekBalance = DeepSeekBalanceStore(service: services.deepSeekBalance)
         usageAutoRefresh = UsageAutoRefreshStore(
-            stores: AgentProvider.allCases.compactMap { stores[$0] },
+            stores: AgentProvider.allCases.compactMap { stores[$0] } + [deepSeekBalance],
             activity: services.activityMonitor
         )
     }
@@ -50,6 +56,14 @@ final class UsageFeatureAssembly: FeatureAssembly, ShellContributing {
                 makeView: { AnyView(UsageToolbarItem(provider: provider)) }
             ))
         }
+        // DeepSeek bakiyesi sağlayıcı göstergelerinin ARDINDA (karar 75).
+        registries.toolbar.register(ToolbarItemDescriptor(
+            id: .deepSeekBalance,
+            region: .trailing,
+            order: ShellToolbarItems.Order.deepSeekBalance,
+            isVisible: { $0.settings.current.usageIndicators.deepseek },
+            makeView: { AnyView(DeepSeekBalanceToolbarItem()) }
+        ))
     }
 
     func start() async {
@@ -86,6 +100,7 @@ final class UsageFeatureAssembly: FeatureAssembly, ShellContributing {
         for (provider, store) in usageStores {
             store.setEnabled(indicators.isEnabled(provider))
         }
+        deepSeekBalance.setEnabled(indicators.deepseek)
     }
 
     private func scheduleInitialLoad() {
@@ -96,6 +111,7 @@ final class UsageFeatureAssembly: FeatureAssembly, ShellContributing {
             for provider in AgentProvider.allCases {
                 await self?.usageStores[provider]?.loadInitialIfNeeded()
             }
+            await self?.deepSeekBalance.loadInitialIfNeeded()
         }
     }
 }

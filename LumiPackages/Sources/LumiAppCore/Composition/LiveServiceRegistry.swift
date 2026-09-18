@@ -20,6 +20,7 @@ final class LiveServiceRegistry: ServiceRegistry {
     let agentHistory: any AgentHistoryServicing
     let agentSessionTransfer: any AgentSessionTransferring
     let deepSeek: any DeepSeekEnvironmentServicing
+    let deepSeekBalance: any DeepSeekBalanceServicing
     let claudeAccounts: any ClaudeAccountServicing
     let git: any GitServicing
     let plastic: any PlasticServicing
@@ -71,7 +72,10 @@ final class LiveServiceRegistry: ServiceRegistry {
         commitMessages = ClaudeCommitMessageService()
         agentHistory = AgentHistoryService()
         agentSessionTransfer = AgentSessionTransferService()
-        deepSeek = DeepSeekEnvironmentService()
+        let deepSeekEnvironment = DeepSeekEnvironmentService()
+        deepSeek = deepSeekEnvironment
+        // Anahtar tek kaynaktan (env dosyası) okunur — servis onu saklamaz.
+        deepSeekBalance = DeepSeekBalanceService(environment: deepSeekEnvironment)
         claudeAccounts = ClaudeAccountService(config: configService, paths: paths)
         highlighter = HighlightrEngine(style: HighlightrStyle(
             plainTextColor: Theme.NS.textPrimary,

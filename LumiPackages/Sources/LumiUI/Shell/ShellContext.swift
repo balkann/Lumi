@@ -76,6 +76,8 @@ public final class ShellContext {
     public let usage: [AgentProvider: UsageStore]
     /// DeepSeek env kurulumu (karar 54) — Settings ▸ Agent + New DeepSeek.
     public let deepSeek: DeepSeekStore
+    /// DeepSeek bakiye göstergesi (karar 75).
+    public let deepSeekBalance: DeepSeekBalanceStore
     /// Claude hesapları (karar 56) — Settings ▸ Accounts + usage popover'ı.
     public let claudeAccounts: ClaudeAccountStore
     /// Terminal link eylemleri (karar 57) — tık noktasındaki popover.
@@ -109,6 +111,7 @@ public final class ShellContext {
         onboarding: OnboardingStore,
         usage: [AgentProvider: UsageStore],
         deepSeek: DeepSeekStore,
+        deepSeekBalance: DeepSeekBalanceStore,
         claudeAccounts: ClaudeAccountStore,
         terminalLinks: TerminalLinkActionStore,
         computerAwake: ComputerAwakeStore,
@@ -135,6 +138,7 @@ public final class ShellContext {
         self.onboarding = onboarding
         self.usage = usage
         self.deepSeek = deepSeek
+        self.deepSeekBalance = deepSeekBalance
         self.claudeAccounts = claudeAccounts
         self.terminalLinks = terminalLinks
         self.computerAwake = computerAwake

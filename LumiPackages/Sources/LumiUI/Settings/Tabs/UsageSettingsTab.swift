@@ -20,11 +20,13 @@ struct UsageSettingsTab: SettingsTabContent {
             InfoCard(
                 "A provider you turn off is not shown and is never queried — no requests "
                     + "are made for it, manual or automatic. Claude usage is read from your "
-                    + "Claude subscription; Codex usage is read from your signed-in Codex CLI."
+                    + "Claude subscription; Codex usage is read from your signed-in Codex CLI. "
+                    + "DeepSeek has no usage or limit endpoint — only the account balance is shown."
             )
             ForEach(AgentProvider.allCases, id: \.self) { provider in
                 indicatorToggle(for: provider)
             }
+            deepSeekToggle
             Rectangle().fill(Theme.border).frame(height: Theme.Stroke.hairline)
             LumiSectionTitle(
                 title: "Usage Auto-Refresh",
@@ -53,7 +55,29 @@ struct UsageSettingsTab: SettingsTabContent {
                     UsageStatusRow(kind: store.statusKind, provider: store.provider)
                 }
             }
+            if shell.settings.current.usageIndicators.deepseek {
+                UsageStatusRow(kind: shell.deepSeekBalance.statusKind)
+            }
         }
+    }
+
+    /// DeepSeek BAKİYE göstergesi (karar 75) — sağlayıcı listesinin dışında:
+    /// yüzde değil para gösterir ve anahtar kurulu değilse hiç çizilmez.
+    private var deepSeekToggle: some View {
+        LumiToggleRow(
+            title: "DeepSeek balance",
+            hint: shell.deepSeek.isInstalled
+                ? "Show your DeepSeek account balance in the top bar"
+                : "Needs an API key — set one in Settings ▸ Agent",
+            isOn: Binding(
+                get: { shell.settings.current.usageIndicators.deepseek },
+                set: { value in
+                    shell.settings.setUsageIndicators(
+                        shell.settings.current.usageIndicators.settingDeepSeek(value)
+                    )
+                }
+            )
+        )
     }
 
     private func indicatorToggle(for provider: AgentProvider) -> some View {

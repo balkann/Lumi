@@ -62,6 +62,7 @@ struct ShellComposition {
             onboarding: workspaceBoot.onboarding,
             usage: usage.usageStores,
             deepSeek: deepSeek.deepSeek,
+            deepSeekBalance: usage.deepSeekBalance,
             claudeAccounts: claudeAccounts.claudeAccounts,
             terminalLinks: terminalLinks.makeStore(shared: shared, repo: repo),
             computerAwake: statusBar.computerAwake,

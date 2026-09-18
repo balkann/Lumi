@@ -28,6 +28,9 @@ public enum ShellToolbarItems {
         /// Usage göstergeleri en solda: `AgentProvider.allCases` sırasında,
         /// sağlayıcı başına 10 adım.
         public static let usageStep = 10
+        /// DeepSeek bakiyesi (karar 75) — sağlayıcı göstergelerinden sonra,
+        /// focus mode'dan önce.
+        public static let deepSeekBalance = 50
         public static let focusMode = 100
         public static let panelToggleBottom = 105
         public static let panelToggleRight = 110

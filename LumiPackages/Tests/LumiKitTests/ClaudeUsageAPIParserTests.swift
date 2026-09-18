@@ -108,4 +108,41 @@ final class ClaudeUsageAPIParserTests: XCTestCase {
         XCTAssertNil(ClaudeUsageAPIParser.parse(Data(#"{"limits":[]}"#.utf8)))
         XCTAssertNil(ClaudeUsageAPIParser.parse(Data("not json".utf8)))
     }
+
+    // MARK: - Pencere boyu (karar 74)
+
+    func testAttachesWindowDurationsFromTheResponseVocabulary() {
+        // `kind` → `five_hour` / `seven_day`: boy kaynağın kendi adlandırması.
+        let data = Data("""
+        {"limits":[
+          {"kind":"session","percent":12,"resets_at":"2026-09-18T10:30:00Z"},
+          {"kind":"weekly_all","percent":43,"resets_at":"2026-09-20T12:00:00Z"},
+          {"kind":"weekly_scoped","percent":38,"resets_at":"2026-09-20T12:00:00Z",
+           "scope":{"model":{"display_name":"Opus"}}},
+          {"kind":"mystery_limit","percent":7,"resets_at":"2026-09-20T12:00:00Z"}
+        ]}
+        """.utf8)
+
+        let snapshot = ClaudeUsageAPIParser.parse(data)
+
+        XCTAssertEqual(snapshot?.fiveHour?.duration, ClaudeUsageWindows.session)
+        XCTAssertEqual(snapshot?.weekAll?.duration, ClaudeUsageWindows.weekly)
+        XCTAssertEqual(snapshot?.weekly(model: "Opus")?.duration, ClaudeUsageWindows.weekly)
+        XCTAssertNil(
+            snapshot?.window(ofKind: .other)?.duration,
+            "tanınmayan limitin penceresi VARSAYILMAZ"
+        )
+    }
+
+    func testFallbackFieldsCarryTheirOwnWindowDurations() {
+        let data = Data("""
+        {"five_hour":{"utilization":1.0,"resets_at":"2026-09-18T10:30:00Z"},
+         "seven_day":{"utilization":43.0,"resets_at":"2026-09-20T12:00:00Z"}}
+        """.utf8)
+
+        let snapshot = ClaudeUsageAPIParser.parse(data)
+
+        XCTAssertEqual(snapshot?.fiveHour?.duration, 5 * 60 * 60)
+        XCTAssertEqual(snapshot?.weekAll?.duration, 7 * 24 * 60 * 60)
+    }
 }

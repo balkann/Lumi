@@ -12,12 +12,37 @@ public struct UsageWindow: Sendable, Equatable {
     public let resetsRaw: String
     /// Parantez içi timezone (örn. `Europe/Istanbul`), varsa.
     public let timezone: String?
+    /// Pencerenin toplam uzunluğu (saniye) — yalnız sağlayıcı BİLDİRİYORSA.
+    ///
+    /// Codex `windowDurationMins` döner; Claude'un OAuth yanıtında karşılığı
+    /// yoktur → nil. Tahmin edilmez: süre uydurulursa `elapsedFraction` de
+    /// uydurma olur ve gösterge yanlış yönlendirir (karar 74).
+    public let duration: TimeInterval?
 
-    public init(percentUsed: Int?, resetsAt: Date?, resetsRaw: String, timezone: String?) {
+    public init(
+        percentUsed: Int?,
+        resetsAt: Date?,
+        resetsRaw: String,
+        timezone: String?,
+        duration: TimeInterval? = nil
+    ) {
         self.percentUsed = percentUsed
         self.resetsAt = resetsAt
         self.resetsRaw = resetsRaw
         self.timezone = timezone
+        self.duration = duration
+    }
+
+    /// Pencerenin GEÇEN kısmı (0–1); reset zamanı ve süre biliniyorsa.
+    ///
+    /// `percentUsed` ile kıyaslanmak için vardır (karar 74): yüzde bu değerin
+    /// üstündeyse limit saatten hızlı tüketiliyor, altındaysa pencerenin
+    /// sonuna pay kalıyor demektir. Pencere başlangıcı `resetsAt - duration`
+    /// olarak türetilir; saat kaymalarına karşı 0–1'e clamp'lenir.
+    public func elapsedFraction(now: Date = Date()) -> Double? {
+        guard let resetsAt, let duration, duration > 0 else { return nil }
+        let elapsed = duration - resetsAt.timeIntervalSince(now)
+        return min(1, max(0, elapsed / duration))
     }
 }
 

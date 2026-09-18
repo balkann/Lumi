@@ -109,6 +109,22 @@ final class ShellToolbarCompositionTests: XCTestCase {
         ], "sıra AgentProvider.allCases sırasıdır (eski enabledProviders)")
     }
 
+    /// DeepSeek bakiyesi (karar 75) sağlayıcı ekseninin dışındadır: kendi
+    /// config anahtarıyla açılır ve göstergelerin ARDINDA durur.
+    func testTrailingRegionIncludesDeepSeekBalanceOnlyWhenEnabled() {
+        XCTAssertFalse(
+            ids(.trailing).contains(.deepSeekBalance),
+            "varsayılan kapalı"
+        )
+
+        fixture.enableDeepSeekBalanceIndicator()
+
+        XCTAssertEqual(ids(.trailing).prefix(2).map(\.self), [
+            .usageIndicator(.claude),
+            .deepSeekBalance,
+        ], "bakiye, açık sağlayıcı göstergelerinin ardında durur")
+    }
+
     /// Gezinme grubu: logo → hamburger (karar 55: tab şeridi kaldırıldı,
     /// toggle ürün adının ardına alındı).
     func testLeadingRegionOrder() {
@@ -232,6 +248,7 @@ private struct ShellFixture {
             ),
             usage: [:],
             deepSeek: DeepSeekStore(service: FakeDeepSeekEnvironmentService(), toasts: toasts),
+            deepSeekBalance: DeepSeekBalanceStore(service: FakeDeepSeekBalanceService()),
             claudeAccounts: ClaudeAccountStore(service: FakeClaudeAccountService(), toasts: toasts),
             terminalLinks: TerminalLinkActionStore(
                 terminals: shared.terminals, repos: repos, workspaces: ProjectWorkspaceStore(service: FakeWorkspaceService(), config: config, repos: repos, toasts: toasts)
@@ -260,6 +277,12 @@ private struct ShellFixture {
     func enableUsageIndicator(_ provider: AgentProvider) {
         context.settings.setUsageIndicators(
             context.settings.current.usageIndicators.setting(true, for: provider)
+        )
+    }
+
+    func enableDeepSeekBalanceIndicator() {
+        context.settings.setUsageIndicators(
+            context.settings.current.usageIndicators.settingDeepSeek(true)
         )
     }
 }

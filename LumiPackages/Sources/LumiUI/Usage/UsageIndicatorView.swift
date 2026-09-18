@@ -213,14 +213,20 @@ private struct UsagePopover: View {
 }
 
 /// Tek pencere satırı: başlık + yüzde + progress bar + reset zamanı.
-/// (internal — `fillFraction` clamp'i birim testten görünür olsun diye.)
+/// (internal — `fillFraction` ve `paceFraction` clamp'i birim testten
+/// görünür olsun diye.)
 struct UsageWindowRow: View {
     let title: String
     let window: UsageWindow
+    /// Yalnız test için enjekte edilir; pencerenin ne kadarının geçtiğini
+    /// hesaplarken kullanılır (karar 74).
+    var now: Date = Date()
 
     /// Progress bar yüksekliği; yarıçap `Radius.sm` (4) yüksekliğin yarısına
     /// (3) kırpılır, yani v1'deki 3pt köşeyle birebir aynı çizilir.
     private static var barHeight: CGFloat { Theme.scaled(6) }
+    /// Tempo çizgisinin kalınlığı — hairline (1) barın üstünde kayboluyordu.
+    private static var paceMarkerWidth: CGFloat { Theme.scaled(2) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
@@ -251,15 +257,54 @@ struct UsageWindowRow: View {
                 RoundedRectangle(cornerRadius: Theme.Radius.sm)
                     .fill(percentColor)
                     .frame(width: geo.size.width * fillFraction)
+                if let pace = paceFraction {
+                    // Dolgunun ÜSTÜNDE durur: çizginin solunda kalan dolgu
+                    // "planın önündeyiz", sağına taşan dolgu "limiti saatten
+                    // hızlı tüketiyoruz" demektir (karar 74).
+                    RoundedRectangle(cornerRadius: Theme.Radius.sm)
+                        .fill(Theme.textPrimary)
+                        .frame(width: Self.paceMarkerWidth)
+                        .offset(x: Self.markerOffset(for: pace, width: geo.size.width))
+                }
             }
         }
         .frame(height: Self.barHeight)
+        .help(paceHelp ?? "")
         .accessibilityHidden(true)
     }
 
     var fillFraction: CGFloat {
         guard let percent = window.percentUsed else { return 0 }
         return CGFloat(min(100, max(0, percent))) / 100
+    }
+
+    /// Pencerenin geçen kısmı (0–1) — süresi bildirilmeyen sağlayıcıda (Claude
+    /// OAuth yanıtı) nil, yani çizgi hiç çizilmez.
+    var paceFraction: CGFloat? {
+        window.elapsedFraction(now: now).map { CGFloat($0) }
+    }
+
+    /// Çizgi barın içinde kalır: uçlarda yarısı dışarı taşarsa kullanıcı
+    /// "%0" ile "%2"yi ayırt edemez.
+    static func markerOffset(for fraction: CGFloat, width: CGFloat) -> CGFloat {
+        let centred = width * fraction - paceMarkerWidth / 2
+        return min(max(0, centred), max(0, width - paceMarkerWidth))
+    }
+
+    /// Çizginin ne anlama geldiğini söyleyen tooltip; yüzde ile tempo farkı
+    /// puan cinsindendir (ikisi de 0–100 ölçeğinde).
+    var paceHelp: String? {
+        guard let pace = paceFraction else { return nil }
+        let elapsed = Int((pace * 100).rounded())
+        guard let percent = window.percentUsed else { return "Window \(elapsed)% elapsed" }
+        let delta = percent - elapsed
+        let verdict: String
+        switch delta {
+        case 0: verdict = "on pace"
+        case ..<0: verdict = "\(-delta) pt under pace"
+        default: verdict = "\(delta) pt over pace"
+        }
+        return "Window \(elapsed)% elapsed · \(verdict)"
     }
 
     private var percentText: String {

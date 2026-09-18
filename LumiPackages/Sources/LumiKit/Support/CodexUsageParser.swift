@@ -93,14 +93,19 @@ public enum CodexUsageParser {
             return nil
         }
         let date = resetDate(entry["resetsAt"])
+        // Süre hem sınıflandırmada hem pencerede kullanılır: sınıflandırma
+        // "hangi limit bu?" sorusunu, pencere "ne kadarı geçti?" sorusunu
+        // yanıtlar (karar 74).
+        let durationMinutes = JSONValue.roundedInt(entry["windowDurationMins"], acceptingStrings: true)
         return RawWindow(
             window: UsageWindow(
                 percentUsed: min(100, max(0, percent)),
                 resetsAt: date,
                 resetsRaw: date.map(UsageResetFormatter.string(from:)) ?? "",
-                timezone: nil
+                timezone: nil,
+                duration: durationMinutes.map { TimeInterval($0) * 60 }
             ),
-            durationMinutes: JSONValue.roundedInt(entry["windowDurationMins"], acceptingStrings: true)
+            durationMinutes: durationMinutes
         )
     }
 

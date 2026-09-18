@@ -74,7 +74,8 @@ final class ConfigGoldenBytesTests: XCTestCase {
             config.autoMinimizeOnSend = true
             config.sessionTrigger = SessionTrigger(enabled: true, hour: 22, minute: 45, prompt: "go")
             config.usageAutoRefresh = UsageAutoRefresh(enabled: true, intervalMinutes: 5)
-            config.usageIndicators = UsageIndicators(claude: false, codex: true)
+            // `deepseek` additive anahtar (karar 75) — yazılan biçim kilitlenir.
+            config.usageIndicators = UsageIndicators(claude: false, codex: true, deepseek: true)
             config.computerAwakeMode = .auto
             config.agentHooksEnabled = false
             config.terminalLinkActionsEnabled = false
@@ -169,7 +170,8 @@ final class ConfigGoldenBytesTests: XCTestCase {
       },
       "usageIndicators" : {
         "claude" : false,
-        "codex" : true
+        "codex" : true,
+        "deepseek" : true
       },
       "workspaces" : [
 

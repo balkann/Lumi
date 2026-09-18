@@ -693,3 +693,43 @@ Karar: kapı kaldırıldı. Kenar şeridinin tek koşulu `LayoutStore.canAutoRev
 
 - **Sınırlar.** `ShellComposition.registerPanelRevealOverlay`'in `isPresented` predikatı. `PanelRevealOverlay`, `LayoutStore` ve panel öğelerinin `isAvailable` kuralları değişmedi. Test: `ShellToolbarCompositionTests.testPanelRevealOverlayIsPresentedWithoutAnActiveRepo`.
 
+
+### 74. Kullanım barında tempo çizgisi (2026-09-18)
+
+Kullanıcı isteği: Codex kullanım barında "pencerenin yüzde kaçındayız" çizgisi — limitte önde mi gidiyoruz, geride mi kaldık.
+
+Kullanım göstergesi şimdiye dek tek bir sayı gösteriyordu: harcanan yüzde. Bu sayı tek başına anlamsızdır — %60, pencerenin başındaysa alarm, sonundaysa rahatlıktır. Eksik olan ikinci eksen zamandır.
+
+Karar: `UsageWindowRow`'un dolgu barına, pencerenin GEÇEN kısmını işaretleyen dikey bir çizgi çizilir. Dolgu çizginin solunda kalıyorsa saatten yavaş tüketiliyor, çizgiyi aşmışsa limit pencere bitmeden dolacak demektir. Tooltip farkı puan olarak yazar (`Window 40% elapsed · 28 pt under pace`).
+
+Pencere başlangıcı `resetsAt - duration` olarak türetilir, bunun için pencerenin UZUNLUĞU gerekir:
+
+- **Codex** `windowDurationMins` döner. Değer zaten okunuyordu ama yalnız sınıflandırmada (hangi pencere 5 saatlik, hangisi haftalık) kullanılıp atılıyordu; artık `UsageWindow.duration` alanında (saniye) taşınır.
+- **Claude**'un OAuth yanıtında ayrı bir süre alanı yoktur — ama pencere boyu yine de KAYNAĞIN KENDİ SÖZLÜĞÜNDEDİR. Canlı yanıt (2026-09-18, `api/oauth/usage`) üst düzeyde `five_hour` ve `seven_day` alanlarını, `limits` dizisinde de bu ikisine eşlenen `session` / `weekly_all` / `weekly_scoped` türlerini döndürür. Süre bu adlandırmadan okunur (`ClaudeUsageWindows`), tahmin edilmez; tanınmayan bir limit türü (`.other`) için `nil` kalır ve o satırda çizgi çizilmez. Aynı eşleme CLI yedeğinde de (`UsageOutputParser`) geçerlidir.
+
+Yani çizgi bir veri kapısıdır, sağlayıcı koşulu değil: `duration` + `resetsAt` varsa çizilir. `elapsedFraction` 0–1'e clamp'lenir (bayat snapshot'ta reset geçmişte kalabilir, saat kayması pencereden uzun bir kalan süre üretebilir).
+
+Sabitlerin riski bilinçlidir: Anthropic pencere boyunu değiştirirse `ClaudeUsageWindows`'taki iki sabit güncellenir. Codex'te böyle bir risk yok çünkü boy her yanıtta gelir.
+
+- **Sınırlar.** `UsageWindow.duration` + `elapsedFraction(now:)`, `CodexUsageParser.window(from:)`, `ClaudeUsageWindows` + `ClaudeUsageAPIParser` + `UsageOutputParser`, `UsageWindowRow` (`paceFraction`, `markerOffset`, `paceHelp`). Topbar'daki kompakt gösterge (ikon + yüzde), `UsageStore`, yenileme aralıkları, cache ve `config.json` biçimi değişmedi.
+
+### 75. DeepSeek bakiye göstergesi (2026-09-18)
+
+Kullanıcı isteği: DeepSeek'ten de gösterebileceğimiz verileri (bakiye, harcama) topbar'a taşımak.
+
+**API'de ne var:** DeepSeek'in genel API'si üç uçtan ibarettir — `chat/completions`, `models` ve `user/balance`. `GET /user/balance` `is_available` + para birimi başına `total_balance` / `granted_balance` / `topped_up_balance` döndürür (tutarlar METİN). Harcama geçmişi, token sayacı, limit ya da reset penceresi döndüren bir uç **yoktur** (doküman + canlı yanıtla doğrulandı, 2026-09-18).
+
+Karar: topbar'a üçüncü bir gösterge eklenir — glyph + toplam bakiye (`$1.69`), tıklamada `Available / Total / Topped up / Granted` satırlarını ve manuel yenilemeyi taşıyan popover. Kullanım göstergesinden AYRI bir bileşendir: pencere ve yüzde olmadığı için dolgu barı da tempo çizgisi de (karar 74) yoktur.
+
+Harcama gösterilmez. Bakiye farkından türetmek mümkündü (her okumayı kaydedip düşüşleri toplamak) ama yeni bir kalıcı dosya biçimi + budama + "para yükleme artışını atla" mantığı demekti; kullanıcı kararıyla kapsam dışı bırakıldı.
+
+Yerleşim ve sınırlar:
+
+- **DeepSeek bir `AgentProvider` DEĞİLDİR** ve olmayacaktır: Claude Code'u kendi endpoint'ine yönlendirerek koşar (karar 54), terminal kartında kimliği Claude'dur. Bu yüzden `UsageIndicators`'a sağlayıcı ekseninin DIŞINDA additive bir `deepseek` anahtarı eklendi (varsayılan kapalı) ve gösterge kendi `ToolbarItemID.deepSeekBalance` descriptor'ıyla kaydedilir.
+- **İki kapı:** config anahtarı (descriptor'ın `isVisible`'ı) ve env dosyasında anahtarın kurulu olması (`DeepSeekBalanceToolbarItem`). Anahtar yokken gösterge çizilmez — aksi hâlde her yenilemede hata üreten boş bir buton kalırdı.
+- **Anahtar tek kaynaktan:** `~/.claude/deepseek.env` (karar 54). Servis anahtarı saklamaz, loglamaz; her çağrıda env'den okur, böylece Settings'te değişen anahtar bir sonraki yenilemede geçerlidir.
+- **Yeniden deneme yok:** `ClaudeUsageService`'teki retry, CLI yedeğine düşüp abonelik kotasından yememek içindi; burada yedek yol yok, hata görünür olur (karar 5) ve son bakiye korunur.
+- Tutarlar `Decimal`'dir (`Double` parayı bozar), para birimi simgesi sunum katmanında eşlenir; tanınmayan kod'un kendisi yazılır (`SGD 4.20`).
+- Otomatik tazeleme döngüsü artık somut `UsageStore` listesi değil `AutoRefreshing` yüzü üzerinden çalışır; bakiye store'u aynı aralıkta tazelenir.
+
+- **Sınırlar.** `DeepSeekBalance` + `DeepSeekBalanceParser` + `DeepSeekBalanceServicing`, `DeepSeekBalanceService`, `DeepSeekBalanceStore`, `AutoRefreshing`, `UsageIndicators.deepseek` (+ codec), `UsageFeatureAssembly` kaydı, `DeepSeekBalanceIndicatorView`/`DeepSeekBalanceToolbarItem`, Settings ▸ Usage anahtarı. `DeepSeekAssembly` (env dosyası), `AgentProvider`, terminal kartı kimliği ve kullanım göstergeleri değişmedi.
