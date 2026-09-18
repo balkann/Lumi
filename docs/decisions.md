@@ -802,3 +802,11 @@ Terminal kartı header'ındaki soyut yeşil/sarı `StatusDot`, Projects panelind
 `awaitingDecisionIDs` terminal kartına yalnız sarı vurgu için değil, glif eşlemesi için de taşınır. Grid ve maximize yolları aynı veriyi alır. Başlık rengi Projects paneliyle ortak `TerminalAttention.isNeeded` kuralındadır: görülmemiş bitiş ve seçili olmayan karar isteği sarıdır; görülmüş bekleme yeniden bağırmaz. Maximize kartı accent çerçevesini korur ama kural gerektiriyorsa başlık sarı olabilir.
 
 - **Sınırlar.** `TerminalCardHeader`, `TerminalCardView`, `TerminalGridView`, `MaximizedTerminalView` ve `TerminalsRouteView`. Kompakt minimize/switcher `TerminalChipStrip` noktaları değiştirilmedi; `Theme.statusColor` bu yüzey için kalır. Persistence, hook durum makinesi, bildirim ve ajan sıralaması değişmedi.
+
+### 82. Projects ajan seçimi mevcut maximize bağlamını korur (2026-09-18)
+
+Projects panelindeki ajan satırı artık checkout'ta aktif bir maximize/solo görünümü varsa yalnız terminali odaklamakla kalmaz; seçilen terminali aynı maximize yüzeyinin yeni hedefi yapar. Böylece alt switcher'dan terminal seçmekle Projects panelinden terminal seçmek aynı sonucu verir. Seçilen terminal minimize edilmişse önce restore edilir, ardından maximize hedefi değiştirilir.
+
+Checkout grid modundaysa Projects seçimi grid'i kendiliğinden maximize etmez; önceki restore + focus davranışı korunur. Maximize durumu repo başına tutulduğu için başka bir checkout'taki solo görünüm seçilen checkout'u etkilemez.
+
+- **Sınırlar.** Cross-store koordinasyonu `ShellContext.focusAgent` içindedir; `ProjectsPanel` ve `AgentRow` yalnız intent göndermeye devam eder. `LayoutStore` persistence'ı, terminal chip switcher'ı ve minimize davranışı değişmedi. Testler: `ShellContextTests.testFocusAgentSwitchesExistingMaximizedTerminal`, `testFocusAgentRestoresMinimizedTerminalIntoExistingMaximizedView`, `testFocusAgentDoesNotEnterMaximizeWhenCheckoutIsInGridMode`.

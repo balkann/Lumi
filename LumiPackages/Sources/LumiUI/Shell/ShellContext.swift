@@ -250,10 +250,16 @@ public final class ShellContext {
     // MARK: - Projects paneli ajan satırları ve silme (karar 51)
 
     /// Sidebar ajan satırı: terminalin sekmesi açık değilse açılır, sonra
-    /// minimize edilmişse geri getirilip odaklanır.
+    /// minimize edilmişse geri getirilip odaklanır. Checkout zaten maximize
+    /// modundaysa seçim aynı solo yüzeyde terminal değiştirir; Projects ve
+    /// maximize altındaki switcher böylece aynı davranışı taşır.
     public func focusAgent(_ meta: TerminalMeta) {
+        let shouldSwitchMaximizedTerminal = layout.maximizedTerminal(in: meta.repoPath) != nil
         if navigation.activeRepoPath != meta.repoPath { navigation.openTab(meta.repoPath) }
         terminals.restoreAndFocus(meta.id)
+        if shouldSwitchMaximizedTerminal {
+            layout.maximize(meta.id, in: meta.repoPath)
+        }
     }
 
     /// Silme onayı: canlı oturum sayısı dialogda gösterilir; store'un önceki
