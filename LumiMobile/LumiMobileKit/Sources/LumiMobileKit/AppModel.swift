@@ -66,6 +66,14 @@ public final class AppModel {
 
     /// sessionId → chat mesajları (mode=chat aboneliği; orca native-chat).
     private var chatBySession: [String: [ChatMessage]] = [:]
+    /// Optimistic kullanıcı mesajı yankıları (orca pending echo — client-side, anında).
+    /// Transcript yankılayınca sayım-tabanlı dedup ile emekliye ayrılır; yankılamazsa kalır.
+    private var pendingBySession: [String: [ChatPending]] = [:]
+    private var pendingCounter = 0
+    /// Session başına streaming geçidi (orca gate + hold uyarlaması).
+    private var streamingGates: [String: ChatStreamGate] = [:]
+    /// Geçitten geçmiş görünür streaming metni (view okur; gerçek mesaj düşene kadar TUTULUR).
+    public private(set) var gatedStreaming: [String: String] = [:]
     /// sessionId → son canlı turn status (Faz 2; chat_status frame'inden).
     public private(set) var turnStatus: [String: ChatTurnStatus] = [:]
     /// Faz 3: session başına aktif (pending) etkileşimli prompt'lar.
@@ -139,6 +147,9 @@ public final class AppModel {
         terminalSinks = [:]
         replayBuffers = [:]
         chatBySession = [:]
+        pendingBySession = [:]
+        streamingGates = [:]
+        gatedStreaming = [:]
         turnStatus = [:]
         prompts = [:]
         models = [:]
@@ -194,6 +205,9 @@ public final class AppModel {
         case .chat(let sessionId, let messages):
             macOnline = true
             chatBySession[sessionId] = messages
+            pendingBySession[sessionId] = chatRetireLandedPending(
+                messages: messages, current: pendingBySession[sessionId] ?? [])
+            recomputeStreaming(sessionId, incoming: nil)
 
         case .chatAppend(let sessionId, let messages):
             macOnline = true
@@ -206,10 +220,14 @@ public final class AppModel {
                 }
             }
             chatBySession[sessionId] = current
+            pendingBySession[sessionId] = chatRetireLandedPending(
+                messages: current, current: pendingBySession[sessionId] ?? [])
+            recomputeStreaming(sessionId, incoming: nil)
 
         case .chatStatus(let sessionId, let status):
             macOnline = true
             turnStatus[sessionId] = status
+            recomputeStreaming(sessionId, incoming: status.streamingText)
 
         case .prompt(let sessionId, let p):
             macOnline = true
@@ -264,6 +282,9 @@ public final class AppModel {
             terminalSinks[active] = nil
             replayBuffers[active] = nil
             chatBySession[active] = nil
+            pendingBySession[active] = nil
+            streamingGates[active] = nil
+            gatedStreaming[active] = nil
             turnStatus[active] = nil
             prompts[active] = nil
         }
@@ -359,6 +380,9 @@ public final class AppModel {
         // görünsün (kanıt: "sohbet yükleniyor + mesaj gitmiyor" — Mac'e chat_send/input 0 ulaştı).
         DiagLog.shared.log("model", "submitText sid=\(sessionId.prefix(8)) chat=\(isChat) len=\(text.count)")
         if isChat {
+            // Optimistic echo: kullanıcının mesajı ANINDA listeye düşer (orca; client-side,
+            // sunucu onayı/latency beklenmez). Transcript yankılarsa dedup ile emekliye ayrılır.
+            appendChatPending(sessionId, text: text)
             Task {
                 let ok = await client.send(frame: PhoneProtocol.chatSendFrame(sessionId: sessionId, text: text))
                 DiagLog.shared.log("model", "out chat_send sid=\(sessionId.prefix(8)) ok=\(ok)")
@@ -419,6 +443,42 @@ public final class AppModel {
 
     public func chatMessages(_ sessionId: String) -> [ChatMessage] {
         chatBySession[sessionId] ?? []
+    }
+
+    /// View'ın çizeceği birleşik mesaj listesi: optimistic pending + journal mesajları
+    /// + gated streaming balonu (orca buildTransientData). Çağıran `foldChatMessages`
+    /// ile turn'lere katlar.
+    public func chatRenderMessages(_ sessionId: String) -> [ChatMessage] {
+        chatAssembleRenderMessages(
+            messages: chatBySession[sessionId] ?? [],
+            pending: pendingBySession[sessionId] ?? [],
+            streaming: gatedStreaming[sessionId])
+    }
+
+    /// Optimistic kullanıcı yankısı ekler (orca pending-echo append).
+    private func appendChatPending(_ sessionId: String, text: String) {
+        let messages = chatBySession[sessionId] ?? []
+        let normalized = normalizeChatUserText(text)
+        let baselineOccurrences = chatCountUserTextOccurrences(messages, normalized)
+        let baselineTailId = messages.last?.id
+        pendingCounter += 1
+        pendingBySession[sessionId] = chatPendingAppend(
+            current: pendingBySession[sessionId] ?? [],
+            id: "pending-\(pendingCounter)", text: text,
+            baselineOccurrences: baselineOccurrences,
+            baselineTailMessageId: baselineTailId)
+    }
+
+    /// Streaming geçidini bir tık ilerletir; sonucu `gatedStreaming`'e yazar. Hem
+    /// chat_status (incoming=metin) hem mesaj değişiminde (incoming=nil) çağrılır —
+    /// gerçek mesaj düşünce catch-up ile balon gizlenir, düşmezse metin tutulur.
+    private func recomputeStreaming(_ sessionId: String, incoming: String?) {
+        let folded = foldChatMessages(chatBySession[sessionId] ?? []).map { $0.message }
+        let (newGate, streaming) = chatDeriveStreaming(
+            gate: streamingGates[sessionId] ?? ChatStreamGate(),
+            folded: folded, incoming: incoming)
+        streamingGates[sessionId] = newGate
+        gatedStreaming[sessionId] = streaming
     }
 
     // MARK: Türetilmiş durum

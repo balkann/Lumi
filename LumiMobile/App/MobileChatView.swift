@@ -13,7 +13,11 @@ struct MobileChatView: View {
     @State private var draft = ""
     @FocusState private var composerFocused: Bool
 
-    private var turns: [FoldedTurn] { foldChatMessages(model.chatMessages(sessionId)) }
+    // Birleşik render listesi (orca): optimistic pending + journal mesajları +
+    // gated streaming balonu → tek liste, sonra turn'lere katlanır. Streaming
+    // artık ayrı bir blok DEĞİL; listenin içinde sentetik assistant turn'ü —
+    // gerçek mesaj düşene kadar kalır (turn bitince silinmez).
+    private var turns: [FoldedTurn] { foldChatMessages(model.chatRenderMessages(sessionId)) }
 
     var body: some View {
         GeometryReader { geo in
@@ -33,21 +37,16 @@ struct MobileChatView: View {
                             ForEach(turns) { turn in
                                 MobileChatMessageView(turn: turn).id(turn.id)
                             }
-                            // Canlı streaming prose: turn bitmeden transcript'e düşmemiş
-                            // assistant metni balonsuz olarak mesaj listesinin sonunda gösterilir.
-                            if let streaming = model.chatStreamingText(sessionId) {
-                                Text(streaming)
-                                    .textSelection(.enabled)
-                                    .foregroundStyle(.primary)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(.horizontal, 12)
-                            }
                             Color.clear.frame(height: 1).id("bottom")
                         }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
                     }
                     .onChange(of: turns.count) { _, _ in
+                        withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
+                    }
+                    // Streaming metni büyüdükçe de dibe kaydır (token akışı sırasında).
+                    .onChange(of: model.gatedStreaming[sessionId]) { _, _ in
                         withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
                     }
                 }
