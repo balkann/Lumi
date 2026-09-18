@@ -43,7 +43,9 @@ final class CodexAccountServiceTests: XCTestCase {
         let managedHome = try XCTUnwrap(invocation.environment["CODEX_HOME"])
         XCTAssertTrue(managedHome.hasSuffix("/codex-accounts/\(account.id)/home"))
         XCTAssertNotEqual(managedHome, systemHome.path)
-        XCTAssertEqual(try String(contentsOfFile: managedHome + "/config.toml"), "model = \"gpt-5\"\n")
+        XCTAssertTrue(
+            try String(contentsOfFile: managedHome + "/config.toml").hasPrefix("model = \"gpt-5\"\n")
+        )
         let selectedHome = await service.selectedHome()
         XCTAssertEqual(selectedHome, managedHome)
     }
@@ -112,6 +114,80 @@ final class CodexAccountServiceTests: XCTestCase {
         }
     }
 
+    func testAddMirrorsHooksAndRekeysTrustForManagedHome() async throws {
+        let systemHome = root.appendingPathComponent("system-codex")
+        try FileManager.default.createDirectory(at: systemHome, withIntermediateDirectories: true)
+        try "model = \"gpt-5\"\n".write(
+            to: systemHome.appendingPathComponent("config.toml"), atomically: true, encoding: .utf8
+        )
+        try Data("{\"hooks\":{}}".utf8).write(to: systemHome.appendingPathComponent("hooks.json"))
+        await scriptLogin(email: "hooks@example.com", workspace: nil)
+
+        let service = makeService(systemHome: systemHome)
+        _ = try await service.addAccount()
+        let managedHome = URL(fileURLWithPath: await service.selectedHome())
+
+        let hooksData = try Data(contentsOf: managedHome.appendingPathComponent("hooks.json"))
+        let hooksRoot = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: hooksData) as? [String: Any]
+        )
+        let hooks = try XCTUnwrap(hooksRoot["hooks"] as? [String: Any])
+        XCTAssertNotNil(hooks["SessionStart"])
+        let configText = try String(
+            contentsOf: managedHome.appendingPathComponent("config.toml"), encoding: .utf8
+        )
+        XCTAssertTrue(configText.contains(managedHome.appendingPathComponent("hooks.json").path))
+    }
+
+    func testManagedHooksFollowEnabledLifecycle() async throws {
+        let systemHome = root.appendingPathComponent("system-codex")
+        try FileManager.default.createDirectory(at: systemHome, withIntermediateDirectories: true)
+        try "model = \"gpt-5\"\n".write(
+            to: systemHome.appendingPathComponent("config.toml"), atomically: true, encoding: .utf8
+        )
+        var disabled = AppConfig.defaults
+        disabled.agentHooksEnabled = false
+        await config.seed(disabled)
+        await scriptLogin(email: "toggle@example.com", workspace: nil)
+        let service = makeService(systemHome: systemHome)
+
+        _ = try await service.addAccount()
+        let managedHome = URL(fileURLWithPath: await service.selectedHome())
+        var hooks = try hooksObject(at: managedHome)
+        XCTAssertNil((hooks["hooks"] as? [String: Any])?["SessionStart"])
+
+        await service.syncManagedHooks(enabled: true)
+        hooks = try hooksObject(at: managedHome)
+        XCTAssertNotNil((hooks["hooks"] as? [String: Any])?["SessionStart"])
+        var configText = try String(
+            contentsOf: managedHome.appendingPathComponent("config.toml"), encoding: .utf8
+        )
+        XCTAssertTrue(configText.contains(managedHome.appendingPathComponent("hooks.json").path))
+
+        await service.syncManagedHooks(enabled: false)
+        hooks = try hooksObject(at: managedHome)
+        XCTAssertNil((hooks["hooks"] as? [String: Any])?["SessionStart"])
+        configText = try String(
+            contentsOf: managedHome.appendingPathComponent("config.toml"), encoding: .utf8
+        )
+        XCTAssertFalse(configText.contains(managedHome.appendingPathComponent("hooks.json").path))
+    }
+
+    func testResumeHomeAcceptsKnownHomesAndRejectsArbitraryPath() async throws {
+        let systemHome = root.appendingPathComponent("system-codex")
+        await scriptLogin(email: "managed@example.com", workspace: nil)
+        let service = makeService(systemHome: systemHome)
+        _ = try await service.addAccount()
+        let managedHome = await service.selectedHome()
+
+        let resolvedManaged = await service.resolvedResumeHome(managedHome)
+        let resolvedSystem = await service.resolvedResumeHome(systemHome.path)
+        let rejected = await service.resolvedResumeHome(root.appendingPathComponent("outside").path)
+        XCTAssertEqual(resolvedManaged, managedHome)
+        XCTAssertEqual(resolvedSystem, systemHome.path)
+        XCTAssertNil(rejected)
+    }
+
     private func makeService(systemHome: URL) -> CodexAccountService {
         CodexAccountService(
             config: config,
@@ -120,6 +196,11 @@ final class CodexAccountServiceTests: XCTestCase {
             locator: locator,
             environment: ["CODEX_HOME": systemHome.path]
         )
+    }
+
+    private func hooksObject(at home: URL) throws -> [String: Any] {
+        let data = try Data(contentsOf: home.appendingPathComponent("hooks.json"))
+        return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
     }
 
     private func scriptLogin(email: String, workspace: String?) async {

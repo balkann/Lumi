@@ -54,6 +54,8 @@ final class TerminalSession {
         name: String,
         task: String?,
         claudeSessionID: String? = nil,
+        codexSessionID: String? = nil,
+        codexHome: String? = nil,
         provider: AgentProvider? = nil,
         environment: [String: String] = [:],
         hookEndpoint: AgentHookEndpoint? = nil,
@@ -71,6 +73,8 @@ final class TerminalSession {
             createdAt: Date(),
             task: task,
             claudeSessionID: claudeSessionID,
+            codexSessionID: codexSessionID,
+            codexHome: codexHome,
             provider: provider
         )
 
@@ -241,9 +245,17 @@ final class TerminalSession {
     /// aynı serial io queue'da uygulanır — OSC ve hook birbirini yarıştırmaz.
     func applyHookEvent(_ event: AgentHookEvent) {
         guard !isTerminated else { return }
-        ioQueue.async { [pipeline] in
+        ioQueue.async { [weak self, pipeline] in
             pipeline.processHookEvent(event)
+            guard event.provider == .codex, event.isLead,
+                  let sessionID = event.sessionID else { return }
+            hopToMain { self?.applyCodexSessionID(sessionID) }
         }
+    }
+
+    private func applyCodexSessionID(_ sessionID: String) {
+        guard !isTerminated, meta.codexSessionID != sessionID else { return }
+        meta.codexSessionID = sessionID
     }
 
     /// Karar 57: düz tıkla açılan link eylemleri (Settings ▸ Terminal).

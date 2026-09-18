@@ -58,8 +58,8 @@ struct AppComposition {
             services: registry,
             shared: shared,
             assemblies: [
-                agentHooks, terminal, notifications, sessionSchedule, usage, repo, workspaceBoot,
-                statusBar, deepSeek, tasks, claudeAccounts, codexAccounts, terminalLinks,
+                agentHooks, terminal, notifications, sessionSchedule, usage, repo, codexAccounts,
+                workspaceBoot, statusBar, deepSeek, tasks, claudeAccounts, terminalLinks,
             ]
         )
         let shell = ShellComposition.make(

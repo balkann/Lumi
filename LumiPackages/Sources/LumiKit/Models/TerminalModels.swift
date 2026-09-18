@@ -72,6 +72,12 @@ public struct TerminalMeta: Sendable, Identifiable, Equatable {
     /// oturum kimliği — quit'te persist edilip açılışta resume için kullanılır.
     /// nil = bu terminal Lumi'nin izlediği bir claude oturumu taşımıyor.
     public let claudeSessionID: String?
+    /// Codex thread learned from the provider hook. Fresh Codex sessions do
+    /// not expose this at launch time, so it becomes available asynchronously.
+    public var codexSessionID: String?
+    /// CODEX_HOME used to launch this thread. Resume must stay on this home so
+    /// account switching cannot point the thread lookup at another account.
+    public let codexHome: String?
     /// Terminalde şu an hangi ajan koşuyor (karar 45): launch komutu, OSC/çıktı
     /// çıkarımı ve hook olaylarından türetilir; ajan çıkınca (`SessionEnd`)
     /// `nil`e döner = düz shell. Kart header'ındaki kimlik ikonunun kaynağı.
@@ -89,6 +95,8 @@ public struct TerminalMeta: Sendable, Identifiable, Equatable {
         oscTitle: String? = nil,
         status: TerminalStatus = .idle,
         claudeSessionID: String? = nil,
+        codexSessionID: String? = nil,
+        codexHome: String? = nil,
         provider: AgentProvider? = nil,
         statusChangedAt: Date? = nil
     ) {
@@ -100,6 +108,8 @@ public struct TerminalMeta: Sendable, Identifiable, Equatable {
         self.oscTitle = oscTitle
         self.status = status
         self.claudeSessionID = claudeSessionID
+        self.codexSessionID = codexSessionID
+        self.codexHome = codexHome
         self.provider = provider
         self.statusChangedAt = statusChangedAt
     }

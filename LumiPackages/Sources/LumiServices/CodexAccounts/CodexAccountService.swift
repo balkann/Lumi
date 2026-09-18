@@ -8,6 +8,7 @@ public actor CodexAccountService: CodexAccountServicing {
     private let config: any ConfigServicing
     private let root: URL
     private let systemDefaultHome: URL
+    private let runtimeResources: CodexManagedRuntimeResources
     private let runner: any EnvironmentProcessRunning
     private let locator: any BinaryLocating
     private let now: @Sendable () -> Date
@@ -24,7 +25,14 @@ public actor CodexAccountService: CodexAccountServicing {
         self.config = config
         root = paths.codexAccountsDir
         let fallback = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".codex")
-        systemDefaultHome = environment["CODEX_HOME"].map(URL.init(fileURLWithPath:)) ?? fallback
+        let defaultHome = environment["CODEX_HOME"].map(URL.init(fileURLWithPath:)) ?? fallback
+        systemDefaultHome = defaultHome
+        runtimeResources = CodexManagedRuntimeResources(
+            systemHome: defaultHome,
+            hookScriptPath: paths.configDir
+                .appendingPathComponent(AgentHookScript.directoryName)
+                .appendingPathComponent(AgentHookScript.fileName(for: .codex)).path
+        )
         self.runner = runner
         self.locator = locator
         self.now = now
@@ -48,11 +56,39 @@ public actor CodexAccountService: CodexAccountServicing {
         return home.path
     }
 
+    public func resolvedResumeHome(_ persistedHome: String?) async -> String? {
+        guard let persistedHome, !persistedHome.isEmpty else { return nil }
+        let candidate = URL(fileURLWithPath: persistedHome).standardizedFileURL
+        if candidate.path == systemDefaultHome.standardizedFileURL.path {
+            return systemDefaultHome.path
+        }
+        let value = await config.config()
+        for account in value.codexAccounts {
+            guard let managed = home(for: account.id),
+                  candidate.path == managed.standardizedFileURL.path,
+                  isTrustedManagedHome(managed, accountID: account.id),
+                  FileManager.default.fileExists(atPath: managed.path) else { continue }
+            return managed.path
+        }
+        return nil
+    }
+
     public func syncActiveSelection() async {
         let snapshot = await accounts()
         guard let account = snapshot.activeAccount, let home = home(for: account.id),
               isTrustedManagedHome(home, accountID: account.id) else { return }
-        try? mirrorConfig(into: home)
+        let hooksEnabled = await config.config().agentHooksEnabled
+        try? runtimeResources.materialize(into: home, hooksEnabled: hooksEnabled)
+    }
+
+    public func syncManagedHooks(enabled: Bool) async {
+        let value = await config.config()
+        for account in value.codexAccounts {
+            guard let managed = home(for: account.id),
+                  isTrustedManagedHome(managed, accountID: account.id),
+                  FileManager.default.fileExists(atPath: managed.path) else { continue }
+            try? runtimeResources.syncHooks(into: managed, enabled: enabled)
+        }
     }
 
     public func addAccount() async throws -> CodexAccountsSnapshot {
@@ -60,7 +96,7 @@ public actor CodexAccountService: CodexAccountServicing {
         guard let home = home(for: id) else {
             throw LumiError.codexAccountFailed(operation: "add", detail: "invalid account id")
         }
-        try prepare(home: home)
+        try await prepare(home: home)
         do {
             let identity = try await runLogin(home: home)
             let existing = await config.config().codexAccounts
@@ -104,7 +140,7 @@ public actor CodexAccountService: CodexAccountServicing {
               let home = home(for: accountID) else {
             throw LumiError.codexAccountFailed(operation: "re-authenticate", detail: "account no longer exists")
         }
-        try prepare(home: home)
+        try await prepare(home: home)
         let authFile = home.appendingPathComponent("auth.json")
         let previousAuth = FileManager.default.contents(atPath: authFile.path)
         let identity: CodexAuthIdentity
@@ -162,7 +198,8 @@ public actor CodexAccountService: CodexAccountServicing {
                     operation: "switch", detail: "this account has no credentials — re-authenticate it"
                 )
             }
-            try mirrorConfig(into: home)
+            let hooksEnabled = await config.config().agentHooksEnabled
+            try runtimeResources.materialize(into: home, hooksEnabled: hooksEnabled)
         }
         try await config.updateConfig { $0.codexAccountSelection = selection }
         return await accounts()
@@ -208,7 +245,7 @@ public actor CodexAccountService: CodexAccountServicing {
         return try await task.value
     }
 
-    private func prepare(home: URL) throws {
+    private func prepare(home: URL) async throws {
         let id = home.deletingLastPathComponent().lastPathComponent
         for url in [root, root.appendingPathComponent(id), home]
         where FileManager.default.fileExists(atPath: url.path) {
@@ -225,15 +262,8 @@ public actor CodexAccountService: CodexAccountServicing {
             )
         }
         try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: home.path)
-        try mirrorConfig(into: home)
-    }
-
-    private func mirrorConfig(into home: URL) throws {
-        let source = systemDefaultHome.appendingPathComponent("config.toml")
-        guard FileManager.default.fileExists(atPath: source.path) else { return }
-        let data = try Data(contentsOf: source)
-        guard !data.isEmpty else { return }
-        try data.write(to: home.appendingPathComponent("config.toml"), options: .atomic)
+        let hooksEnabled = await config.config().agentHooksEnabled
+        try runtimeResources.materialize(into: home, hooksEnabled: hooksEnabled)
     }
 
     private func identity(at home: URL) -> CodexAuthIdentity? {

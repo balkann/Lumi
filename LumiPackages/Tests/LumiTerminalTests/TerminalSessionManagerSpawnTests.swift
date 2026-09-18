@@ -55,6 +55,23 @@ final class TerminalSessionManagerSpawnTests: XCTestCase {
         XCTAssertNotNil(UUID(uuidString: id))
     }
 
+    func testCodexSpawnCarriesSelectedHomeAndResumedThread() throws {
+        let manager = TerminalSessionManager()
+        defer { manager.killAll() }
+        manager.setLaunchEnvironment(["CODEX_HOME": "/tmp/selected-home"], for: .codex)
+
+        let meta = try manager.spawn(
+            repoPath: FileManager.default.temporaryDirectory.path,
+            task: nil,
+            command: "codex resume 'thread-123' || codex",
+            environment: ["CODEX_HOME": "/tmp/original-home"]
+        )
+
+        XCTAssertEqual(meta.provider, .codex)
+        XCTAssertEqual(meta.codexSessionID, "thread-123")
+        XCTAssertEqual(meta.codexHome, "/tmp/original-home")
+    }
+
     /// Faz 1.22 + refactor 4.7: uygulama-seviyesi NSEvent monitörü artık TEK
     /// (`TerminalEventMonitor`), manager tarafından kurulur ve kapanışta bırakılır;
     /// çağrı idempotent.

@@ -52,7 +52,12 @@ final class ResumeSessionPersistenceTests: XCTestCase {
         let service = makeService()
         let entries = [
             ResumeSession(repoPath: "/repo/a", sessionID: "11111111-2222-3333-4444-555555555555"),
-            ResumeSession(repoPath: "/repo/b", sessionID: "aaaabbbb-cccc-dddd-eeee-ffff00001111"),
+            ResumeSession(
+                repoPath: "/repo/b",
+                sessionID: "thread-2",
+                provider: .codex,
+                codexHome: "/Users/dev/.lumi/codex-accounts/id/home"
+            ),
         ]
 
         // Act
@@ -62,6 +67,19 @@ final class ResumeSessionPersistenceTests: XCTestCase {
         // Assert — taze bir servis diskten aynı listeyi okur
         let reloaded = await makeService().uiState()
         XCTAssertEqual(reloaded.resumeSessions, entries)
+    }
+
+    func testLegacyResumeRecordWithoutProviderDefaultsToClaude() async throws {
+        try """
+        {"openTabs": ["/repo/a"], "activeTab": null, "leftSidebarOpen": true,
+         "rightSidebarOpen": false,
+         "resumeSessions": [{"repoPath":"/repo/a","sessionID":"legacy-id"}]}
+        """.write(to: paths.uiStateFile, atomically: true, encoding: .utf8)
+
+        let state = await makeService().uiState()
+        let entry = try XCTUnwrap(state.resumeSessions.first)
+        XCTAssertEqual(entry.provider, .claude)
+        XCTAssertNil(entry.codexHome)
     }
 
     func testConsumingResumeSessionsClearsDiskKey() async throws {

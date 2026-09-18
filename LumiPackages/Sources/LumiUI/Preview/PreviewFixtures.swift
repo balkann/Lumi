@@ -152,6 +152,16 @@ private final class PreviewTerminalService: TerminalServicing {
 
     @discardableResult
     func spawn(repoPath: String, task: String?, command: String?) throws -> TerminalMeta {
+        try spawn(repoPath: repoPath, task: task, command: command, environment: [:])
+    }
+
+    @discardableResult
+    func spawn(
+        repoPath: String,
+        task: String?,
+        command: String?,
+        environment: [String: String]
+    ) throws -> TerminalMeta {
         let meta = TerminalMeta(
             id: TerminalID(),
             name: "Terminal \(terminals.count + 1)",
@@ -230,6 +240,7 @@ private struct PreviewCodexAccountService: CodexAccountServicing {
     )
     func accounts() async -> CodexAccountsSnapshot { Self.snapshot }
     func syncActiveSelection() async {}
+    func syncManagedHooks(enabled: Bool) async {}
     func addAccount() async throws -> CodexAccountsSnapshot { Self.snapshot }
     func cancelPendingLogin() async {}
     func reauthenticate(accountID: String) async throws -> CodexAccountsSnapshot { Self.snapshot }
@@ -238,6 +249,9 @@ private struct PreviewCodexAccountService: CodexAccountServicing {
         CodexAccountsSnapshot(accounts: Self.snapshot.accounts, selection: selection)
     }
     func selectedHome() async -> String { "/Users/preview/.codex" }
+    func resolvedResumeHome(_ persistedHome: String?) async -> String? {
+        persistedHome ?? "/Users/preview/.codex"
+    }
 }
 
 private struct PreviewDeepSeekEnvironmentService: DeepSeekEnvironmentServicing {

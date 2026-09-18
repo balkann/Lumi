@@ -225,6 +225,7 @@ final class ConfigGoldenBytesTests: XCTestCase {
       },
       "resumeSessions" : [
         {
+          "provider" : "claude",
           "repoPath" : "/r/alpha",
           "sessionID" : "s-1"
         }

@@ -88,18 +88,34 @@ public final class TerminalSessionManager: TerminalServicing {
 
     @discardableResult
     public func spawn(repoPath: String, task: String?, command: String?) throws -> TerminalMeta {
+        try spawn(repoPath: repoPath, task: task, command: command, environment: [:])
+    }
+
+    @discardableResult
+    public func spawn(
+        repoPath: String,
+        task: String?,
+        command: String?,
+        environment: [String: String]
+    ) throws -> TerminalMeta {
         spawnCounter += 1
         // Karar 23: claude komutuna --session-id enjeksiyonu (veya mevcut
         // flag'ten çıkarım) — ID meta'da taşınır, quit'te resume için persist edilir.
         let prepared = ClaudeSessionCommand.prepare(command: command)
         let provider = AgentProvider.detect(launchCommand: prepared.command)
+        var effectiveEnvironment = provider.flatMap { launchEnvironments[$0] } ?? [:]
+        effectiveEnvironment.merge(environment) { _, override in override }
+        let codexSessionID = provider == .codex
+            ? CodexSessionCommand.resumedSessionID(from: prepared.command) : nil
         let session = try TerminalSession(
             repoPath: repoPath,
             name: "Terminal \(spawnCounter)",
             task: task,
             claudeSessionID: prepared.sessionID,
+            codexSessionID: codexSessionID,
+            codexHome: provider == .codex ? effectiveEnvironment["CODEX_HOME"] : nil,
             provider: provider,
-            environment: provider.flatMap { launchEnvironments[$0] } ?? [:],
+            environment: effectiveEnvironment,
             hookEndpoint: hookEndpoint,
             font: font
         )

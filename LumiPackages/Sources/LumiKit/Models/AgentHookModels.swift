@@ -76,6 +76,9 @@ public struct AgentHookEvent: Sendable, Equatable {
     public let provider: AgentProvider
     public let terminalID: TerminalID
     public let kind: AgentHookEventKind
+    /// Provider-owned conversation identifier. Codex resumes this exact thread
+    /// after a graceful app restart; hook payload is the authority.
+    public let sessionID: String?
     /// Alt ajan/teammate olayları `agent_id` taşır; lider olaylar taşımaz.
     public let agentID: String?
     /// `TeammateIdle` yalnız `teammate_name` taşır.
@@ -99,6 +102,7 @@ public struct AgentHookEvent: Sendable, Equatable {
         provider: AgentProvider,
         terminalID: TerminalID,
         kind: AgentHookEventKind,
+        sessionID: String? = nil,
         agentID: String? = nil,
         teammateName: String? = nil,
         toolName: String? = nil,
@@ -112,6 +116,7 @@ public struct AgentHookEvent: Sendable, Equatable {
         self.provider = provider
         self.terminalID = terminalID
         self.kind = kind
+        self.sessionID = sessionID
         self.agentID = agentID
         self.teammateName = teammateName
         self.toolName = toolName
@@ -164,6 +169,7 @@ extension AgentHookEvent {
             provider: provider,
             terminalID: terminalID,
             kind: AgentHookEventKind(name: name),
+            sessionID: safeSessionID(dict["session_id"]),
             agentID: string(dict["agent_id"]),
             teammateName: string(dict["teammate_name"]),
             // Codex bazı sürümlerde `name` kullanır (Orca `extractCodexToolFields`).
@@ -181,6 +187,15 @@ extension AgentHookEvent {
         guard let text = value as? String else { return nil }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
+    }
+
+    /// Mirrors Orca's provider-session trust boundary: resume arguments must
+    /// be bounded, must not look like flags, and must not contain controls.
+    private static func safeSessionID(_ value: Any?) -> String? {
+        guard let value = string(value),
+              value.range(of: #"^[A-Za-z0-9][A-Za-z0-9._:-]{0,511}$"#, options: .regularExpression) != nil
+        else { return nil }
+        return value
     }
 
     /// Orca `readClaudeBackgroundAgentTasks` sadeleştirmesi: yalnız

@@ -31,7 +31,7 @@ enum UIStateCodec {
         if let value = JSONValue.bool(dict["windowMaximized"]) {
             state.windowMaximized = value
         }
-        // Karar 23 (additive): açılışta tüketilecek claude resume kayıtları
+        // Karar 23/79 (additive): açılışta tüketilecek ajan resume kayıtları.
         if let raw = dict["resumeSessions"] as? [[String: Any]] {
             state.resumeSessions = raw.compactMap(ResumeSessionCodec.decode)
         }
@@ -274,16 +274,38 @@ enum ResumeSessionCodec {
     static func decode(_ dict: [String: Any]?) -> ResumeSession? {
         guard let dict,
               let repoPath = dict["repoPath"] as? String,
-              let sessionID = dict["sessionID"] as? String else {
+              let sessionID = dict["sessionID"] as? String,
+              isSafeSessionID(sessionID) else {
             return nil
         }
-        return ResumeSession(repoPath: repoPath, sessionID: sessionID)
+        // Provider alanı karar 79 öncesinde yoktu; eksik kayıt Claude'dur.
+        let provider: AgentProvider
+        if let rawProvider = dict["provider"] as? String {
+            guard let decoded = AgentProvider(rawValue: rawProvider) else { return nil }
+            provider = decoded
+        } else {
+            provider = .claude
+        }
+        guard provider == .claude || provider == .codex else { return nil }
+        return ResumeSession(
+            repoPath: repoPath,
+            sessionID: sessionID,
+            provider: provider,
+            codexHome: dict["codexHome"] as? String
+        )
     }
 
     static func overlay(_ session: ResumeSession) -> [String: Any] {
-        [
+        var result: [String: Any] = [
             "repoPath": session.repoPath,
             "sessionID": session.sessionID,
+            "provider": session.provider.rawValue,
         ]
+        result["codexHome"] = session.codexHome
+        return result
+    }
+
+    private static func isSafeSessionID(_ value: String) -> Bool {
+        value.range(of: #"^[A-Za-z0-9][A-Za-z0-9._:-]{0,511}$"#, options: .regularExpression) != nil
     }
 }

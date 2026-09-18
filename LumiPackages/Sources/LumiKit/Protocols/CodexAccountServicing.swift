@@ -3,6 +3,8 @@ import Foundation
 public protocol CodexAccountServicing: Sendable {
     func accounts() async -> CodexAccountsSnapshot
     func syncActiveSelection() async
+    /// Installs or removes Lumi's hook groups in every trusted managed home.
+    func syncManagedHooks(enabled: Bool) async
     func addAccount() async throws -> CodexAccountsSnapshot
     func cancelPendingLogin() async
     func reauthenticate(accountID: String) async throws -> CodexAccountsSnapshot
@@ -10,6 +12,9 @@ public protocol CodexAccountServicing: Sendable {
     func select(_ selection: CodexAccountSelection) async throws -> CodexAccountsSnapshot
     /// Effective home for new Codex processes and usage probes.
     func selectedHome() async -> String
+    /// Accepts a persisted resume home only when it is still the system home
+    /// or a configured, trusted managed-account home.
+    func resolvedResumeHome(_ persistedHome: String?) async -> String?
 }
 
 public struct CodexAccountsSnapshot: Sendable, Equatable {

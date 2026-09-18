@@ -18,6 +18,7 @@ final class AgentHookEventTests: XCTestCase {
         """))
 
         XCTAssertEqual(event.kind, .preToolUse)
+        XCTAssertEqual(event.sessionID, "s1")
         XCTAssertEqual(event.agentID, "a-1")
         XCTAssertEqual(event.toolName, "Bash")
         XCTAssertEqual(event.source, "startup")
@@ -45,6 +46,15 @@ final class AgentHookEventTests: XCTestCase {
         let event = try XCTUnwrap(parse("{\"hook_event_name\":\"PreToolUse\",\"name\":\"request_user_input\"}", provider: .codex))
         XCTAssertEqual(event.toolName, "request_user_input")
         XCTAssertTrue(event.isUserQuestionTool)
+    }
+
+    func testUnsafeProviderSessionIDsAreDropped() throws {
+        XCTAssertNil(try XCTUnwrap(parse(
+            "{\"hook_event_name\":\"SessionStart\",\"session_id\":\"--last\"}",
+            provider: .codex
+        )).sessionID)
+        let control = "{\"hook_event_name\":\"SessionStart\",\"session_id\":\"bad\\u0001id\"}"
+        XCTAssertNil(try XCTUnwrap(parse(control, provider: .codex)).sessionID)
     }
 
     func testUserQuestionToolDetectionIsCaseAndPunctuationInsensitive() {

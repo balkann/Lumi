@@ -225,7 +225,9 @@ final class ConfigCodecIntegrityTests: XCTestCase {
         ],
         windowBounds: WindowBounds(x: 10, y: 20, width: 1200, height: 800),
         windowMaximized: true,
-        resumeSessions: [ResumeSession(repoPath: "/r/alpha", sessionID: "s-1")],
+        resumeSessions: [ResumeSession(
+            repoPath: "/r/alpha", sessionID: "s-1", provider: .codex, codexHome: "/codex-home"
+        )],
         activeRoute: "tasks",
         panelLayout: PanelLayout.defaults
             .moving(.fileTree, to: .right, index: 0)
@@ -341,7 +343,9 @@ extension ConfigCodecIntegrityTests {
     }
 
     func testResumeSessionCodecCoversEveryField() {
-        let value = ResumeSession(repoPath: "/r/alpha", sessionID: "s-1")
+        let value = ResumeSession(
+            repoPath: "/r/alpha", sessionID: "s-1", provider: .codex, codexHome: "/codex-home"
+        )
         assertOverlayMatchesFields(value, overlay: ResumeSessionCodec.overlay(value))
         XCTAssertEqual(ResumeSessionCodec.decode(ResumeSessionCodec.overlay(value)), value)
     }

@@ -12,6 +12,15 @@ public protocol TerminalSessionControlling: AnyObject, Sendable {
     /// Yeni login-shell PTY oturumu açar; `command` verilirse shell'e yazılır (PTY argv'si değil).
     @discardableResult
     func spawn(repoPath: String, task: String?, command: String?) throws -> TerminalMeta
+    /// Opens a session with per-spawn environment overrides. Used by Codex
+    /// cold restore to pin the thread to its original CODEX_HOME.
+    @discardableResult
+    func spawn(
+        repoPath: String,
+        task: String?,
+        command: String?,
+        environment: [String: String]
+    ) throws -> TerminalMeta
 
     func write(id: TerminalID, text: String) throws
     func kill(id: TerminalID) throws

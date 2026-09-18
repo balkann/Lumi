@@ -16,7 +16,6 @@ final class AgentHooksAssembly: FeatureAssembly {
     private var services: (any ServiceRegistry)!
     private var shared: SharedStores!
     private var ingest: Task<Void, Never>?
-    private var installTask: Task<Void, Never>?
     private(set) var isEnabled = false
 
     func build(services: any ServiceRegistry, shared: SharedStores) {
@@ -65,16 +64,13 @@ final class AgentHooksAssembly: FeatureAssembly {
         }
         isEnabled = true
         startIngest()
-        let installer = services.agentHookInstaller
-        installTask = Task { @MainActor [weak self] in
-            let results = await installer.install()
-            self?.report(results)
-        }
+        // Later UI-phase account sync may mirror Codex hooks into isolated
+        // homes, so installation must finish before bootstrap advances.
+        report(await services.agentHookInstaller.install())
+        await services.codexAccounts.syncManagedHooks(enabled: true)
     }
 
     private func disable(uninstall: Bool) async {
-        installTask?.cancel()
-        installTask = nil
         ingest?.cancel()
         ingest = nil
         guard isEnabled else { return }
@@ -84,6 +80,7 @@ final class AgentHooksAssembly: FeatureAssembly {
         if uninstall {
             let results = await services.agentHookInstaller.uninstall()
             report(results)
+            await services.codexAccounts.syncManagedHooks(enabled: false)
         }
     }
 

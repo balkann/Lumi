@@ -61,6 +61,55 @@ final class TerminalSessionInjectionTests: XCTestCase {
         XCTAssertEqual(pty.terminations, 1)
     }
 
+    func testCodexHookCapturesProviderThreadID() async throws {
+        let session = try TerminalSession(
+            repoPath: FileManager.default.temporaryDirectory.path,
+            name: "codex",
+            task: nil,
+            codexHome: "/tmp/codex-home",
+            provider: .codex,
+            font: .monospacedSystemFont(ofSize: 13, weight: .regular),
+            ptySpawner: FakePTYSpawner(pty: FakePTY())
+        )
+
+        session.applyHookEvent(AgentHookEvent(
+            provider: .codex,
+            terminalID: session.id,
+            kind: .sessionStart,
+            sessionID: "thread-123"
+        ))
+
+        let captured = await waitUntil { session.meta.codexSessionID == "thread-123" }
+        XCTAssertTrue(captured)
+        XCTAssertEqual(session.meta.codexHome, "/tmp/codex-home")
+    }
+
+    func testCodexSubagentHookDoesNotReplaceLeadThreadID() async throws {
+        let session = try TerminalSession(
+            repoPath: FileManager.default.temporaryDirectory.path,
+            name: "codex",
+            task: nil,
+            codexHome: "/tmp/codex-home",
+            provider: .codex,
+            font: .monospacedSystemFont(ofSize: 13, weight: .regular),
+            ptySpawner: FakePTYSpawner(pty: FakePTY())
+        )
+        session.applyHookEvent(AgentHookEvent(
+            provider: .codex, terminalID: session.id, kind: .sessionStart,
+            sessionID: "root-thread"
+        ))
+        let captured = await waitUntil { session.meta.codexSessionID == "root-thread" }
+        XCTAssertTrue(captured)
+
+        session.applyHookEvent(AgentHookEvent(
+            provider: .codex, terminalID: session.id, kind: .subagentStart,
+            sessionID: "child-thread", agentID: "child-1"
+        ))
+        try? await Task.sleep(for: .milliseconds(20))
+
+        XCTAssertEqual(session.meta.codexSessionID, "root-thread")
+    }
+
     func testRequestRepaintPokesPTYAndRedrawDoesNot() throws {
         let pty = FakePTY()
         let session = try makeSession(pty: pty)

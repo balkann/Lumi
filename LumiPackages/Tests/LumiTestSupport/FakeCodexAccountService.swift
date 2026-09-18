@@ -3,6 +3,7 @@ import LumiKit
 public actor FakeCodexAccountService: CodexAccountServicing {
     private var snapshot: CodexAccountsSnapshot
     private var home: String
+    public private(set) var managedHookSyncs: [Bool] = []
 
     public init(snapshot: CodexAccountsSnapshot = .empty, home: String = "/tmp/fake-codex-home") {
         self.snapshot = snapshot
@@ -11,7 +12,11 @@ public actor FakeCodexAccountService: CodexAccountServicing {
 
     public func accounts() async -> CodexAccountsSnapshot { snapshot }
     public func syncActiveSelection() async {}
+    public func syncManagedHooks(enabled: Bool) async { managedHookSyncs.append(enabled) }
     public func selectedHome() async -> String { home }
+    public func resolvedResumeHome(_ persistedHome: String?) async -> String? {
+        persistedHome ?? home
+    }
     public func cancelPendingLogin() async {}
     public func addAccount() async throws -> CodexAccountsSnapshot { snapshot }
     public func reauthenticate(accountID: String) async throws -> CodexAccountsSnapshot { snapshot }

@@ -104,9 +104,16 @@ public final class TerminalListStore: StoreLifecycle {
 
     // MARK: - Intent'ler
 
-    public func spawn(in repoPath: String, command: String? = nil, task: String? = nil) {
+    public func spawn(
+        in repoPath: String,
+        command: String? = nil,
+        task: String? = nil,
+        environment: [String: String] = [:]
+    ) {
         toasts.reporting {
-            _ = try self.service.spawn(repoPath: repoPath, task: task, command: command)
+            _ = try self.service.spawn(
+                repoPath: repoPath, task: task, command: command, environment: environment
+            )
         }
     }
 

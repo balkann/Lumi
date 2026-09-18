@@ -6,31 +6,37 @@ import LumiKit
 ///
 /// Güvenlik sınırları:
 /// - Kullanıcı dosyası ayrıştırılamıyorsa ASLA üzerine yazılmaz (`failed`).
-/// - Sağlayıcının ev dizini (`~/.claude`, `~/.codex`) yoksa CLI kurulu
-///   sayılmaz → `skipped`; Lumi başkasının dizinini yaratmaz.
+/// - Sağlayıcının ev dizini yoksa ayar dosyası yaratılmaz. Codex script'i yine
+///   yazılır; Lumi-managed home'lar aynı global script'i kullanır.
 /// - Yazımlar atomiktir; script dizini 0700, script'ler 0755.
 public struct AgentHookInstaller: AgentHookInstalling {
     public let homeDirectory: URL
+    public let codexDirectory: URL
     /// `~/.lumi/hooks` (dev'de `~/.lumi-dev/hooks`).
     public let scriptDirectory: URL
     /// `FileManager.default` thread-safe'tir; Sendable damgası yoktur.
     private var fileManager: FileManager { .default }
 
-    public init(homeDirectory: URL, scriptDirectory: URL) {
+    public init(homeDirectory: URL, scriptDirectory: URL, codexDirectory: URL? = nil) {
         self.homeDirectory = homeDirectory
+        self.codexDirectory = codexDirectory ?? homeDirectory.appendingPathComponent(".codex")
         self.scriptDirectory = scriptDirectory
     }
 
     /// `LumiPaths` üzerinden standart yerleşim.
-    public init(paths: LumiPaths, homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser) {
+    public init(
+        paths: LumiPaths,
+        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) {
         self.init(
             homeDirectory: homeDirectory,
-            scriptDirectory: paths.configDir.appendingPathComponent(AgentHookScript.directoryName)
+            scriptDirectory: paths.configDir.appendingPathComponent(AgentHookScript.directoryName),
+            codexDirectory: environment["CODEX_HOME"].map(URL.init(fileURLWithPath:))
         )
     }
 
     var claudeSettingsFile: URL { homeDirectory.appendingPathComponent(".claude/settings.json") }
-    var codexDirectory: URL { homeDirectory.appendingPathComponent(".codex") }
     var codexHooksFile: URL { codexDirectory.appendingPathComponent("hooks.json") }
     var codexConfigFile: URL { codexDirectory.appendingPathComponent("config.toml") }
 
@@ -86,11 +92,14 @@ public struct AgentHookInstaller: AgentHookInstalling {
     // MARK: - Codex
 
     private func installCodex() -> AgentHookInstallResult {
-        guard fileManager.fileExists(atPath: codexDirectory.path) else {
-            return AgentHookInstallResult(provider: .codex, outcome: .skipped(reason: "Codex not installed"))
-        }
         do {
             let scriptChanged = try writeScript(for: .codex)
+            guard fileManager.fileExists(atPath: codexDirectory.path) else {
+                return AgentHookInstallResult(
+                    provider: .codex,
+                    outcome: scriptChanged ? .installed : .skipped(reason: "Codex home not found")
+                )
+            }
             let root = try readJSONObject(at: codexHooksFile)
             let command = AgentHookScript.managedCommand(scriptPath: scriptPath(for: .codex), provider: .codex)
             let applied = CodexHookSettings.applyManaged(to: root, command: command)
