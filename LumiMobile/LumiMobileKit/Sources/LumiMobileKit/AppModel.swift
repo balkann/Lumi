@@ -164,6 +164,10 @@ public final class AppModel {
         lastCommandError = [:]
         commandTargets = [:]
         deleteCommandIds = []
+        branchRequestIds = []
+        branchesForRepo = []
+        branchesLoading = false
+        branchesError = nil
         startState = .idle
     }
 

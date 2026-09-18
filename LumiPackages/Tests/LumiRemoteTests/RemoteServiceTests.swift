@@ -384,15 +384,10 @@ final class FakeTerminalServicing: TerminalServicing {
     @Test @MainActor
     func listBranchesReturnsWorkspaceBranches() async throws {
         let term = FakeTerminalServicing()
-        let conn = FakeRelayConnection()
         let repo = Repo(name: "R", path: "/tmp/r", isGitRepo: true, source: .projectsRoot)
         let repoSvc = FakeRepoService(repos: [repo])
         let ws = FakeWorkspaceService()
         await ws.setBranches(.success([WorkspaceBranch(name: "main"), WorkspaceBranch(name: "dev")]))
-        let svc = RemoteService(paths: .testDefaults(), terminal: term, repos: repoSvc,
-            connection: conn, chatSource: FakeChatTranscriptSource(events: []), workspaces: ws)
-        _ = svc
-
         let result = await RemoteCommandHandler(
             terminal: term, trust: NoopClaudeWorkspaceTrust(),
             chatSessions: NoopChatSessionService(), repos: repoSvc, workspaces: ws
@@ -401,6 +396,7 @@ final class FakeTerminalServicing: TerminalServicing {
         #expect(result["ok"] as? Bool == true)
         #expect(result["branches"] as? [String] == ["main", "dev"])
         #expect(await ws.branchCalls.map(\.0) == ["/tmp/r"])
+        #expect(await ws.branchCalls.map(\.1) == [100])
     }
 
     @Test @MainActor

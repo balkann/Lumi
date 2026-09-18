@@ -52,4 +52,15 @@ import Foundation
         #expect(model.branchesForRepo == ["main", "dev"])
         #expect(model.branchesLoading == false)
     }
+
+    @Test func loadBranchesFailureSetsError() async {
+        let (model, client) = makeModelWithFakeClient()
+        await model.loadBranches(repoPath: "/tmp/r")
+        #expect(model.branchesLoading == true)
+        let cid = client.commands.last!.commandId
+        model.handle(.commandResult(CommandResult(commandId: cid, ok: false, error: "unknown_repo", branches: nil)))
+        #expect(model.branchesLoading == false)
+        #expect(model.branchesForRepo == [])
+        #expect(model.branchesError == "unknown_repo")
+    }
 }
