@@ -1,7 +1,6 @@
 import LumiKit
 import LumiState
 import SwiftUI
-import UniformTypeIdentifiers
 
 /// Projects paneli (karar 48–51): proje → checkout (original / workspace) →
 /// ajan satırları. Orca sidebar'ının sadeliği hedeftir: çalışan ve biten
@@ -15,8 +14,6 @@ public struct ProjectsPanel: View {
     @State private var searchText = ""
     @State private var isSearchVisible = false
     @State private var collapsedProjects = Set<String>()
-    @State private var draggedProjectPath: String?
-    @State private var dropTargetProjectPath: String?
     @FocusState private var focusedProjectAction: String?
     /// Sağ tık menüsü açık olan projenin yolu (karar 53 deseni).
     @State private var menuProjectPath: String?
@@ -149,18 +146,8 @@ public struct ProjectsPanel: View {
 
     private func projectRow(_ project: Repo) -> some View {
         HoverReader { isHovering in
-            projectRowContent(
-                project, isHovering: isHovering,
-                isDropTarget: dropTargetProjectPath == project.path
-            )
+            projectRowContent(project, isHovering: isHovering)
         }
-        .onDrop(of: [UTType.lumiProjectPath], delegate: ProjectReorderDropDelegate(
-            targetPath: project.path,
-            draggedPath: $draggedProjectPath,
-            dropTargetPath: $dropTargetProjectPath
-        ) { sourcePath, targetPath in
-            Task { await shell.workspaces.moveProject(sourcePath, relativeTo: targetPath) }
-        })
         // Native `contextMenu` koyu panelde sistem görünümüyle çıkıyordu;
         // menü Lumi'nin kendi `PopoverMenu`suyla çizilir (karar 53 deseni).
         .onRightClick { menuProjectPath = project.path }
@@ -206,7 +193,7 @@ public struct ProjectsPanel: View {
         )
     }
 
-    private func projectRowContent(_ project: Repo, isHovering: Bool, isDropTarget: Bool) -> some View {
+    private func projectRowContent(_ project: Repo, isHovering: Bool) -> some View {
         let actionFocusPrefix = project.path + "#"
         let showsActions = isHovering || focusedProjectAction?.hasPrefix(actionFocusPrefix) == true
         return HStack(spacing: Theme.Spacing.sm) {
@@ -226,10 +213,6 @@ public struct ProjectsPanel: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
-                // Put the native drag recognizer on the title surface itself.
-                // The surrounding Button keeps click/keyboard foldout
-                // semantics, while its label no longer swallows drag start.
-                .onDrag { projectDragProvider(for: project) }
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Toggle workspaces for \(project.name)")
@@ -262,75 +245,15 @@ public struct ProjectsPanel: View {
             .buttonStyle(.plain)
             .accessibilityHidden(true)
         }
-        .opacity(isDropTarget ? 0.72 : 1)
-        .background(isDropTarget ? Theme.bgElevated : .clear)
-        .overlay {
-            if isDropTarget {
-                RoundedRectangle(cornerRadius: Theme.Radius.md)
-                    .stroke(Theme.accentPrimary, lineWidth: Theme.Stroke.hairline)
-            }
-        }
-        .animation(Theme.Motion.quickEase, value: isDropTarget)
         .padding(.horizontal, Theme.Spacing.xs)
         .padding(.vertical, Theme.Spacing.xxs)
         .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
-    }
-
-    private func projectDragProvider(for project: Repo) -> NSItemProvider {
-        draggedProjectPath = project.path
-        let provider = NSItemProvider()
-        let data = Data(project.path.utf8)
-        provider.registerDataRepresentation(
-            forTypeIdentifier: UTType.lumiProjectPath.identifier,
-            visibility: .ownProcess
-        ) { completion in
-            completion(data, nil)
-            return nil
-        }
-        return provider
     }
 
     private func toggleProject(_ project: Repo) {
         if !collapsedProjects.insert(project.path).inserted {
             collapsedProjects.remove(project.path)
         }
-    }
-}
-
-private extension UTType {
-    static let lumiProjectPath = UTType(exportedAs: "com.lumi.project-path")
-}
-
-private struct ProjectReorderDropDelegate: DropDelegate {
-    let targetPath: String
-    @Binding var draggedPath: String?
-    @Binding var dropTargetPath: String?
-    let move: (String, String) -> Void
-
-    func validateDrop(info: DropInfo) -> Bool {
-        info.hasItemsConforming(to: [UTType.lumiProjectPath.identifier])
-            && draggedPath != nil && draggedPath != targetPath
-    }
-
-    func dropEntered(info: DropInfo) {
-        guard validateDrop(info: info) else { return }
-        dropTargetPath = targetPath
-    }
-
-    func dropExited(info: DropInfo) {
-        if dropTargetPath == targetPath { dropTargetPath = nil }
-    }
-
-    func dropUpdated(info: DropInfo) -> DropProposal? {
-        validateDrop(info: info) ? DropProposal(operation: .move) : DropProposal(operation: .cancel)
-    }
-
-    func performDrop(info: DropInfo) -> Bool {
-        guard let sourcePath = draggedPath, sourcePath != targetPath else { return false }
-        move(sourcePath, targetPath)
-        draggedPath = nil
-        dropTargetPath = nil
-        return true
     }
 }
 

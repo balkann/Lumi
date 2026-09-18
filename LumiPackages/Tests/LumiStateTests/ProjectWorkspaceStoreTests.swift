@@ -70,28 +70,6 @@ final class ProjectWorkspaceStoreTests: XCTestCase {
         XCTAssertTrue(store.addedProjects.isEmpty)
     }
 
-    func testSidebarProjectsCanBeReorderedAndPersisted() async throws {
-        let second = Repo(name: "Second", path: "/projects/second", isGitRepo: true, source: .standalone)
-        let third = Repo(name: "Third", path: "/projects/third", isGitRepo: true, source: .standalone)
-        await repoService.setRepos([project, second, third])
-        await repos.reload()
-        let initialPaths = [project.path, second.path, third.path]
-        try await config.updateConfig {
-            $0.sidebarProjectPaths = initialPaths
-        }
-        await store.load()
-
-        await store.moveProject(project.path, relativeTo: third.path)
-        XCTAssertEqual(store.addedProjects.map(\.path), [second.path, third.path, project.path])
-        var saved = await config.config()
-        XCTAssertEqual(saved.sidebarProjectPaths, [second.path, third.path, project.path])
-
-        await store.moveProject(project.path, relativeTo: second.path)
-        XCTAssertEqual(store.addedProjects.map(\.path), [project.path, second.path, third.path])
-        saved = await config.config()
-        XCTAssertEqual(saved.sidebarProjectPaths, [project.path, second.path, third.path])
-    }
-
     func testPlasticDefaultsToCurrentBranchAndGitResetsToNewBranch() async {
         await service.setDefaultInspection(.success(WorkspaceSource(projectPath: project.path, scm: .plastic,
             branch: "/main/release", destinationDirectory: "/w", isUnityProject: true)))
