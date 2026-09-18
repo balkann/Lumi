@@ -1,12 +1,12 @@
 import SwiftUI
 import LumiMobileKit
 
+/// Yeni chat oturumu başlatır (chat-first; telefon için saf kind=chat akışı).
+/// Persona ve ilk prompt bu fazda kapsam dışı — yalnız repo seçimi yeterli.
 struct NewSessionView: View {
     let model: AppModel
     @Environment(\.dismiss) private var dismiss
     @State private var repoPath = ""
-    @State private var personaId = ""
-    @State private var prompt = ""
 
     var body: some View {
         NavigationStack {
@@ -17,21 +17,13 @@ struct NewSessionView: View {
                         Text(repo.name).tag(repo.path)
                     }
                 }
-                Picker("Persona", selection: $personaId) {
-                    Text("Yok").tag("")
-                    ForEach(model.personas) { persona in
-                        Text(persona.label).tag(persona.id)
-                    }
-                }
-                TextField("İlk prompt", text: $prompt, axis: .vertical)
-                    .lineLimit(3...8)
 
                 Section {
                     Button(action: submit) {
                         if model.startState == .sending {
                             ProgressView()
                         } else {
-                            Text("Oturumu başlat")
+                            Text("Chat başlat")
                         }
                     }
                     .disabled(!canSubmit)
@@ -40,7 +32,7 @@ struct NewSessionView: View {
                     }
                 }
             }
-            .navigationTitle("Yeni oturum")
+            .navigationTitle("Yeni chat")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -58,22 +50,16 @@ struct NewSessionView: View {
     }
 
     private var canSubmit: Bool {
-        // Repo listesi Mac'ten `repos`/`welcome` ile gelir; Mac çevrimdışıysa veya liste
-        // henüz gelmediyse buton pasif kalır. Persona bu build'de yok (picker "Yok" tek).
+        // Repo listesi Mac'ten `repos`/`welcome` ile gelir; Mac çevrimdışıysa buton pasif.
         model.macOnline
             && !model.repos.isEmpty
             && !repoPath.isEmpty
-            && !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && model.startState != .sending
     }
 
     private func submit() {
         Task {
-            await model.startSession(
-                repoPath: repoPath,
-                personaId: personaId.isEmpty ? nil : personaId,
-                prompt: prompt
-            )
+            await model.startChatSession(repoPath: repoPath)
         }
     }
 }

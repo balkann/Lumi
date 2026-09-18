@@ -62,12 +62,6 @@ public final class AppModel {
 
     /// sessionId → chat mesajları (mode=chat aboneliği; orca native-chat).
     private var chatBySession: [String: [ChatMessage]] = [:]
-    /// Feed chunk'ı görülen oturumlar (şerit görünürlüğü) ve otoriter grid satır sayısı
-    /// (şeridin alt-bölge kırpması scrollback'in rows'una göre hesaplanır).
-    public private(set) var feedSeen: Set<String> = []
-    public private(set) var gridRows: [String: Int] = [:]
-
-    public func hasFeed(_ sessionId: String) -> Bool { feedSeen.contains(sessionId) }
     /// sessionId → son canlı turn status (Faz 2; chat_status frame'inden).
     public private(set) var turnStatus: [String: ChatTurnStatus] = [:]
     /// Faz 3: session başına aktif (pending) etkileşimli prompt'lar.
@@ -174,8 +168,6 @@ public final class AppModel {
 
         case .scrollback(let chunk), .data(let chunk):
             macOnline = true
-            feedSeen.insert(chunk.sessionId)
-            if let rows = chunk.rows { gridRows[chunk.sessionId] = rows }
             route(chunk)
 
         case .commandResult(let result):
@@ -260,8 +252,6 @@ public final class AppModel {
         }
         models = models.filter { liveIds.contains($0.key) }
         lastCommandError = lastCommandError.filter { liveIds.contains($0.key) }
-        feedSeen = feedSeen.filter { liveIds.contains($0) }
-        gridRows = gridRows.filter { liveIds.contains($0.key) }
         // Aktif oturum listede yoksa (silindi/kapandı) sink'i kapat.
         if let active = activeSessionId, !liveIds.contains(active) {
             terminalSinks[active]?.finish()

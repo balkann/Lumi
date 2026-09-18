@@ -1,7 +1,6 @@
 // LumiMobile/App/MobileChatView.swift
 import SwiftUI
 import LumiMobileKit
-import LumiWire
 import Foundation
 
 /// Native chat görünümü: transcript'ten türeyen mesajları satır-saran balonlar
@@ -30,6 +29,15 @@ struct MobileChatView: View {
                             ForEach(turns) { turn in
                                 MobileChatMessageView(turn: turn).id(turn.id)
                             }
+                            // Canlı streaming prose: turn bitmeden transcript'e düşmemiş
+                            // assistant metni balonsuz olarak mesaj listesinin sonunda gösterilir.
+                            if let streaming = model.chatStreamingText(sessionId) {
+                                Text(streaming)
+                                    .textSelection(.enabled)
+                                    .foregroundStyle(.primary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.horizontal, 12)
+                            }
                             Color.clear.frame(height: 1).id("bottom")
                         }
                         .padding(.horizontal, 12)
@@ -40,11 +48,6 @@ struct MobileChatView: View {
                     }
                 }
                 let pending = model.prompts[sessionId]?.last(where: { $0.state == .pending })
-                if chatLiveStripVisible(working: model.turnStatus[sessionId]?.working ?? false,
-                                        hasPendingPrompt: pending != nil,
-                                        hasFeed: model.hasFeed(sessionId)) {
-                    ChatLiveTerminalStrip(model: model, sessionId: sessionId)
-                }
                 if let status = model.turnStatus[sessionId], status.working {
                     TurnStatusBar(status: status) {
                         model.sendInput(sessionId, Data([0x03]))
