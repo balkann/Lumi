@@ -18,9 +18,24 @@ public enum Theme {
     /// Commit butonu hover'ı (v1 --accent-primary-deep #7C3AED).
     public static let accentDeep = Color(red: 0x7C / 255, green: 0x3A / 255, blue: 0xED / 255)
     public static let accentCyan = Color(red: 0x22 / 255, green: 0xD3 / 255, blue: 0xEE / 255)
-    public static let success = Color(red: 0x4A / 255, green: 0xDE / 255, blue: 0x80 / 255)
-    public static let warning = Color(red: 0xFB / 255, green: 0xBF / 255, blue: 0x24 / 255)
-    public static let error = Color(red: 0xF8 / 255, green: 0x71 / 255, blue: 0x71 / 255)
+    /// Durum paletinin HAM değerleri. `Color` bileşenlerini geri vermediği için
+    /// rampanın (`Theme.blend`) ara ton üretebilmesi hex'e ihtiyaç duyar;
+    /// renkler yine tek yerde, burada tanımlanır.
+    public enum Hex {
+        public static let success: UInt32 = 0x4ADE80
+        public static let warning: UInt32 = 0xFBBF24
+        public static let error: UInt32 = 0xF87171
+        /// Tempo rampasının soğuk ucu (karar 85).
+        public static let ice: UInt32 = 0x38BDF8
+    }
+
+    public static let success = Color(hex: Hex.success)
+    public static let warning = Color(hex: Hex.warning)
+    public static let error = Color(hex: Hex.error)
+    /// Buz mavisi: limitin gerisinde kalan, yani rahat olan kullanım (karar 85).
+    /// Yeşille aynı "iyi" ailesindedir ama farklı bir şey söyler — yeşil
+    /// "tempoda", buz mavisi "tempodan yavaş" demektir.
+    public static let ice = Color(hex: Hex.ice)
     public static let border = Color(red: 0x2A / 255, green: 0x2A / 255, blue: 0x4A / 255)
 
     /// Git decoration paleti (VS Code SCM renkleri; Explorer badge + Source Control).
@@ -105,6 +120,21 @@ public enum Theme {
         case .deleted: return gitDeleted
         case .renamed, .untracked: return gitUntracked
         }
+    }
+
+    /// İki palet rengi arasında sRGB ara tonu (`t` = 0 → `a`, 1 → `b`).
+    ///
+    /// Renk rampaları için vardır (karar 85): ara ton bir TOKEN DEĞİLDİR, iki
+    /// token arasındaki ölçülmüş konumdur — bu yüzden çağıran hex sabitlerini
+    /// verir, kendi rengini kurmaz.
+    public static func blend(_ a: UInt32, _ b: UInt32, _ t: Double) -> Color {
+        let t = min(1, max(0, t))
+        func channel(_ shift: UInt32) -> Double {
+            let from = Double((a >> shift) & 0xFF)
+            let to = Double((b >> shift) & 0xFF)
+            return (from + (to - from) * t) / 255
+        }
+        return Color(.sRGB, red: channel(16), green: channel(8), blue: channel(0), opacity: 1)
     }
 
     /// Kompakt terminal chip'lerinin durum noktası renk sistemi.

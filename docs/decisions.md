@@ -833,3 +833,30 @@ Ayrıca git olmayan projede git taburunun tamamı (dal + durum + özet + geçmi�
 
 - **Sınırlar.** `GitService.remoteURL`, `GitCommandRunner.logQuietFailure` (git'in satır sonu kırpılır; kırpılmadığı için her kayıt iki satır oluyordu), `GitStore` (`probedRemoteRepos`, `loadAll`/`loadHistory`/`refresh` üzerinde additive `rescanRemote` parametresi, `evict`) ve `RepoFeatureAssembly`'nin iki köprüsü. Görünmeyen panel için veri yüklememe fikri (Source Control sekmesi kapalıyken geçmiş + dal başına commit listesi) ÖLÇÜLMEDİ ve kapsam dışıdır; ölçülen 11 git sürecinin ancak 1'i bu kararla düşer, asıl kaldıraç oradadır. Testler: `GitServiceTests.testRemoteURLIsNilWhenOriginIsNotConfigured`, `testRemoteURLReturnsConfiguredOrigin`, `GitStoreTests`'in dört karar 84 testi, `RepoFeatureAssemblyGitGateTests`.
 
+### 85. Kullanım rengi mutlak yüzdeyi değil tempo çizgisine olan mesafeyi gösterir (2026-09-19)
+
+Kullanıcı isteği: "pace marker'dan geride kaldıkça buz mavisi olsun, pace marker'dan uzaklaştıkça critical seviyesine ulaşsın; marker yakınlarında da normal rengi (yeşil) olsun."
+
+Karar 74 tempo çizgisini getirdi ama renk sistemine dokunmadı: dolgu hâlâ MUTLAK yüzdeye göre (%50 sarı / %80 kırmızı) boyanıyordu. Yani göstergede iki eksen vardı ve ikisi birbirinden habersizdi — çizgi "geride kaldın" derken dolgu sarı olabiliyordu. Üstelik fark yalnız tooltip metnindeydi; topbar'a bar sığmadığı için tempo sinyali oraya HİÇ ulaşmıyordu.
+
+Karar: rengin kaynağı `percentUsed` değil, dolgunun tempo çizgisine olan MESAFESİDİR (`UsagePace.deltaPoints` = harcanan yüzde − pencerenin geçen yüzdesi). Rampa süreklidir:
+
+```
+  -1 ───────────── 0 ───────── +0.5 ───────── +1
+  ice (#38BDF8)  success      warning       error
+  geride         tempoda      önde          kritik
+```
+
+- **Tolerans (±5 puan).** Çizginin yakını düz yeşildir. Tempoda giden bir pencerede yüzde ile saat birkaç puan salınır; bant olmasa renk sürekli titrerdi.
+- **Soğuk taraf 25 puan, sıcak taraf 40 puan.** Asimetri bilinçli: geride kalmak haberdir, öne geçmek uyarıdır — uyarı rengine geçmek için daha çok kanıt istenir. Sarı da rampanın UCU değil, sıcak yarının orta durağıdır; kırmızı yalnız uçta durur ki "kritik" seyrek ve inandırıcı kalsın.
+- **Buz mavisi yeni bir palet token'ıdır** (`Theme.ice`, #38BDF8 — palet ailesiyle uyumlu). Yeşille aynı "iyi" ailesindedir ama başka bir şey söyler: yeşil "tempoda", buz mavisi "tempodan yavaş".
+- **Tükenen limit rampayı ezer.** `percentUsed >= 100` ise `toneStop` tavana oturur: pencere neredeyse bittiği için "tempoda" görünen bir kota bitmiş olabilir, ve bitmiş kota sakin renkte gösterilemez.
+- **Çizginin kendisi nötr kalır** (`Theme.textPrimary`). Renk artık ona olan mesafeyi ölçüyor; çizgi referansın kendisidir, renklenirse ölçtüğü şeyle yarışır (ve sarı dolgunun üstünde sarı çizgi kaybolur).
+- **Mutlak bant (`UsageLevel`) YEDEK olarak kalır.** Pencere süresi bilinmeyen satırda (Claude'un tanınmayan limit türü) tempo hesaplanamaz; orada eski %50/%80 bandı çizilir. Tempo uydurulmaz — karar 74'teki veri kapısının aynısı.
+- **Renk tek kanal değildir.** Aynı `UsagePace`'ten üretilen söz (`verdict`: "28 pt under pace") satır tooltip'ine, topbar tooltip'ine ve VoiceOver etiketine girer. Renk ve metin ayrı hesaplanırsa bir gün ayrı şey söylerler.
+- **Topbar da rampadan beslenir.** Kompakt göstergenin yüzdesi artık tempoyu taşır; iki yüzeyin farklı şey söylemesi kabul edilemez, bu yüzden ikisi de tek kapıdan (`UsageTint.color(for:now:)`) geçer.
+
+Katman ayrımı korunur: aritmetik saf ve view'suzdur (`LumiKit/Support/UsagePace.swift`), rampanın renkleri presenter'dadır (`UsagePresentation`), ara ton bir token değil iki token arasındaki ölçülmüş konumdur (`Theme.blend`, hex sabitleri `Theme.Hex`).
+
+- **Sınırlar.** `UsagePace`, `Theme.ice`/`Theme.Hex`/`Theme.blend`, `UsagePresentation` (`color`, `verdict`, `summary`, `UsageTint`), `UsageIndicatorView` (`tint`, `helpText`, `accessibilityLabel`) ve `UsageWindowRow` (`percentColor`, `paceHelp`). Çizginin konumu, `UsageWindow`/`UsageSnapshot` biçimi, yenileme aralıkları, cache ve `config.json` değişmedi.
+

@@ -46,6 +46,27 @@ final class UsageWindowRowTests: XCTestCase {
         )
     }
 
+    /// Satırın rengi mutlak yüzdeden değil, çizgiye olan mesafeden gelir
+    /// (karar 85) — dolgu ve yüzde metni aynı rengi kullanır.
+    func testFillColorFollowsTheDistanceToTheMarker() {
+        // 30 puan geride (tolerans 5 + coolSpan 25) → soğuk uç.
+        let behind = row(percent: 10, resetsIn: 3 * 60 * 60, duration: 5 * 60 * 60)
+        XCTAssertEqual(behind.percentColor, Theme.ice)
+
+        let onPace = row(percent: 40, resetsIn: 3 * 60 * 60, duration: 5 * 60 * 60)
+        XCTAssertEqual(onPace.percentColor, Theme.success)
+
+        let ahead = row(percent: 90, resetsIn: 3 * 60 * 60, duration: 5 * 60 * 60)
+        XCTAssertEqual(ahead.percentColor, Theme.error)
+    }
+
+    func testRowWithoutDataStaysMuted() {
+        XCTAssertEqual(
+            row(percent: nil, resetsIn: 3 * 60 * 60, duration: 5 * 60 * 60).percentColor,
+            Theme.textMuted
+        )
+    }
+
     func testHelpTextNamesTheGapBetweenUsageAndClock() {
         // %12 harcanmış, pencerenin %40'ı geçmiş → 28 puan geride.
         XCTAssertEqual(
