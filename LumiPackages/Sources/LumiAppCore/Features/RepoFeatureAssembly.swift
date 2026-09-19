@@ -138,6 +138,17 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
         repoStore.capabilities[repoPath]?.isPlasticWorkspace == true
     }
 
+    /// Karar 84: git olmayan projede git taburu (dal + durum + özet + geçmiş +
+    /// dal başına commit listesi) her dosya değişiminde boşuna koşuyordu; her
+    /// komut exit 128 ile sessizce düşüyor ama süreç yine de açılıyordu.
+    /// Explorer'ın yenile butonu bu kapıyı zaten kullanıyordu, izleyici yolu
+    /// kullanmıyordu. Yetenek bilgisi her iki çağrı yerinde de hemen önceki
+    /// `loadFileTree` içinde tazelendiği için `git init` bir sonraki dosya
+    /// değişiminde kendiliğinden yakalanır.
+    private func isGitRepo(_ repoPath: String) -> Bool {
+        repoStore.capabilities[repoPath]?.isGitRepo == true
+    }
+
     // MARK: - Aktif repo
 
     /// Aktif repo değişimi: tek repo izlenir + git/tree yüklenir.
@@ -169,7 +180,9 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
                 guard let current else { return }
                 await self.services.repo.watchFileTree(repoPath: current)
                 await self.repoStore.loadFileTree(current)
-                await self.gitStore.loadAll(current)
+                if self.isGitRepo(current) {
+                    await self.gitStore.loadAll(current)
+                }
                 // Karar 46: `cm` yalnız `.plastic/` tanınan dizinde koşar.
                 if self.isPlasticWorkspace(current) {
                     await self.plasticStore.loadAll(current)
@@ -204,7 +217,11 @@ final class RepoFeatureAssembly: FeatureAssembly, ShellContributing {
             guard let self else { return }
             await self.repoStore.loadFileTree(repoPath)
             if self.shared.navigation.activeRepoPath == repoPath {
-                await self.gitStore.refresh(repoPath)
+                if self.isGitRepo(repoPath) {
+                    // Karar 84: remote adresi yapılandırmadır, her dosya
+                    // yazımında yeniden sorulmaz.
+                    await self.gitStore.refresh(repoPath, rescanRemote: false)
+                }
                 if self.isPlasticWorkspace(repoPath) {
                     await self.plasticStore.refreshStatus(repoPath)
                 }

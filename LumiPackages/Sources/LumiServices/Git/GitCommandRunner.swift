@@ -49,8 +49,12 @@ public struct GitCommandRunner: Sendable {
     /// değişiminde log gürültüsü üretmez.
     public func logQuietFailure(_ operation: String, _ output: ProcessOutput?) {
         if let output, output.stderr.contains("not a git repository") { return }
-        let detail = output.map { "exit \($0.exitCode): \($0.stderr.prefix(200))" }
-            ?? "timeout/launch failure"
+        // Karar 84: git'in stderr'i satır sonuyla biter; kırpılmazsa her kayıt
+        // İKİ satır olur (mesaj + boş satır) ve teşhis log'u iki katına çıkar.
+        let detail = output.map {
+            let stderr = $0.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+            return "exit \($0.exitCode): \(stderr.prefix(200))"
+        } ?? "timeout/launch failure"
         fputs("[lumi-git] \(operation) başarısız (sessiz): \(detail)\n", stderr)
     }
 }

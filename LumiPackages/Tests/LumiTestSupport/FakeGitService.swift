@@ -56,6 +56,8 @@ public actor FakeGitService: GitReading, GitContentReading, GitWriting {
     public private(set) var imagePreviewCalls: [ImagePreviewCall] = []
     public private(set) var commitCalls: [CommitCall] = []
     public private(set) var branchesCallCount = 0
+    /// Karar 84: remote yalnız repo başına bir kez sorulmalı.
+    public private(set) var remoteURLCallCount = 0
     public private(set) var statusCallCount = 0
     public private(set) var commitsCallCount = 0
     public private(set) var historyCalls: [Int] = []
@@ -140,7 +142,8 @@ public actor FakeGitService: GitReading, GitContentReading, GitWriting {
     }
 
     public func remoteURL(repoPath: String) async -> String? {
-        remoteURLToReturn
+        remoteURLCallCount += 1
+        return remoteURLToReturn
     }
 
     public func isGitHubCLIAvailable() async -> Bool {

@@ -26,6 +26,22 @@ final class GitServiceTests: XCTestCase {
         try super.tearDownWithError()
     }
 
+    // MARK: - Karar 84: remote yokluğu geçerli cevaptır
+
+    func testRemoteURLIsNilWhenOriginIsNotConfigured() async throws {
+        let url = await service.remoteURL(repoPath: repoDir.path)
+
+        XCTAssertNil(url, "origin tanımsızsa remote yok demektir (arıza değil)")
+    }
+
+    func testRemoteURLReturnsConfiguredOrigin() async throws {
+        try git("remote", "add", "origin", "https://github.com/lumi/lumi.git")
+
+        let url = await service.remoteURL(repoPath: repoDir.path)
+
+        XCTAssertEqual(url, "https://github.com/lumi/lumi.git")
+    }
+
     // MARK: - Karar 47: ham diff metni
 
     func testWorkingTreeDiffTextCoversTrackedAndUntrackedFiles() async throws {

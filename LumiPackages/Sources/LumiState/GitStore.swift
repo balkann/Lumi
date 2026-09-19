@@ -25,6 +25,11 @@ public final class GitStore {
     /// GitHub CLI PATH'te mi? Süreç ömrü boyunca bir kez ölçülür.
     public private(set) var isGitHubCLIAvailable = false
     @ObservationIgnored private var didProbeGitHubCLI = false
+    /// Remote adresi sorulmuş repo'lar (karar 84). Remote YAPILANDIRMADIR,
+    /// çalışma durumu değil: dal/durum/geçmiş her dosya yazımında değişir, remote
+    /// adresi değişmez. Dosya izleyicisi tik'i (`rescanRemote: false`) bu yüzden
+    /// yeniden sormaz; `evict` işareti düşürür, manuel yenileme zorlar.
+    @ObservationIgnored private var probedRemoteRepos: Set<String> = []
     public private(set) var changes: [String: [GitFileChange]] = [:]
     /// Karar 41: başlıktaki upstream / ahead-behind / satır istatistiği.
     public private(set) var branchSummaries: [String: GitBranchSummary] = [:]
@@ -56,7 +61,9 @@ public final class GitStore {
 
     // MARK: - Yükleme
 
-    public func loadAll(_ repoPath: String) async {
+    /// `rescanRemote: false` yalnız dosya izleyicisi tik'i içindir (bkz.
+    /// `loadRemoteURL`); diğer her çağrı remote'u taze sorar.
+    public func loadAll(_ repoPath: String, rescanRemote: Bool = true) async {
         let branchList = await git.branches(repoPath: repoPath)
         branches[repoPath] = branchList
         if !userToggledRepos.contains(repoPath),
@@ -65,7 +72,7 @@ public final class GitStore {
         }
 
         await loadChanges(repoPath)
-        await loadHistory(repoPath)
+        await loadHistory(repoPath, rescanRemote: rescanRemote)
 
         commitsByBranch[repoPath] = await loadCommits(repoPath, branches: branchList)
     }
@@ -73,7 +80,7 @@ public final class GitStore {
     /// Graph history + remote bağlamı. `gh` yoklaması yalnız İLK çağrıda
     /// koşar: PATH taraması repo'dan bağımsızdır ve her tazelemede bir
     /// `which gh` süreci açmak gereksiz.
-    public func loadHistory(_ repoPath: String) async {
+    public func loadHistory(_ repoPath: String, rescanRemote: Bool = true) async {
         let commits = await git.history(repoPath: repoPath, limit: Self.historyLimit)
         history[repoPath] = commits
         if let head = commits.first(where: { commit in
@@ -84,15 +91,26 @@ public final class GitStore {
             headHash[repoPath] = commits.first?.hash
         }
 
-        if let remote = await git.remoteURL(repoPath: repoPath) {
-            remoteURLs[repoPath] = remote
-        } else {
-            remoteURLs.removeValue(forKey: repoPath)
-        }
+        await loadRemoteURL(repoPath, rescan: rescanRemote)
 
         if !didProbeGitHubCLI {
             didProbeGitHubCLI = true
             isGitHubCLIAvailable = await git.isGitHubCLIAvailable()
+        }
+    }
+
+    /// `origin` adresi — repo başına BİR kez sorulur (karar 84).
+    ///
+    /// `rescan` işareti sıfırlar: manuel yenileme, uyandırma ve commit sonrası
+    /// taze sorar, böylece terminalden eklenen bir remote yakalanır. Olumsuz
+    /// cevap da saklanır (remote'suz depoda tekrar tekrar sorulmaz).
+    private func loadRemoteURL(_ repoPath: String, rescan: Bool) async {
+        if !rescan, probedRemoteRepos.contains(repoPath) { return }
+        probedRemoteRepos.insert(repoPath)
+        if let remote = await git.remoteURL(repoPath: repoPath) {
+            remoteURLs[repoPath] = remote
+        } else {
+            remoteURLs.removeValue(forKey: repoPath)
         }
     }
 
@@ -175,8 +193,9 @@ public final class GitStore {
     }
 
     /// fileTreeChanged köprüsü — git panellerinin canlılığı.
-    public func refresh(_ repoPath: String) async {
-        await loadAll(repoPath)
+    /// `rescanRemote: false` = otomatik tik (karar 84).
+    public func refresh(_ repoPath: String, rescanRemote: Bool = true) async {
+        await loadAll(repoPath, rescanRemote: rescanRemote)
     }
 
     // MARK: - Seçim / accordion
@@ -217,6 +236,7 @@ public final class GitStore {
         history.removeValue(forKey: repoPath)
         headHash.removeValue(forKey: repoPath)
         remoteURLs.removeValue(forKey: repoPath)
+        probedRemoteRepos.remove(repoPath)
         changes.removeValue(forKey: repoPath)
         branchSummaries.removeValue(forKey: repoPath)
         explorerStatuses.removeValue(forKey: repoPath)

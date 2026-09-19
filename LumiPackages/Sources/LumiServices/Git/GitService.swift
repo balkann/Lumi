@@ -95,12 +95,22 @@ public struct GitService: GitServicing {
         return GitPorcelainParser.parseHistory(output.stdout)
     }
 
+    /// `origin` remote adresi; tanımlı değilse `nil`.
+    ///
+    /// Karar 84: "origin yok" bir ARIZA DEĞİL, sorunun geçerli cevabıdır —
+    /// git exit 2 + `No such remote` ile cevaplar, remote'suz depo da normaldir
+    /// (GitHub eylemleri gizlenir). Eskiden bu cevap `logQuietFailure`'a
+    /// gidiyordu ve her tazelemede stderr'e hata satırı yazıyordu; tek bir
+    /// oturumda 8.000'den fazla satır ölçüldü. `branchSummary`'nin upstream
+    /// yokluğunu sessizce "yayınlanmamış" sayması ile aynı kalıp. Log yalnız
+    /// süreç HİÇ koşamadığında (launch hatası / timeout) kalır.
     public func remoteURL(repoPath: String) async -> String? {
         let output = await commands.run(["remote", "get-url", "origin"], in: repoPath)
-        guard let output, output.exitCode == 0 else {
-            commands.logQuietFailure("remoteURL", output)
+        guard let output else {
+            commands.logQuietFailure("remoteURL", nil)
             return nil
         }
+        guard output.exitCode == 0 else { return nil }
         let trimmed = output.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
     }

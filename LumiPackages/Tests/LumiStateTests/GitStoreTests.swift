@@ -14,6 +14,64 @@ final class GitStoreTests: XCTestCase {
         GitStore(git: git, toasts: ToastStore(autoDismissAfter: 60))
     }
 
+    // MARK: - Karar 84: remote adresi repo başına bir kez sorulur
+
+    func testAutomaticRefreshDoesNotReprobeRemoteURL() async {
+        let git = FakeGitService()
+        await git.setRemoteURL("git@github.com:lumi/lumi.git")
+        let store = makeStore(git)
+
+        await store.loadAll(repoPath)
+        await store.refresh(repoPath, rescanRemote: false)
+        await store.refresh(repoPath, rescanRemote: false)
+
+        let count = await git.remoteURLCallCount
+        XCTAssertEqual(count, 1, "dosya izleyicisi tik'i remote'u yeniden sormamalı")
+        XCTAssertEqual(store.remoteURLs[repoPath], "git@github.com:lumi/lumi.git")
+    }
+
+    /// Remote'suz depoda olumsuz cevap da saklanır — asıl gürültü kaynağı buydu.
+    func testAutomaticRefreshDoesNotReprobeMissingRemote() async {
+        let git = FakeGitService()
+        let store = makeStore(git)
+
+        await store.loadAll(repoPath)
+        await store.refresh(repoPath, rescanRemote: false)
+
+        let count = await git.remoteURLCallCount
+        XCTAssertEqual(count, 1)
+        XCTAssertNil(store.remoteURLs[repoPath])
+    }
+
+    func testManualRefreshReprobesRemoteURL() async {
+        let git = FakeGitService()
+        let store = makeStore(git)
+
+        await store.loadAll(repoPath)
+        await git.setRemoteURL("git@github.com:lumi/lumi.git")
+        await store.refresh(repoPath, rescanRemote: false)
+        XCTAssertNil(store.remoteURLs[repoPath], "otomatik tik yeni remote'u görmez")
+
+        await store.refresh(repoPath)
+
+        XCTAssertEqual(store.remoteURLs[repoPath], "git@github.com:lumi/lumi.git")
+        let count = await git.remoteURLCallCount
+        XCTAssertEqual(count, 2)
+    }
+
+    func testEvictClearsRemoteProbeMarker() async {
+        let git = FakeGitService()
+        await git.setRemoteURL("git@github.com:lumi/lumi.git")
+        let store = makeStore(git)
+
+        await store.loadAll(repoPath)
+        store.evict(repoPath)
+        await store.refresh(repoPath, rescanRemote: false)
+
+        let count = await git.remoteURLCallCount
+        XCTAssertEqual(count, 2, "sekme kapanıp açılınca remote yeniden sorulur")
+    }
+
     func testLoadAllCapsConcurrentCommitCalls() async {
         let git = FakeGitService()
         await git.setBranches((0 ..< 10).map { GitBranch(name: "b\($0)", isCurrent: $0 == 0) })
