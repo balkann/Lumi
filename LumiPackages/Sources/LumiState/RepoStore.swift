@@ -25,7 +25,7 @@ public final class RepoStore: StoreLifecycle {
     @ObservationIgnored private var autoExpandedRepos: Set<String> = []
 
     @ObservationIgnored private let service: any RepoServicing
-    @ObservationIgnored private let consumer = EventConsumer()
+    @ObservationIgnored private let consumer = EventConsumer(label: "repo")
 
     public init(service: any RepoServicing) {
         self.service = service

@@ -20,7 +20,7 @@ public final class NotificationService: NotificationServicing {
 
     private let presenter: any NotificationPresenting
     private let scheduler: any RepeatingScheduling
-    private let broadcaster = EventBroadcaster<NotificationEvent>()
+    private let broadcaster = EventBroadcaster<NotificationEvent>(label: "notifications")
     private var settings: NotificationSettings
     private var windowFocused = true
     private var permissionRequested = false

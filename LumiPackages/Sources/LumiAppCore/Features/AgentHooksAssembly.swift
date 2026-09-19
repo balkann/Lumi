@@ -1,6 +1,7 @@
 import Foundation
 import LumiKit
 import LumiState
+import os
 
 /// Ajan hook köprüsü (karar 45): loopback sunucuyu açar, uç noktayı terminal
 /// servisine verir (sonraki spawn'ların env'i), Claude/Codex ayar dosyalarına
@@ -11,6 +12,8 @@ import LumiState
 /// yollayamaz ve kart sezgisel yola düşer.
 @MainActor
 final class AgentHooksAssembly: FeatureAssembly {
+    /// Teşhis izi (karar 83).
+    private static let logger = LumiLog.logger("agentHooks")
     let bootstrapPhase = BootstrapPhase.system
 
     private var services: (any ServiceRegistry)!
@@ -71,6 +74,7 @@ final class AgentHooksAssembly: FeatureAssembly {
     }
 
     private func disable(uninstall: Bool) async {
+        Self.logger.log("disable(uninstall: \(uninstall)) enabled=\(self.isEnabled)")
         ingest?.cancel()
         ingest = nil
         guard isEnabled else { return }
@@ -87,11 +91,15 @@ final class AgentHooksAssembly: FeatureAssembly {
     private func startIngest() {
         guard ingest == nil else { return }
         let stream = services.agentHooks.events()
+        Self.logger.log("ingest start")
         ingest = Task { @MainActor [weak self] in
+            var handled = 0
             for await event in stream {
                 guard let self else { return }
                 self.services.terminal.applyAgentHookEvent(event)
+                handled += 1
             }
+            Self.logger.log("ingest loop ended (cancelled: \(Task.isCancelled), handled \(handled))")
         }
     }
 

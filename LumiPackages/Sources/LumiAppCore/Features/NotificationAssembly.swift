@@ -2,6 +2,10 @@ import Foundation
 import LumiKit
 import LumiServices
 import LumiState
+import os
+
+/// Teşhis izi (karar 83).
+private let notificationLogger = LumiLog.logger("notifications")
 
 /// Bildirim köprüleri (refactor 3.3): terminal status → OS bildirimi ve
 /// bildirim event'leri → store'lar.
@@ -76,6 +80,7 @@ final class NotificationAssembly: FeatureAssembly {
                 switch event {
                 case .clicked(let id):
                     // Minimize istisnası: bildirim tıklaması restore + focus
+                    notificationLogger.log("notification clicked \(LumiLog.short(id), privacy: .public)")
                     self.shared.terminals.restoreAndFocus(id)
                 case .bell(let id, let repoName):
                     self.shared.toasts.show(

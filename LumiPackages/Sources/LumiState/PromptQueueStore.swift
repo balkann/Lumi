@@ -30,7 +30,7 @@ public final class PromptQueueStore: StoreLifecycle {
     @ObservationIgnored private var statuses: [TerminalID: TerminalStatus] = [:]
     @ObservationIgnored private var awaitingDecisionIDs: Set<TerminalID> = []
     @ObservationIgnored private var settleTasks: [TerminalID: Task<Void, Never>] = [:]
-    @ObservationIgnored private let consumer = EventConsumer()
+    @ObservationIgnored private let consumer = EventConsumer(label: "promptQueue")
 
     /// Bekleme durumunun stabil sayılması için geçmesi gereken süre — anlık
     /// flicker'a ve kullanıcıya manuel müdahale aralığı tanımak için.

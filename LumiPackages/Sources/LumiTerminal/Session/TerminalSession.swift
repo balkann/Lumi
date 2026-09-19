@@ -2,6 +2,10 @@ import AppKit
 import Foundation
 import LumiKit
 import SwiftTerm
+import os
+
+/// Teşhis izi (karar 83); io queue'dan da yazılabilsin diye dosya düzeyinde.
+private let sessionLogger = LumiLog.logger("terminal")
 
 @MainActor
 protocol TerminalSessionDelegate: AnyObject {
@@ -147,9 +151,11 @@ final class TerminalSession {
     }
 
     private func wirePTY() {
+        let sessionID = id
         pty.onExit = { [weak self, pipeline] code in
             // io queue: önce timer iptal + kalan buffer flush,
             // sonra main'e exit bildirimi — main FIFO teslim sırasını korur
+            sessionLogger.log("pty exit \(LumiLog.short(sessionID), privacy: .public) code \(code) (io queue)")
             pipeline.prepareForExit()
             hopToMain { self?.handleExit(code: code) }
         }
@@ -205,6 +211,7 @@ final class TerminalSession {
     private func handleExit(code: Int32) {
         guard !isTerminated else { return }
         isTerminated = true
+        sessionLogger.log("handleExit \(LumiLog.short(self.id), privacy: .public) code \(code) delegate=\(self.delegate != nil)")
         pendingResize?.cancel()
         launchGate?.cancel()
         launchGate = nil
@@ -347,6 +354,7 @@ final class TerminalSession {
     var processID: Int32? { isTerminated ? nil : pty.processID }
 
     func terminate() {
+        sessionLogger.log("terminate \(LumiLog.short(self.id), privacy: .public) pid \(self.pty.processID.map(String.init) ?? "nil", privacy: .public)")
         pty.terminate()
     }
 

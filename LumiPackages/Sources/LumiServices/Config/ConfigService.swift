@@ -13,7 +13,7 @@ public actor ConfigService: ConfigServicing {
 
     private let paths: LumiPaths
     private let writeDebounce: Duration
-    private let broadcaster = EventBroadcaster<ConfigEvent>()
+    private let broadcaster = EventBroadcaster<ConfigEvent>(label: "config")
 
     private var cachedUIState: UIState?
     private var cachedUIRaw: [String: Any]?
