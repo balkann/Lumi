@@ -50,7 +50,7 @@ enum CodexAppServerProbe {
         // çağıran vazgeçtikten sonra probe 30 sn boyunca yoklamaya devam
         // ediyordu (arka planda görünmez bir codex süreciyle birlikte).
         return try await withTaskCancellationHandler {
-            defer { session.shutdown() }
+            defer { session.shutdownDetached() }
 
             let deadline = Date().addingTimeInterval(timeout)
             session.send(request: 1, method: "initialize", params: [
@@ -62,7 +62,7 @@ enum CodexAppServerProbe {
             session.send(request: 2, method: method, params: [:])
             return try await session.awaitResponse(id: 2, deadline: deadline)
         } onCancel: {
-            session.shutdown()
+            session.shutdownDetached()
         }
     }
 }
@@ -85,7 +85,7 @@ private final class ProbeSession: @unchecked Sendable {
     private var responses: [Int: Result<Data, CodexAppServerProbe.ProbeError>] = [:]
     private var stderrText = ""
     private var isShutDown = false
-    /// `waitUntilExit` yalnız gerçekten başlatılmış süreçte çağrılabilir.
+    /// `terminate()`/`isRunning` yalnız gerçekten başlatılmış süreçte çağrılabilir.
     private var didLaunch = false
 
     init(binary: String, codexHome: String?) throws {
@@ -225,6 +225,30 @@ private final class ProbeSession: @unchecked Sendable {
     /// SIGKILL gelir (karar 55).
     private static let terminationGrace: TimeInterval = 2
 
+    /// SIGKILL sonrası reap için beklenen üst sınır (karar 86). Burada
+    /// `waitUntilExit()` KULLANILMAZ: Foundation çıkış bildirimini çağıran
+    /// thread'in run loop'una bağlar ve cooperative pool thread'inde bu
+    /// bildirim hiç gelmeyebilir — thread süresiz bloke kalır.
+    private static let reapGrace: TimeInterval = 2
+
+    /// Sonlandırma bloklayıcıdır ve Swift concurrency'nin cooperative
+    /// pool'unda ÇALIŞMAMALIDIR (karar 86): pool'un thread sayısı çekirdek
+    /// sayısı kadardır, orada bloke olan her probe pool'dan bir thread düşürür
+    /// ve yeterince sızıntı uygulamanın TÜM async dünyasını durdurur —
+    /// `AsyncStream` tüketicileri dahil (hayalet terminal bug'ı).
+    private static let shutdownQueue = DispatchQueue(
+        label: "com.lumi.codex-probe.shutdown",
+        qos: .utility,
+        attributes: .concurrent
+    )
+
+    /// Pool'u tutmadan sonlandırır: çağıran hemen döner, bloklayıcı bekleme
+    /// ayrı bir kuyrukta koşar. Süreç sonlandırma sırası `shutdown()`'ın
+    /// idempotence'ıyla korunur.
+    func shutdownDetached() {
+        Self.shutdownQueue.async { [self] in shutdown() }
+    }
+
     /// Idempotent. `terminate()` sonrası süreç beklenir: aksi halde çocuk süreç
     /// reap edilmeyip zombi olarak kalıyordu. Ama bekleme SINIRLIDIR: koşulsuz
     /// `waitUntilExit()` SIGTERM'e yanıt vermeyen bir süreçte çağıran thread'i
@@ -243,10 +267,14 @@ private final class ProbeSession: @unchecked Sendable {
         guard launched else { return }
         if process.isRunning { process.terminate() }
         let deadline = Date().addingTimeInterval(Self.terminationGrace)
-        while process.isRunning, Date() < deadline {
-            usleep(UInt32(Self.pollInterval.components.attoseconds / 1_000_000_000_000))
-        }
+        while process.isRunning, Date() < deadline { sleepOnePollInterval() }
         if process.isRunning { kill(process.processIdentifier, SIGKILL) }
-        process.waitUntilExit()
+        // SIGKILL'den sonra reap'i bekle — ama SINIRLI (karar 86).
+        let reapDeadline = Date().addingTimeInterval(Self.reapGrace)
+        while process.isRunning, Date() < reapDeadline { sleepOnePollInterval() }
+    }
+
+    private func sleepOnePollInterval() {
+        usleep(UInt32(Self.pollInterval.components.attoseconds / 1_000_000_000_000))
     }
 }

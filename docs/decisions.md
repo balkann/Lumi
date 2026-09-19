@@ -860,3 +860,25 @@ Katman ayrımı korunur: aritmetik saf ve view'suzdur (`LumiKit/Support/UsagePac
 
 - **Sınırlar.** `UsagePace`, `Theme.ice`/`Theme.Hex`/`Theme.blend`, `UsagePresentation` (`color`, `verdict`, `summary`, `UsageTint`), `UsageIndicatorView` (`tint`, `helpText`, `accessibilityLabel`) ve `UsageWindowRow` (`percentColor`, `paceHelp`). Çizginin konumu, `UsageWindow`/`UsageSnapshot` biçimi, yenileme aralıkları, cache ve `config.json` değişmedi.
 
+### 86. Bloklayıcı süreç beklemesi cooperative pool'da koşmaz (2026-09-19)
+
+Hayalet-terminal bug'ının (karar 83'te iz bırakılan) kök nedeni bulundu ve bu sefer canlı süreçten ölçüldü. Semptom kayıtta şöyle görünür:
+
+```
+13:31:14  [terminal] exit ACD6AF7A code 1 remaining 1     ← manager yayınladı
+          (…[terminals] ← exited YOK — tüketici olayı hiç almadı)
+13:31:18  [terminal] spawn 3E60EE3B repo=Lumi sessions=2  ← ⌘T PTY'yi açtı
+          (…[terminals] ← spawned YOK — kart doğmadı)
+```
+
+`consumer loop ended` de `stream terminated` de yoktur: döngü ne öldü ne iptal edildi, sadece bir daha hiç koşmadı. `sample` bunun nedenini tek satırda verdi — makinenin 8 çekirdeğine karşılık **cooperative pool'un 8 thread'inin sekizi de** `ProbeSession.shutdown()` → `-[NSConcreteTask waitUntilExit]` içinde kilitliydi. Her Codex kullanım probe'u bir thread'i ömür boyu götürmüştü; pool tükenince Swift concurrency'nin tamamı durur. `AsyncStream.Iterator.next()` nonisolated'dır: `for await` döngüsü MainActor'da olsa da bir sonraki elemanı almak için pool'dan thread ister. Terminal olayları bu yüzden ne uygulanır ne düşer. Uygulamanın geri kalanı yaşıyor gibi görünür, çünkü AppKit'in senkron yolu (tuş → `spawn`, çizim) pool'a uğramaz — ⌘Q'nun asılması da aynı açlığın yüzüdür.
+
+Karar: **bloklayıcı süreç beklemesi cooperative pool'da çalışmaz.**
+
+- **`waitUntilExit()` kullanılmaz.** Foundation çıkış bildirimini çağıran thread'in run loop'una bağlar; pool thread'inde bu bildirim gelmeyebilir ve SIGKILL gönderilmiş olsa bile bekleme dönmez. Yerine `isRunning` yoklaması gelir, `reapGrace` (2 sn) üst sınırıyla. Zombi riski bu sınırın karşılığıdır: reap edilemeyen bir çocuk, donmuş bir uygulamadan iyidir.
+- **Sonlandırma çağıranı bloklamaz.** `shutdownDetached()` işi kendi `DispatchQueue`'suna atar (`com.lumi.codex-probe.shutdown`, concurrent, utility); probe'un `defer`'ı ve `onCancel`'ı bunu çağırır. SIGTERM'i yutan bir app-server'da çağıran artık grace süresi boyunca beklemez.
+- **Kapı iki yerde birden tutulur.** Yalnız süresiz beklemeyi kaldırmak yeterli değildi: sınırlı bir bekleme de (2+2 sn) yeterince eşzamanlı probe'la pool'u geçici olarak boşaltabilir. Sınır + pool dışına taşıma birlikte anlamlıdır.
+
+Karar 55'in "probe'da SIGKILL yedeği" ve karar 68'in "timeout kesin üst sınırdır" kararları bu boşluğu kapatmıyordu: ikisi de *çağıranın* ne kadar bekleyeceğini sınırlıyor, sonlandırmanın *thread'i* ne kadar tutacağını değil.
+
+- **Sınırlar.** `CodexAppServerProbe.swift` (`shutdownDetached`, `reapGrace`, `sleepOnePollInterval`, iki çağrı yeri). Probe protokolü, timeout/cache davranışı, yenileme aralıkları ve `EventBroadcaster`/`EventConsumer` değişmedi — tüketici zaten doğruydu, yakıtı kesilmişti. Test: `CodexAppServerProbeTests.testShutdownDoesNotBlockCallerOnStubbornChild` (SIGTERM'i `trap`'leyen app-server taklidi; iptalden sonra çağıran 1 sn'den kısa sürede döner ve süreç yine de ölür).
