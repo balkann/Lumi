@@ -1,5 +1,6 @@
 // LumiMobile/App/MobileChatMessageView.swift
 import SwiftUI
+import UIKit
 import LumiMobileKit
 import LumiWire
 
@@ -7,8 +8,24 @@ import LumiWire
 struct MobileChatMessageView: View {
     let turn: FoldedTurn
 
+    @State private var copied = false
+
     var body: some View {
         VStack(alignment: turn.message.role == .user ? .trailing : .leading, spacing: 4) {
+            if turn.message.role == .assistant, let text = chatCopyText(turn) {
+                HStack {
+                    Spacer()
+                    Button {
+                        performCopy(text)
+                    } label: {
+                        Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Copy message")
+                }
+            }
             ForEach(Array(turn.message.blocks.enumerated()), id: \.offset) { _, block in
                 blockView(block)
             }
@@ -16,6 +33,13 @@ struct MobileChatMessageView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(maxWidth: .infinity, alignment: turn.message.role == .user ? .trailing : .leading)
+    }
+
+    private func performCopy(_ text: String) {
+        UIPasteboard.general.string = text
+        copied = true
+        // Revert the confirmation checkmark after a short beat (orca 700ms).
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { copied = false }
     }
 
     @ViewBuilder
