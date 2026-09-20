@@ -6,7 +6,7 @@ import Foundation
 /// Reports the bottom sentinel's minY within the ScrollView's "chatScroll"
 /// coordinate space, so the view can tell whether the list is at the bottom.
 private struct BottomSentinelKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
+    static var defaultValue: CGFloat { 0 }
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = nextValue()
     }
