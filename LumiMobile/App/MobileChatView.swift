@@ -3,6 +3,15 @@ import SwiftUI
 import LumiMobileKit
 import Foundation
 
+/// Reports the bottom sentinel's minY within the ScrollView's "chatScroll"
+/// coordinate space, so the view can tell whether the list is at the bottom.
+private struct BottomSentinelKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
 /// Native chat view: displays messages derived from the transcript as
 /// line-wrapping bubbles (no horizontal scroll). The composer sends free text.
 struct MobileChatView: View {
@@ -12,6 +21,7 @@ struct MobileChatView: View {
     @StateObject private var keyboard = KeyboardObserver()
     @State private var draft = ""
     @FocusState private var composerFocused: Bool
+    @State private var atBottom = true
 
     // Combined render list (orca): optimistic pending + journal messages +
     // gated streaming bubble → single list, then folded into turns. Streaming
@@ -37,18 +47,52 @@ struct MobileChatView: View {
                             ForEach(turns) { turn in
                                 MobileChatMessageView(turn: turn).id(turn.id)
                             }
-                            Color.clear.frame(height: 1).id("bottom")
+                            Color.clear
+                                .frame(height: 1)
+                                .id("bottom")
+                                .background(
+                                    GeometryReader { g in
+                                        Color.clear.preference(
+                                            key: BottomSentinelKey.self,
+                                            value: g.frame(in: .named("chatScroll")).minY
+                                        )
+                                    }
+                                )
                         }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
                     }
+                    .coordinateSpace(name: "chatScroll")
+                    .onPreferenceChange(BottomSentinelKey.self) { minY in
+                        atBottom = chatAtBottom(sentinelMinY: minY, viewportHeight: geo.size.height)
+                    }
                     .onChange(of: turns.count) { _, _ in
-                        withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
+                        if atBottom { withAnimation { proxy.scrollTo("bottom", anchor: .bottom) } }
                     }
                     // Also scroll to bottom as streaming text grows (during token stream).
                     .onChange(of: model.gatedStreaming[sessionId]) { _, _ in
-                        withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
+                        if atBottom { withAnimation { proxy.scrollTo("bottom", anchor: .bottom) } }
                     }
+                    .overlay(alignment: .bottomTrailing) {
+                        if !atBottom {
+                            Button {
+                                withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
+                                atBottom = true
+                            } label: {
+                                Image(systemName: "arrow.down.circle.fill")
+                                    .font(.title)
+                                    .symbolRenderingMode(.hierarchical)
+                                    .foregroundStyle(Color.accentColor)
+                                    .background(Circle().fill(Color(uiColor: .systemBackground)))
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.trailing, 16)
+                            .padding(.bottom, 12)
+                            .accessibilityLabel("Scroll to latest")
+                            .transition(.opacity)
+                        }
+                    }
+                    .animation(.easeInOut(duration: 0.15), value: atBottom)
                 }
                 let pending = model.prompts[sessionId]?.last(where: { $0.state == .pending })
                 if let status = model.turnStatus[sessionId], status.working {
