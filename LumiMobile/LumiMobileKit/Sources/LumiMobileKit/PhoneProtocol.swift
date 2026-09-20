@@ -1,22 +1,22 @@
 import Foundation
 import LumiWire
 
-/// Relay'den gelebilecek mesajlar (telefon rolü için, terminal-ayna protokolü).
+/// Messages that can arrive from the relay (phone role, terminal-mirror protocol).
 public enum ServerMessage: Sendable, Equatable {
     case welcome(Welcome)
     case commandResult(CommandResult)
     case pong
-    // Terminal-mirror mesajları
+    // Terminal-mirror messages
     case sessions([SessionMeta])
     case scrollback(TerminalChunk)
     case data(TerminalChunk)
-    // Telefondan yeni oturum için repo listesi
+    // Repo list for starting a new session from the phone
     case repos([Repo])
-    // Chat-mirror mesajları
+    // Chat-mirror messages
     case chat(sessionId: String, messages: [ChatMessage])
     case chatAppend(sessionId: String, messages: [ChatMessage])
     case chatStatus(sessionId: String, status: ChatTurnStatus)
-    // Faz 3: etkileşimli prompt
+    // Phase 3: interactive prompt
     case prompt(sessionId: String, prompt: ChatPrompt)
 }
 
@@ -42,12 +42,12 @@ public struct OutgoingCommand: Sendable, Equatable {
     }
 }
 
-/// Zarf codec'i — docs/spec/50-remote-protocol.md ile birebir.
-/// Gelen taraf toleranslıdır: bilinmeyen tip/kind/itemType nil döner, akış kırılmaz.
+/// Envelope codec — matches docs/spec/50-remote-protocol.md exactly.
+/// The incoming side is tolerant: unknown type/kind/itemType returns nil without breaking the stream.
 public enum PhoneProtocol {
     public static let version = 1
 
-    // MARK: Gelen
+    // MARK: Incoming
 
     public static func decodeServerMessage(_ text: String) -> ServerMessage? {
         guard let data = text.data(using: .utf8),
@@ -124,7 +124,7 @@ public enum PhoneProtocol {
         ])
     }
 
-    /// Faz 3: etkileşimli prompt cevabı — approval (optionId). Telefon→Mac.
+    /// Phase 3: interactive prompt response — approval (optionId). Phone→Mac.
     public static func promptRespondFrame(sessionId: String, itemId: String, expectedRevision: Int, optionId: String) -> String {
         frame(type: "prompt_respond", payload: [
             "sessionId": sessionId, "itemId": itemId,
@@ -132,7 +132,7 @@ public enum PhoneProtocol {
         ])
     }
 
-    /// Faz 3.1: soru cevabı — soru başına selection (indices + other). Telefon→Mac.
+    /// Phase 3.1: question response — per-question selection (indices + other). Phone→Mac.
     public static func promptRespondSelectionsFrame(sessionId: String, itemId: String, expectedRevision: Int,
                                                     selections: [(indices: [Int], other: String?)]) -> String {
         let sel = selections.map { s -> [String: Any] in
@@ -146,12 +146,12 @@ public enum PhoneProtocol {
         ])
     }
 
-    /// Faz 2: kullanıcı mesajı gönderme — telefon→Mac. `chat_send` frame'i.
+    /// Phase 2: send a user message — phone→Mac. `chat_send` frame.
     public static func chatSendFrame(sessionId: String, text: String) -> String {
         frame(type: "chat_send", payload: ["sessionId": sessionId, "text": text])
     }
 
-    // MARK: Giden
+    // MARK: Outgoing
 
     public static func helloFrame(token: String) -> String {
         frame(type: "hello", payload: ["role": "phone", "token": token])

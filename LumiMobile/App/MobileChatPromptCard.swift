@@ -2,9 +2,9 @@ import SwiftUI
 import LumiMobileKit
 import LumiWire
 
-/// Faz 3 / 3.1: composer üstünde etkileşimli prompt kartı. En son pending item'ı çizer.
-/// approval: title+detail + Allow(mavi)/Deny(/don't-ask). question: tek-seçim tap; multiSelect
-/// toggle+Submit; allowOther free-text. Gruplu çok-soru (questions.count>1) = Faz 3.1 Task 8.
+/// Phase 3 / 3.1: interactive prompt card above the composer. Renders the latest pending item.
+/// approval: title+detail + Allow(blue)/Deny(/don't-ask). question: single-select tap; multiSelect
+/// toggle+Submit; allowOther free-text. Grouped multi-question (questions.count>1) = Phase 3.1 Task 8.
 struct MobileChatPromptCard: View {
     let prompt: ChatPrompt
     let maxHeight: CGFloat
@@ -13,7 +13,7 @@ struct MobileChatPromptCard: View {
     @State private var sending = false
     @State private var selected: [Int] = []
     @State private var freeText = ""
-    // Gruplu çok-soru state (Bileşen D)
+    // Grouped multi-question state (Component D)
     @State private var groupSel: [Int: [Int]] = [:]
     @State private var groupText: [Int: String] = [:]
 
@@ -50,7 +50,7 @@ struct MobileChatPromptCard: View {
         }
     }
 
-    // MARK: approval
+    // MARK: Approval
 
     private var approvalButtons: some View {
         ForEach(Array(prompt.options.enumerated()), id: \.element.id) { idx, opt in
@@ -62,7 +62,7 @@ struct MobileChatPromptCard: View {
         }
     }
 
-    // MARK: question (tek soru)
+    // MARK: Question (single question)
 
     @ViewBuilder private var questionBody: some View {
         ForEach(Array(prompt.options.enumerated()), id: \.element.id) { idx, opt in
@@ -83,7 +83,7 @@ struct MobileChatPromptCard: View {
                 sending = true
                 onQuestion([(indices: selected.sorted(), other: trimmedOther)])
             } label: {
-                Text("Gönder\(selected.isEmpty ? "" : " (\(selected.count))")")
+                Text("Send\(selected.isEmpty ? "" : " (\(selected.count))")")
                     .font(.footnote.bold()).frame(maxWidth: .infinity)
                     .padding(.vertical, 8)
                     .background(Color.accentColor.opacity(selected.isEmpty ? 0.08 : 0.22),
@@ -94,7 +94,7 @@ struct MobileChatPromptCard: View {
         if prompt.allowOther { freeTextRow }
     }
 
-    // MARK: grouped question (çok-soru; Bileşen D)
+    // MARK: Grouped question (multi-question; Component D)
 
     @ViewBuilder private var groupedQuestionBody: some View {
         ForEach(Array(prompt.questions.enumerated()), id: \.element.id) { qi, q in
@@ -111,14 +111,14 @@ struct MobileChatPromptCard: View {
                             if let at = sel.firstIndex(of: oi) { sel.remove(at: at) } else { sel.append(oi) }
                             groupSel[qi] = sel
                         } else {
-                            // Tek-seçim: bir önceki seçimi sil, yenisini yaz.
+                            // Single-select: clear the previous selection, write the new one.
                             groupSel[qi] = [oi]
                         }
                     }
                 }
                 if q.allowOther {
                     HStack(spacing: 6) {
-                        TextField("Ya da yaz…", text: Binding(
+                        TextField("Or type…", text: Binding(
                             get: { groupText[qi] ?? "" },
                             set: { groupText[qi] = $0 }
                         ), axis: .vertical)
@@ -127,8 +127,8 @@ struct MobileChatPromptCard: View {
                 }
             }
         }
-        // Tek Gönder butonu — tüm soruları sırayla toplar.
-        // groupedReady: her soru cevaplanmış olmalı (seçim VEYA dolu free-text).
+        // Single Send button — collects all questions in order.
+        // groupedReady: every question must be answered (a selection OR non-empty free-text).
         let groupedReady = prompt.questions.indices.allSatisfy { qi in
             !(groupSel[qi] ?? []).isEmpty
                 || !(groupText[qi] ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -143,7 +143,7 @@ struct MobileChatPromptCard: View {
             }
             onQuestion(result)
         } label: {
-            Text("Gönder")
+            Text("Send")
                 .font(.footnote.bold()).frame(maxWidth: .infinity)
                 .padding(.vertical, 8)
                 .background(Color.accentColor.opacity(groupedReady ? 0.22 : 0.08),
@@ -154,7 +154,7 @@ struct MobileChatPromptCard: View {
 
     private var freeTextRow: some View {
         HStack(spacing: 6) {
-            TextField("Ya da yaz…", text: $freeText, axis: .vertical)
+            TextField("Or type…", text: $freeText, axis: .vertical)
                 .textFieldStyle(.roundedBorder).lineLimit(1...3)
             Button {
                 guard !sending, !trimmedOtherIsEmpty else { return }

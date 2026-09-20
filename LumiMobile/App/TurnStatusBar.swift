@@ -3,9 +3,9 @@ import LumiMobileKit
 import LumiWire
 import Foundation
 
-/// Faz 2: chat composer'ının üstünde canlı turn-status bandı. working iken görünür.
-/// Sol: spinner + "Çalışıyor {n}sn" (TimelineView ile canlı). Orta: araç çipi.
-/// Sağ: Stop → Ctrl-C (0x03).
+/// Phase 2: live turn-status bar above the chat composer. Visible while working.
+/// Left: spinner + "Running {n}s" (live via TimelineView). Middle: tool chip.
+/// Right: Stop → Ctrl-C (0x03).
 struct TurnStatusBar: View {
     let status: ChatTurnStatus
     let onStop: () -> Void
@@ -31,7 +31,7 @@ struct TurnStatusBar: View {
                                     in: RoundedRectangle(cornerRadius: 4))
                 }
                 Spacer()
-                Button("Durdur", role: .destructive) { onStop() }
+                Button("Stop", role: .destructive) { onStop() }
                     .font(.footnote.bold())
             }
             .padding(.horizontal, 12)
@@ -41,9 +41,9 @@ struct TurnStatusBar: View {
     }
 
     private func elapsedLabel(now: Date) -> String {
-        guard let startedAtMs = status.startedAtMs else { return "Çalışıyor" }
+        guard let startedAtMs = status.startedAtMs else { return "Running" }
         let started = Date(timeIntervalSince1970: Double(startedAtMs) / 1000)
         let secs = max(0, Int(now.timeIntervalSince(started)))
-        return "Çalışıyor \(secs)sn"
+        return "Running \(secs)s"
     }
 }

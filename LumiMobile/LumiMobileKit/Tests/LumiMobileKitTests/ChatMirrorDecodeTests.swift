@@ -12,7 +12,7 @@ final class ChatMirrorDecodeTests: XCTestCase {
             {"type":"tool-result","output":"ok","isError":false}]}]}}
         """#
         guard case let .chat(sessionId, messages)? = PhoneProtocol.decodeServerMessage(frame) else {
-            return XCTFail("chat decode edilemedi")
+            return XCTFail("chat could not be decoded")
         }
         XCTAssertEqual(sessionId, "s1")
         XCTAssertEqual(messages.count, 2)
@@ -24,7 +24,7 @@ final class ChatMirrorDecodeTests: XCTestCase {
     func testDecodeChatAppendFrame() {
         let frame = #"{"v":1,"type":"chat_append","payload":{"sessionId":"s1","messages":[{"id":"m3","role":"assistant","blocks":[{"type":"text","text":"done"}]}]}}"#
         guard case let .chatAppend(_, messages)? = PhoneProtocol.decodeServerMessage(frame) else {
-            return XCTFail("chat_append decode edilemedi")
+            return XCTFail("chat_append could not be decoded")
         }
         XCTAssertEqual(messages.first?.id, "m3")
     }
@@ -43,12 +43,12 @@ final class ChatMirrorDecodeTests: XCTestCase {
           {"role":"assistant","blocks":[{"type":"text","text":"no id → dropped"}]}]}}
         """#
         guard case let .chat(_, messages)? = PhoneProtocol.decodeServerMessage(frame) else {
-            return XCTFail("chat decode edilemedi")
+            return XCTFail("chat could not be decoded")
         }
-        XCTAssertEqual(messages.count, 1, "id'siz mesaj compactMap ile düşürülür")
+        XCTAssertEqual(messages.count, 1, "message without id is dropped by compactMap")
         XCTAssertEqual(messages[0].timestampMs, 7)
         XCTAssertEqual(messages[0].turnId, "t1")
         XCTAssertEqual(messages[0].blocks[0], .imageRef(path: "/a.png", url: nil, alt: "pic"))
-        XCTAssertEqual(messages[0].blocks[1], .unknown, "bilinmeyen blok tipi → .unknown")
+        XCTAssertEqual(messages[0].blocks[1], .unknown, "unknown block type → .unknown")
     }
 }

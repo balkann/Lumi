@@ -13,7 +13,7 @@ public struct PairingInfo: Sendable, Equatable {
 
 public enum Pairing {
     /// `lumi-remote://pair?url=<pct>&token=<pct>` → PairingInfo.
-    /// URLComponents query değerlerini kendisi percent-decode eder.
+    /// URLComponents percent-decodes the query values automatically.
     public static func parse(_ string: String) -> PairingInfo? {
         let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let components = URLComponents(string: trimmed),
@@ -29,7 +29,7 @@ public enum Pairing {
     }
 }
 
-/// Eşleştirme bilgisinin güvenli saklanması. Üretimde Keychain; testte in-memory.
+/// Secure storage for pairing info. Keychain in production; in-memory in tests.
 public protocol SecureStore: Sendable {
     func read() -> PairingInfo?
     func write(_ info: PairingInfo)
@@ -47,8 +47,8 @@ public final class InMemorySecureStore: SecureStore, @unchecked Sendable {
     public func clear() { lock.withLock { stored = nil } }
 }
 
-/// kSecClassGenericPassword altında tek kayıt (tasarım §7: token Keychain'de).
-/// İnce I/O katmanı — birim testi yok, Task 10 uçtan uca doğrulamasıyla kapsanır.
+/// Single entry under kSecClassGenericPassword (design §7: token stored in Keychain).
+/// Thin I/O layer — no unit tests, covered by Task 10 end-to-end verification.
 public final class KeychainStore: SecureStore {
     private let service = "com.lumi.LumiMobile.pairing"
     private let account = "default"

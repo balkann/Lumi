@@ -5,7 +5,7 @@ struct NewSessionView: View {
     let model: AppModel
     @Environment(\.dismiss) private var dismiss
     @State private var repoPath = ""
-    @State private var branchMode = "current"          // current | existing | new
+    @State private var branchMode = "current"          // current | existing | new (branch mode)
     @State private var selectedBranch = ""
     @State private var newBranchName = ""
     @State private var baseBranch = ""
@@ -15,7 +15,7 @@ struct NewSessionView: View {
         NavigationStack {
             Form {
                 Picker("Repo", selection: $repoPath) {
-                    Text("Seç…").tag("")
+                    Text("Select…").tag("")
                     ForEach(model.repos) { repo in Text(repo.name).tag(repo.path) }
                 }
                 .onChange(of: repoPath) { _, path in
@@ -24,35 +24,35 @@ struct NewSessionView: View {
                 }
 
                 if !repoPath.isEmpty {
-                    Picker("Dal", selection: $branchMode) {
-                        Text("Mevcut dal").tag("current")
-                        Text("Var olan dal").tag("existing")
-                        Text("Yeni dal").tag("new")
+                    Picker("Branch", selection: $branchMode) {
+                        Text("Current branch").tag("current")
+                        Text("Existing branch").tag("existing")
+                        Text("New branch").tag("new")
                     }
                     .pickerStyle(.segmented)
 
                     if branchMode == "existing" {
                         if model.branchesLoading {
-                            HStack { ProgressView(); Text("Dallar yükleniyor…") }
+                            HStack { ProgressView(); Text("Loading branches…") }
                         } else if let err = model.branchesError {
                             Text(err).font(.footnote).foregroundStyle(.orange)
                         } else {
-                            Picker("Dal", selection: $selectedBranch) {
-                                Text("Seç…").tag("")
+                            Picker("Branch", selection: $selectedBranch) {
+                                Text("Select…").tag("")
                                 ForEach(model.branchesForRepo, id: \.self) { Text($0).tag($0) }
                             }
                         }
                     } else if branchMode == "new" {
-                        TextField("Yeni dal adı", text: $newBranchName)
+                        TextField("New branch name", text: $newBranchName)
                             .autocorrectionDisabled()
-                        Picker("Baz dal (ops.)", selection: $baseBranch) {
-                            Text("Mevcut dal").tag("")
+                        Picker("Base branch (opt.)", selection: $baseBranch) {
+                            Text("Current branch").tag("")
                             ForEach(model.branchesForRepo, id: \.self) { Text($0).tag($0) }
                         }
                     }
 
                     if branchMode != "current" {
-                        TextField("Workspace adı (ops.)", text: $workspaceName)
+                        TextField("Workspace name (opt.)", text: $workspaceName)
                             .autocorrectionDisabled()
                     }
                 }
@@ -60,7 +60,7 @@ struct NewSessionView: View {
                 Section {
                     Button(action: submit) {
                         if model.startState == .sending { ProgressView() }
-                        else { Text("Chat başlat") }
+                        else { Text("Start chat") }
                     }
                     .disabled(!canSubmit)
                     if case .failed(let error) = model.startState {
@@ -68,11 +68,11 @@ struct NewSessionView: View {
                     }
                 }
             }
-            .navigationTitle("Yeni chat")
+            .navigationTitle("New Chat")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Vazgeç") { dismiss() }
+                    Button("Cancel") { dismiss() }
                 }
             }
             .onChange(of: model.startState) { _, state in

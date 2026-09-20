@@ -7,25 +7,26 @@ public enum StartSessionState: Sendable, Equatable {
     case failed(String)
 }
 
-/// Tek view-model: RelayClient olaylarını UI durumuna indirger, komutları yollar.
-/// istemci→model AsyncStream, model→UI @Observable (repo kalıbı; Combine yok).
+/// Single view-model: reduces RelayClient events to UI state, sends commands.
+/// client→model AsyncStream, model→UI @Observable (repo pattern; no Combine).
 ///
-/// Terminal-ayna modeli: Mac ham PTY baytını `data`/`scrollback` mesajlarıyla yollar,
-/// model bunları abone olunan session'ın `terminalStream`'ine (SwiftTerm view'ı tüketir)
-/// yönlendirir. Tuş vuruşları `sendInput` ile `input` frame'i olarak geri gönderilir.
+/// Terminal-mirror model: Mac sends raw PTY bytes via `data`/`scrollback` messages,
+/// the model routes them to the subscribed session's `terminalStream` (consumed by the SwiftTerm view).
+/// Keystrokes are sent back as `input` frames via `sendInput`.
 @Observable @MainActor
 public final class AppModel {
     public private(set) var isPaired: Bool
     public private(set) var connection: ConnectionState = .disconnected
     public private(set) var macOnline = false
     public private(set) var lastSeenAt: Date?
-    /// Aktif terminal oturumlarının listesi (welcome/sessions mesajından).
+    /// List of active terminal sessions (from welcome/sessions message).
     public private(set) var sessions: [SessionMeta] = []
-    /// Şu an abone olunan (görüntülenen) oturum; reconnect'te yeniden abone olmak için (Task 11).
+    /// Currently subscribed (displayed) session; used to re-subscribe on reconnect (Task 11).
     public private(set) var activeSessionId: String?
-    /// Aktif aboneliğin modu (chat mı terminal mi). Reconnect'te AYNI modda yeniden
-    /// abone olmak için — aksi halde chat modda kopunca terminal moduna düşer ve
-    /// `chat`/`chat_append` frame'leri gelmez, mesajlar telefona ulaşmaz (handoff #6).
+    /// Mode of the active subscription (chat or terminal). Kept to re-subscribe in the
+    /// SAME mode on reconnect — otherwise, after a disconnect in chat mode it would fall
+    /// back to terminal mode and `chat`/`chat_append` frames would stop arriving,
+    /// causing messages not to reach the phone (handoff #6).
     private var activeChatMode = false
     public private(set) var repos: [Repo] = []
     public private(set) var personas: [Persona] = []
@@ -42,49 +43,50 @@ public final class AppModel {
     private static let notificationsKey = "notificationsEnabled"
     private var consumeTask: Task<Void, Never>?
     private var commandCounter = 0
-    /// sessionId → mevcut model id'si (SessionMeta.model'den; kalıcı bilgi).
+    /// sessionId → current model id (from SessionMeta.model; persisted information).
     private var models: [String: String] = [:]
-    /// commandId → sessionId; start_session için "" (oturum henüz yok).
+    /// commandId → sessionId; "" for start_session (session doesn't exist yet).
     private var commandTargets: [String: String] = [:]
-    /// delete_session komut id'leri — commandResult'ta yerel liste temizliği için.
+    /// delete_session command ids — used to clean up the local list on commandResult.
     private var deleteCommandIds: Set<String> = []
-    /// Branch yükleme durumu (list_branches komutu için).
+    /// Branch loading state (for the list_branches command).
     public private(set) var branchesForRepo: [String] = []
     public private(set) var branchesLoading = false
     public private(set) var branchesError: String?
     private var branchRequestIds: Set<String> = []
-    /// Bu telefonun başlattığı stream-json chat oturumları. `submitText` routing'i
-    /// buna bakar — `sessions` broadcast'i gecikirse bile chat mesajı yanlışlıkla
-    /// PTY input'a düşmez (final review #1: kind broadcast yarışına bağlı olamaz).
+    /// Stream-json chat sessions started by this phone. `submitText` routing
+    /// checks this — so chat messages never accidentally fall through to PTY input
+    /// even if the `sessions` broadcast is delayed (final review #1: cannot depend on kind broadcast race).
     private var chatSessionIds: Set<String> = []
 
     // MARK: Terminal byte-routing
 
-    /// Aktif oturumun canlı chunk tüketicisi (SwiftTerm view). Tek tüketici yeterli.
+    /// Live chunk consumer for the active session (SwiftTerm view). A single consumer is sufficient.
     private var terminalSinks: [String: AsyncStream<TerminalChunk>.Continuation] = [:]
-    /// Aktif oturum için, view stream'e bağlanmadan önce gelen chunk'ların replay tamponu.
-    /// View `terminalStream` çağırınca önce bunlar sırayla replay edilir, sonra canlı akış.
+    /// Replay buffer for chunks that arrive before the view connects to the stream.
+    /// When the view calls `terminalStream`, these are replayed in order first, then the live stream follows.
     private var replayBuffers: [String: [TerminalChunk]] = [:]
-    /// Şerit unmount'ken (sink yok) sınırsız bellek birikimini önler. En eski
-    /// chunk'lar düşer; claude TUI sık full-repaint yaptığı için orta-akış replayı kabul edilir.
+    /// Prevents unbounded memory accumulation while the strip is unmounted (no sink).
+    /// Oldest chunks are dropped; mid-stream replay may cause brief visual glitches,
+    /// which are acceptable since the Claude TUI performs full repaints frequently.
     private static let replayBufferCap = 2048
 
-    // MARK: Chat durumu (mode=chat; orca native-chat)
+    // MARK: Chat state (mode=chat; orca native-chat)
 
-    /// sessionId → chat mesajları (mode=chat aboneliği; orca native-chat).
+    /// sessionId → chat messages (mode=chat subscription; orca native-chat).
     private var chatBySession: [String: [ChatMessage]] = [:]
-    /// Optimistic kullanıcı mesajı yankıları (orca pending echo — client-side, anında).
-    /// Transcript yankılayınca sayım-tabanlı dedup ile emekliye ayrılır; yankılamazsa kalır.
+    /// Optimistic user message echoes (orca pending echo — client-side, immediate).
+    /// Retired via count-based dedup when the transcript echoes them; kept otherwise.
     private var pendingBySession: [String: [ChatPending]] = [:]
     private var pendingCounter = 0
-    /// Session başına streaming geçidi (orca deriveMobileNativeChatStreaming portu).
+    /// Per-session streaming gate (port of orca deriveMobileNativeChatStreaming).
     private var streamingGates: [String: ChatStreamGate] = [:]
-    /// Geçitten geçmiş görünür streaming metni (view okur; gerçek mesaj tail'e
-    /// düşünce veya turn bitince gizlenir).
+    /// Visible streaming text that passed through the gate (read by the view;
+    /// hidden when the real message lands in the tail or the turn ends).
     public private(set) var gatedStreaming: [String: String] = [:]
-    /// sessionId → son canlı turn status (Faz 2; chat_status frame'inden).
+    /// sessionId → latest live turn status (Phase 2; from chat_status frame).
     public private(set) var turnStatus: [String: ChatTurnStatus] = [:]
-    /// Faz 3: session başına aktif (pending) etkileşimli prompt'lar.
+    /// Phase 3: active (pending) interactive prompts per session.
     public private(set) var prompts: [String: [ChatPrompt]] = [:]
 
     public init(client: any RelayClienting, store: any SecureStore, prefs: any PreferenceStore = UserDefaultsPreferenceStore()) {
@@ -95,7 +97,7 @@ public final class AppModel {
         self.notificationsEnabled = prefs.bool(forKey: Self.notificationsKey)
     }
 
-    // MARK: Yaşam döngüsü
+    // MARK: Lifecycle
 
     public func start() async {
         guard consumeTask == nil, let pairing = store.read() else { return }
@@ -108,9 +110,9 @@ public final class AppModel {
                     self.connection = state
                     if state == .disconnected { self.macOnline = false }
                     // Task 11: Reconnect subscription replay.
-                    // Bağlantı yeniden kurulunca aktif session varsa Mac'e yeniden subscribe
-                    // gönder; Mac taze scrollback + canlı data akışını yeniden başlatır.
-                    // activeSessionId nil ise (ilk bağlantı veya abone yok) işlem yapılmaz.
+                    // When the connection is re-established and there is an active session,
+                    // send a re-subscribe to the Mac; the Mac restarts fresh scrollback + live data stream.
+                    // If activeSessionId is nil (first connection or no subscriber) nothing happens.
                     if state == .connected, let sid = self.activeSessionId {
                         let mode = self.activeChatMode ? "chat" : "terminal"
                         Task { await self.client.send(frame: PhoneProtocol.subscribeFrame(sessionId: sid, mode: mode)) }
@@ -127,7 +129,7 @@ public final class AppModel {
     @discardableResult
     public func pair(from string: String) async -> Bool {
         guard let info = Pairing.parse(string) else {
-            DiagLog.shared.log("model", "pair parse edilemedi")
+            DiagLog.shared.log("model", "pair parse failed")
             return false
         }
         DiagLog.shared.log("model", "pair ok relay=\(info.relayUrl)")
@@ -171,7 +173,7 @@ public final class AppModel {
         startState = .idle
     }
 
-    // MARK: Gelen mesajlar
+    // MARK: Incoming messages
 
     public func handle(_ message: ServerMessage) {
         if case .pong = message {} else {
@@ -185,12 +187,12 @@ public final class AppModel {
             if let repos = welcome.repos { self.repos = repos }
 
         case .sessions(let metas):
-            // sessions mesajını yalnız Mac gönderebilir → Mac online.
+            // Only the Mac can send a sessions message → Mac is online.
             macOnline = true
             applySessions(metas)
 
         case .repos(let repos):
-            // repos mesajını yalnız Mac gönderebilir → Mac online.
+            // Only the Mac can send a repos message → Mac is online.
             macOnline = true
             self.repos = repos
 
@@ -202,30 +204,30 @@ public final class AppModel {
             if branchRequestIds.remove(result.commandId) != nil {
                 branchesLoading = false
                 if result.ok { branchesForRepo = result.branches ?? [] }
-                else { branchesError = result.error ?? "dallar yüklenemedi" }
+                else { branchesError = result.error ?? "couldn't load branches" }
                 return
             }
             let wasDelete = deleteCommandIds.remove(result.commandId) != nil
             guard let target = commandTargets.removeValue(forKey: result.commandId) else { return }
             if target.isEmpty {
-                startState = result.ok ? .succeeded : .failed(result.error ?? "oturum açılamadı")
-                // start_session kind=chat → Mac sessionId döndürür → chat oturumu
-                // olarak işaretle (routing için) + otomatik chat abone ol.
+                startState = result.ok ? .succeeded : .failed(result.error ?? "couldn't open session")
+                // start_session kind=chat → Mac returns sessionId → mark as a chat session
+                // (for routing) + automatically subscribe to chat.
                 if result.ok, let sid = result.sessionId {
                     chatSessionIds.insert(sid)
                     subscribeChat(sid)
                 }
             } else if wasDelete {
-                // Silme: Mac chat oturumu silinince güncel `sessions` yayınlamıyor →
-                // telefon listesi takılıyordu ("silemiyorum"). Başarıda VEYA hayalet
-                // oturumda (session_not_found, Mac restart sonrası) yereli hemen temizle.
+                // Delete: when the Mac deletes a chat session it doesn't broadcast an updated `sessions` →
+                // the phone list was stuck ("can't delete"). On success OR ghost session
+                // (session_not_found, after a Mac restart) immediately clean up locally.
                 if result.ok || result.error == "session_not_found" {
                     removeSessionLocally(target)
                 } else {
-                    lastCommandError[target] = result.error ?? "oturum silinemedi"
+                    lastCommandError[target] = result.error ?? "couldn't delete session"
                 }
             } else if !result.ok {
-                lastCommandError[target] = result.error ?? "komut iletilemedi"
+                lastCommandError[target] = result.error ?? "command failed to send"
             }
 
         case .pong:
@@ -267,7 +269,7 @@ public final class AppModel {
         }
     }
 
-    /// Gelen mesajın tek satırlık teşhis özeti (içerik metni loglanmaz).
+    /// One-line diagnostic summary of an incoming message (message content is not logged).
     private static func describe(_ message: ServerMessage) -> String {
         switch message {
         case .welcome(let welcome):
@@ -295,8 +297,8 @@ public final class AppModel {
         }
     }
 
-    /// SessionMeta listesini uygular: model bilgisini kalıcı tutar, ölü oturumların
-    /// terminal kaynaklarını temizler.
+    /// Applies a SessionMeta list: persists model information, cleans up terminal
+    /// resources for dead sessions.
     private func applySessions(_ metas: [SessionMeta]) {
         sessions = metas
         let liveIds = Set(metas.map(\.id))
@@ -305,7 +307,7 @@ public final class AppModel {
         }
         models = models.filter { liveIds.contains($0.key) }
         lastCommandError = lastCommandError.filter { liveIds.contains($0.key) }
-        // Aktif oturum listede yoksa (silindi/kapandı) sink'i kapat.
+        // If the active session is no longer in the list (deleted/closed), close its sink.
         if let active = activeSessionId, !liveIds.contains(active) {
             terminalSinks[active]?.finish()
             terminalSinks[active] = nil
@@ -319,31 +321,31 @@ public final class AppModel {
         }
     }
 
-    /// Gelen chunk'ı ilgili session'ın canlı sink'ine yollar; sink henüz bağlı değilse
-    /// (view geç mount olduysa) aktif oturum için replay tamponuna biriktirir.
+    /// Routes an incoming chunk to the live sink of the relevant session; if the sink is
+    /// not yet connected (view mounted late), accumulates in the replay buffer for the active session.
     private func route(_ chunk: TerminalChunk) {
         if let sink = terminalSinks[chunk.sessionId] {
             sink.yield(chunk)
         } else if chunk.sessionId == activeSessionId {
             var buf = replayBuffers[chunk.sessionId, default: []]
             buf.append(chunk)
-            // Cap: şerit unmount'ken (sink yok) feed sınırsız birikmesin — en eski
-            // chunk düşer. Orta-akıştan replay TUI'de kısa süreli bozuk çizim
-            // yapabilir; claude TUI sık full-repaint yaptığı için kabul edilir.
+            // Cap: prevent unbounded feed accumulation while the strip is unmounted (no sink) —
+            // oldest chunk is dropped. Replay from mid-stream may cause brief visual glitches in the TUI;
+            // acceptable since the Claude TUI performs full repaints frequently.
             if buf.count > Self.replayBufferCap { buf.removeFirst(buf.count - Self.replayBufferCap) }
             replayBuffers[chunk.sessionId] = buf
         }
-        // Aktif olmayan/abonesiz oturumun chunk'ı düşürülür (istenmeyen veri).
+        // Chunks for inactive/unsubscribed sessions are dropped (unwanted data).
     }
 
-    // MARK: Terminal abonelik API'si (Task 9/11 tüketir)
+    // MARK: Terminal subscription API (consumed by Task 9/11)
 
-    /// Oturumu aktif işaretler ve `subscribe` frame'i gönderir. Mac scrollback + canlı
-    /// data ile yanıtlar; bunlar `terminalStream(sessionId)`'e akar.
+    /// Marks the session as active and sends a `subscribe` frame. The Mac responds with
+    /// scrollback + live data, which flow into `terminalStream(sessionId)`.
     public func subscribe(_ sessionId: String) {
-        // unsubscribe çağrılmadan session değiştirilirse önceki session'ın kaynaklarını
-        // temizle: aksi halde eski view'ın `for await`'i asla sonlanmaz ve geç gelen eski
-        // `.data` ona yield edilir.
+        // If the session is changed without calling unsubscribe, clean up the previous
+        // session's resources: otherwise the old view's `for await` never ends and late
+        // arriving old `.data` is yielded to it.
         if let old = activeSessionId, old != sessionId {
             terminalSinks[old]?.finish()
             terminalSinks[old] = nil
@@ -355,8 +357,8 @@ public final class AppModel {
         Task { await client.send(frame: PhoneProtocol.subscribeFrame(sessionId: sessionId)) }
     }
 
-    /// Aboneliği bırakır: aktif eşleşiyorsa temizler, `unsubscribe` frame'i gönderir,
-    /// canlı stream'i sonlandırır.
+    /// Releases the subscription: clears state if it matches the active session,
+    /// sends an `unsubscribe` frame, and terminates the live stream.
     public func unsubscribe(_ sessionId: String) {
         if activeSessionId == sessionId { activeSessionId = nil; activeChatMode = false }
         terminalSinks[sessionId]?.finish()
@@ -365,52 +367,52 @@ public final class AppModel {
         Task { await client.send(frame: PhoneProtocol.unsubscribeFrame(sessionId: sessionId)) }
     }
 
-    /// Tuş vuruşu / bayt dizisini `input` frame'i olarak Mac PTY'sine yollar.
+    /// Sends a keystroke / byte sequence to the Mac PTY as an `input` frame.
     public func sendInput(_ sessionId: String, _ data: Data) {
         Task { await client.send(frame: PhoneProtocol.inputFrame(sessionId: sessionId, data: data)) }
     }
 
-    /// Faz 3: etkileşimli prompt cevabı. Optimistic dismiss yok — kart, resolution
-    /// broadcast'i (state=resolved/cancelled) gelince `handle(.prompt)` üzerinden düşer.
+    /// Phase 3: interactive prompt response. No optimistic dismiss — the card is removed
+    /// via `handle(.prompt)` when a resolution broadcast (state=resolved/cancelled) arrives.
     public func respondPrompt(_ sessionId: String, itemId: String, revision: Int, optionId: String) {
         Task { await client.send(frame: PhoneProtocol.promptRespondFrame(
             sessionId: sessionId, itemId: itemId, expectedRevision: revision, optionId: optionId)) }
     }
 
-    /// Faz 3.1: soru cevabı (soru başına indices + free-text). Optimistic dismiss yok.
+    /// Phase 3.1: question response (indices + free-text per question). No optimistic dismiss.
     public func respondPromptSelections(_ sessionId: String, itemId: String, revision: Int,
                                         selections: [(indices: [Int], other: String?)]) {
         Task { await client.send(frame: PhoneProtocol.promptRespondSelectionsFrame(
             sessionId: sessionId, itemId: itemId, expectedRevision: revision, selections: selections)) }
     }
 
-    /// Serbest metin gönderiminde (`submitText`) metin ile Enter arasındaki "settle"
-    /// penceresi. Varsayılan orca paritesi (`AGENT_PROMPT_SUBMIT_SETTLE_MS` = 500 ms);
-    /// test'ler hızlandırmak için sıfırlayabilir.
+    /// The "settle" window between the text and Enter in `submitText`.
+    /// Default is orca parity (`AGENT_PROMPT_SUBMIT_SETTLE_MS` = 500 ms);
+    /// tests can set it to zero to speed up.
     public var submitSettle: Duration = .milliseconds(500)
 
-    /// Serbest metin gönderimi (chat composer / terminal metin çubuğu):
-    /// - Chat oturumu (kind = "chat"): `chat_send` frame'i gönderir (PTY input değil).
-    /// - Terminal oturumu: metni bir `input` frame'iyle yollar, ajanın paste'i
-    ///   sindirmesi için `submitSettle` bekler, sonra Enter'ı (CR) AYRI bir
-    ///   `input` frame'iyle yollar.
+    /// Free-text submission (chat composer / terminal text bar):
+    /// - Chat session (kind = "chat"): sends a `chat_send` frame (not PTY input).
+    /// - Terminal session: sends the text as an `input` frame, waits `submitSettle`
+    ///   for the agent to ingest the paste, then sends Enter (CR) as a SEPARATE
+    ///   `input` frame.
     ///
-    /// Terminal yolu neden ayrı: tek write'taki birleşik `metin\r`, Claude Code
-    /// TUI'sinde paste ingest'i tamamlanmadan gelen Enter olarak yutulur ve submit
-    /// tetiklenmez — metin input satırında görünür ama gönderilmez (orca
-    /// `runtime-terminal-writer` paritesi: text → settle → CR). İki write'ı TEK
-    /// Task içinde sıralı tutar; ayrı `sendInput` çağrıları Task sırasını garanti
-    /// etmez ve Enter metni geçebilir.
+    /// Why separate for the terminal path: a combined `text\r` in a single write is
+    /// swallowed by the Claude Code TUI as an Enter before paste ingest completes,
+    /// so submit is not triggered — the text appears on the input line but is not sent
+    /// (orca `runtime-terminal-writer` parity: text → settle → CR). Keeping both writes
+    /// in a SINGLE Task ensures ordering; separate `sendInput` calls do not guarantee
+    /// Task order and Enter may overtake the text.
     public func submitText(_ sessionId: String, _ text: String) {
-        // Chat oturumu: chat_send frame'i (PTY bypass). Tek kaynak: isChatSession
-        // (yerel izlenen chat id'si VEYA sessions broadcast'inde kind:chat).
+        // Chat session: chat_send frame (PTY bypass). Single source: isChatSession
+        // (locally tracked chat id OR kind:chat in sessions broadcast).
         let isChat = isChatSession(sessionId)
-        // Faz 2.1 teşhis: hangi dalın çalıştığı + frame'in kuyruğa girdiği cihaz logunda
-        // görünsün (kanıt: "sohbet yükleniyor + mesaj gitmiyor" — Mac'e chat_send/input 0 ulaştı).
+        // Phase 2.1 diagnostics: which branch is running + that the frame entered the queue should
+        // appear in the device log (evidence: "chat loading + message not going through" — 0 chat_send/input reached the Mac).
         DiagLog.shared.log("model", "submitText sid=\(sessionId.prefix(8)) chat=\(isChat) len=\(text.count)")
         if isChat {
-            // Optimistic echo: kullanıcının mesajı ANINDA listeye düşer (orca; client-side,
-            // sunucu onayı/latency beklenmez). Transcript yankılarsa dedup ile emekliye ayrılır.
+            // Optimistic echo: the user's message lands in the list IMMEDIATELY (orca; client-side,
+            // no server acknowledgement/latency wait). Retired via dedup if the transcript echoes it.
             appendChatPending(sessionId, text: text)
             Task {
                 let ok = await client.send(frame: PhoneProtocol.chatSendFrame(sessionId: sessionId, text: text))
@@ -418,7 +420,7 @@ public final class AppModel {
             }
             return
         }
-        // Terminal oturumu: metin → settle → CR (orca runtime-terminal-writer paritesi).
+        // Terminal session: text → settle → CR (orca runtime-terminal-writer parity).
         Task {
             if !text.isEmpty {
                 await client.send(frame: PhoneProtocol.inputFrame(sessionId: sessionId, data: Data(text.utf8)))
@@ -429,20 +431,20 @@ public final class AppModel {
         }
     }
 
-    /// Verilen oturuma gelen scrollback + canlı data chunk'larının akışı.
-    /// Bağlanınca önce (subscribe sonrası biriken) replay tamponu sırayla verilir,
-    /// sonra canlı chunk'lar akar. Aynı anda tek tüketici desteklenir; yeni stream
-    /// eskisini yerinden eder.
+    /// Stream of scrollback + live data chunks arriving for the given session.
+    /// On connection, the replay buffer accumulated since subscribe is delivered first in order,
+    /// followed by live chunks. Only a single consumer at a time is supported;
+    /// a new stream displaces the old one.
     public func terminalStream(_ sessionId: String) -> AsyncStream<TerminalChunk> {
-        // Eski tüketici varsa kapat (yeni stream tek sahip olur).
+        // Close the old consumer if any (the new stream becomes the sole owner).
         terminalSinks[sessionId]?.finish()
         let buffered = replayBuffers[sessionId] ?? []
         replayBuffers[sessionId] = []
         return AsyncStream { continuation in
             for chunk in buffered { continuation.yield(chunk) }
             terminalSinks[sessionId] = continuation
-            // Consumer-side iptal (view cancellation) sink'i kendi kendine temizlesin.
-            // Tek-tüketici varsayımı geçerli → o id'nin sink'ini nil'le.
+            // Consumer-side cancellation (view cancellation) should clean up the sink itself.
+            // Single-consumer assumption holds → nil out the sink for that id.
             continuation.onTermination = { [weak self] _ in
                 Task { @MainActor [weak self] in
                     self?.terminalSinks[sessionId] = nil
@@ -451,12 +453,12 @@ public final class AppModel {
         }
     }
 
-    // MARK: Chat abonelik API'si (Task 10)
+    // MARK: Chat subscription API (Task 10)
 
-    /// mode=chat aboneliği: activeSessionId ayarla + chat frame'i gönder.
+    /// mode=chat subscription: set activeSessionId + send chat frame.
     public func subscribeChat(_ sessionId: String) {
-        // Terminal aboneliğiyle aynı temizlik: eski oturumun sink'i sonlanmazsa
-        // geç gelen eski .data ona yield edilir (bkz. subscribe(_:)).
+        // Same cleanup as terminal subscription: if the old session's sink is not finished,
+        // late arriving old .data is yielded to it (see subscribe(_:)).
         if let old = activeSessionId, old != sessionId {
             terminalSinks[old]?.finish()
             terminalSinks[old] = nil
@@ -465,7 +467,7 @@ public final class AppModel {
         activeSessionId = sessionId
         activeChatMode = true
         chatBySession[sessionId] = chatBySession[sessionId] ?? []
-        // Şerit mount olmadan gelen scrollback düşmesin (subscribe(_:) paritesi).
+        // Don't drop scrollback that arrives before the strip mounts (subscribe(_:) parity).
         replayBuffers[sessionId] = []
         Task { await client.send(frame: PhoneProtocol.subscribeFrame(sessionId: sessionId, mode: "chat")) }
     }
@@ -474,9 +476,8 @@ public final class AppModel {
         chatBySession[sessionId] ?? []
     }
 
-    /// View'ın çizeceği birleşik mesaj listesi: optimistic pending + journal mesajları
-    /// + gated streaming balonu (orca buildTransientData). Çağıran `foldChatMessages`
-    /// ile turn'lere katlar.
+    /// Combined message list for the view to render: optimistic pending + journal messages
+    /// + gated streaming bubble (orca buildTransientData). The caller folds into turns via `foldChatMessages`.
     public func chatRenderMessages(_ sessionId: String) -> [ChatMessage] {
         chatAssembleRenderMessages(
             messages: chatBySession[sessionId] ?? [],
@@ -484,9 +485,9 @@ public final class AppModel {
             streaming: gatedStreaming[sessionId])
     }
 
-    /// Sezgisel soru kartı: chat'te AskUserQuestion tool'u yok → AI seçenekleri düz
-    /// metin listesi olarak sunar. Son assistant mesajını (turn bittiyse) ayrıştırıp
-    /// tıklanabilir seçenekler döndürür (orca heuristic yolu); yanıt sürerken nil.
+    /// Heuristic question card: no AskUserQuestion tool in chat → the AI presents options as a
+    /// plain text list. Parses the last assistant message (if the turn has ended) and returns
+    /// tappable options (orca heuristic path); nil while a response is in progress.
     public func heuristicQuestion(_ sessionId: String) -> ChatHeuristicQuestion? {
         if turnStatus[sessionId]?.working == true { return nil }
         guard let last = chatMessages(sessionId).last(where: { $0.role == .assistant }) else { return nil }
@@ -496,7 +497,7 @@ public final class AppModel {
         return parseAgentQuestion(text)
     }
 
-    /// Sezgisel soru cevabı: seçili index'ler → metin → normal chat mesajı (submitText).
+    /// Heuristic question answer: selected indexes → text → regular chat message (submitText).
     public func answerHeuristicQuestion(_ sessionId: String, _ question: ChatHeuristicQuestion,
                                         selectedIndexes: [Int]) {
         let answer = formatChatQuestionAnswer(question, selectedIndexes: selectedIndexes)
@@ -504,7 +505,7 @@ public final class AppModel {
         submitText(sessionId, answer)
     }
 
-    /// Optimistic kullanıcı yankısı ekler (orca pending-echo append).
+    /// Appends an optimistic user echo (orca pending-echo append).
     private func appendChatPending(_ sessionId: String, text: String) {
         let messages = chatBySession[sessionId] ?? []
         let normalized = normalizeChatUserText(text)
@@ -518,14 +519,14 @@ public final class AppModel {
             baselineTailMessageId: baselineTailId)
     }
 
-    /// Streaming geçidini bir tık ilerletir; sonucu `gatedStreaming`'e yazar. Hem
-    /// chat_status hem mesaj değişiminde (chat/chat_append) çağrılır — her ikisi de
-    /// güncel turnStatus + folded'a bakar. Turn canlı değilse önizleme verilmez
-    /// (orca mobileNativeChatStreamPreview); gerçek mesaj düşünce catch-up ile gizlenir.
+    /// Advances the streaming gate by one tick and writes the result to `gatedStreaming`.
+    /// Called on both chat_status and message changes (chat/chat_append) — both look at
+    /// the current turnStatus + folded. No preview is given when the turn is not live
+    /// (orca mobileNativeChatStreamPreview); hidden via catch-up when the real message lands.
     private func recomputeStreaming(_ sessionId: String) {
         let working = turnStatus[sessionId]?.working ?? false
-        // Önizleme yalnız turn canlıyken; bitince nil → balon gizlenir (gerçek mesaj
-        // o an transcript'te olduğundan boşluk olmaz).
+        // Preview only while the turn is live; once done, nil → bubble hidden
+        // (the real message is in the transcript at that point, so no gap).
         let preview = working ? (turnStatus[sessionId]?.streamingText) : nil
         let folded = foldChatMessages(chatBySession[sessionId] ?? []).map { $0.message }
         let (newGate, streaming) = chatDeriveStreaming(
@@ -535,9 +536,9 @@ public final class AppModel {
         gatedStreaming[sessionId] = streaming
     }
 
-    // MARK: Türetilmiş durum
+    // MARK: Derived state
 
-    /// `waiting` üstte (tasarım §4.3), sonra error/working/idle; grup içi repo adına göre.
+    /// `waiting` first (design §4.3), then error/working/idle; within a group sorted by repo name.
     public var orderedSessions: [SessionMeta] {
         func priority(_ badge: Badge) -> Int {
             switch badge {
@@ -558,8 +559,8 @@ public final class AppModel {
         sessions.first { $0.id == id }
     }
 
-    /// Silinen oturumu telefon durumundan tamamen çıkarır (Mac chat silmede
-    /// `sessions` yayınlamadığı için — liste + chat/pending/streaming/terminal state).
+    /// Fully removes a deleted session from the phone's state (because the Mac does not
+    /// broadcast `sessions` when a chat session is deleted — list + chat/pending/streaming/terminal state).
     private func removeSessionLocally(_ id: String) {
         sessions.removeAll { $0.id == id }
         chatSessionIds.remove(id)
@@ -577,26 +578,26 @@ public final class AppModel {
         if activeSessionId == id { activeSessionId = nil; activeChatMode = false }
     }
 
-    /// Oturum stream-json chat oturumu mu? Görünüm yönlendirmesi (chat view vs
-    /// terminal-mirror) ve `submitText` routing'i BUNU tek kaynak olarak kullanır:
-    /// bu telefonun başlattığı chat (yerel izlenen `chatSessionIds`) VEYA `sessions`
-    /// broadcast'inde kind:chat — hangisi önce gelirse (broadcast yarışı). Terminal
-    /// oturumları (kind nil/"terminal") false döner → mirror görünümü (Faz 2.1: eskiden
-    /// TerminalSessionView her oturumu chat modunda açıyordu → terminal oturumu ölü
-    /// chat'te "yükleniyor"da takılıyordu).
+    /// Is the session a stream-json chat session? View routing (chat view vs
+    /// terminal-mirror) and `submitText` routing use THIS as the single source of truth:
+    /// chat sessions started by this phone (locally tracked `chatSessionIds`) OR kind:chat
+    /// in a `sessions` broadcast — whichever arrives first (broadcast race).
+    /// Terminal sessions (kind nil/"terminal") return false → mirror view
+    /// (Phase 2.1: previously TerminalSessionView was opening every session in chat mode →
+    /// terminal sessions got stuck on "loading" in a dead chat).
     public func isChatSession(_ id: String) -> Bool {
         chatSessionIds.contains(id) || sessions.first(where: { $0.id == id })?.kind == "chat"
     }
 
-    // MARK: Komutlar
+    // MARK: Commands
 
     public func startSession(repoPath: String, personaId: String?, prompt: String) async {
         startState = .sending
         await dispatch(target: "", action: .startSession(repoPath: repoPath, personaId: personaId, prompt: prompt))
     }
 
-    /// Faz 2: saf chat oturumu başlatır (kind=chat). Mac commandResult'ta sessionId
-    /// döndürür; `commandResult` handler otomatik olarak `subscribeChat` çağırır.
+    /// Phase 2: starts a pure chat session (kind=chat). The Mac returns the sessionId
+    /// in commandResult; the `commandResult` handler automatically calls `subscribeChat`.
     public func startChatSession(repoPath: String, branchMode: String? = nil,
                                  branchName: String? = nil, baseBranch: String? = nil,
                                  workspaceName: String? = nil) async {
@@ -607,7 +608,7 @@ public final class AppModel {
             baseBranch: baseBranch, workspaceName: workspaceName))
     }
 
-    /// Branch listesi yükler (list_branches komutu). Yanıt commandResult'ta branchesForRepo'ya işlenir.
+    /// Loads the branch list (list_branches command). The response is processed into branchesForRepo via commandResult.
     public func loadBranches(repoPath: String) async {
         branchesForRepo = []
         branchesError = nil
@@ -619,7 +620,7 @@ public final class AppModel {
         if !ok {
             branchRequestIds.remove(commandId)
             branchesLoading = false
-            branchesError = "bağlantı yok"
+            branchesError = "no connection"
         }
     }
 
@@ -627,11 +628,11 @@ public final class AppModel {
         startState = .idle
     }
 
-    // MARK: Streaming metni (Faz 2 Task 4)
+    // MARK: Streaming text (Phase 2 Task 4)
 
-    /// Verilen oturum için canlı streaming metnini döndürür (orca gate paritesi).
-    /// working değilse / streaming son assistant metnini geçmiyorsa nil — transcript
-    /// yerleşince overlay düşer (spec Faz 2 §E).
+    /// Returns the live streaming text for the given session (orca gate parity).
+    /// nil if not working or if the streaming text does not exceed the last assistant text —
+    /// overlay drops when the transcript settles (spec Phase 2 §E).
     public func chatStreamingText(_ sessionId: String) -> String? {
         let status = turnStatus[sessionId] ?? .idle
         let lastAssistant = chatMessages(sessionId).last(where: { $0.role == .assistant })
@@ -660,7 +661,7 @@ public final class AppModel {
         await dispatch(target: sessionId, action: .setModel(sessionId: sessionId, model: model))
     }
 
-    /// Ham model id'sini kısa etikete indirger (UI).
+    /// Reduces a raw model id to a short label (UI).
     public func modelLabel(_ raw: String) -> String {
         let lower = raw.lowercased()
         if lower.contains("opus") { return "Opus" }
@@ -675,7 +676,7 @@ public final class AppModel {
 
     public func applyPushToken(_ hex: String) async {
         DiagLog.shared.log(
-            "push", "token alındı \(hex.prefix(8))… enabled=\(notificationsEnabled)")
+            "push", "token received \(hex.prefix(8))… enabled=\(notificationsEnabled)")
         latestPushToken = hex
         if notificationsEnabled { await client.registerPush(deviceToken: hex) }
     }
@@ -705,7 +706,7 @@ public final class AppModel {
         await client.registerPush(deviceToken: token)
     }
 
-    // MARK: Yardımcılar
+    // MARK: Helpers
 
     private func dispatch(target: String, action: CommandAction) async {
         commandCounter += 1
@@ -716,7 +717,7 @@ public final class AppModel {
             lastCommandError[target] = nil
         }
         let ok = await client.send(command: OutgoingCommand(commandId: commandId, action: action))
-        // Mirror ile yalnız case adı loglanır — mesaj içeriği günlüğe düşmez.
+        // Only the case name is logged via Mirror — message content does not appear in the log.
         let label = Mirror(reflecting: action).children.first?.label
             ?? String(describing: action)
         DiagLog.shared.log(
@@ -724,9 +725,9 @@ public final class AppModel {
         if !ok {
             commandTargets[commandId] = nil
             if target.isEmpty {
-                startState = .failed("bağlantı yok")
+                startState = .failed("no connection")
             } else {
-                lastCommandError[target] = "bağlantı yok"
+                lastCommandError[target] = "no connection"
             }
         }
     }

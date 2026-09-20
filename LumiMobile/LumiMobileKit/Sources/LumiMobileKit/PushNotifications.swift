@@ -1,30 +1,30 @@
 import Foundation
 
-/// Sistem bildirim izni durumu (UNAuthorizationStatus'un UIKit-siz karşılığı).
+/// System notification permission status (UIKit-free equivalent of UNAuthorizationStatus).
 public enum NotificationAuthStatus: Sendable, Equatable {
     case notDetermined, denied, authorized
 }
 
-/// Toggle AÇ sonucu; UI'nin ne yapacağını belirler.
+/// Result of toggling notifications ON; tells the UI what to do next.
 public enum EnableResult: Sendable, Equatable {
-    case enabled        // izin var, kayıt başladı
-    case needsSettings  // izin reddedilmiş → Ayarlar'a yönlendir
-    case declined       // kullanıcı prompt'ta reddetti
+    case enabled        // permission granted, registration started
+    case needsSettings  // permission denied → redirect to Settings
+    case declined       // user dismissed the permission prompt
 }
 
-/// Sistem izin API'sinin soyutlaması (prod: UNUserNotificationCenter).
+/// Abstraction for the system permission API (prod: UNUserNotificationCenter).
 public protocol NotificationAuthorizing: Sendable {
     func authorizationStatus() async -> NotificationAuthStatus
     func requestAuthorization() async -> Bool
 }
 
-/// APNs kayıt API'sinin soyutlaması (prod: UIApplication).
+/// Abstraction for the APNs registration API (prod: UIApplication).
 public protocol RemoteRegistering: Sendable {
     @MainActor func registerForRemoteNotifications()
     @MainActor func unregisterForRemoteNotifications()
 }
 
-/// AppModel'in push orkestrasyonuna eriştiği sınır (impl: PushCoordinator).
+/// The boundary AppModel uses to access push orchestration (impl: PushCoordinator).
 @MainActor
 public protocol PushControlling: AnyObject, Sendable {
     func onPairingSucceeded() async
@@ -33,7 +33,7 @@ public protocol PushControlling: AnyObject, Sendable {
     func refreshAuthStatus() async
 }
 
-/// Basit bool tercih deposu (kullanıcı ayarları; Keychain değil).
+/// Simple boolean preference store (user settings; not Keychain).
 public protocol PreferenceStore: Sendable {
     func bool(forKey key: String) -> Bool
     func set(_ value: Bool, forKey key: String)
@@ -66,7 +66,7 @@ public final class PushCoordinator: PushControlling {
         self.registrar = registrar
     }
 
-    /// AppDelegate APNs token'ı verince çağrılır.
+    /// Called when AppDelegate receives the APNs device token.
     public func handleDeviceToken(_ hex: String) async {
         await model.applyPushToken(hex)
     }

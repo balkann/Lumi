@@ -1,8 +1,8 @@
 import Foundation
 
-/// Ham terminal chunk'larını bir SwiftTerm view'ına uygulayan soyut alıcı.
-/// App target'taki adapter gerçek `TerminalView`'ı sarar; testte fake kullanılır.
-/// `@MainActor`: SwiftTerm view'ı yalnız ana aktörde beslenebilir.
+/// Abstract receiver that applies raw terminal chunks to a SwiftTerm view.
+/// The adapter in the app target wraps the real `TerminalView`; tests use a fake.
+/// `@MainActor`: SwiftTerm views can only be fed from the main actor.
 @MainActor
 public protocol TerminalFeeder: AnyObject {
     func resize(cols: Int, rows: Int)
@@ -10,17 +10,16 @@ public protocol TerminalFeeder: AnyObject {
     func feed(bytes: [UInt8])
 }
 
-/// View hazır olana dek gelen chunk'ları tamponlar; view bağlanınca (attach)
-/// tamponu SIRAYLA boşaltır ve sonraki chunk'ları anında uygular.
+/// Buffers incoming chunks until the view is ready; once attached, drains the
+/// buffer IN ORDER and applies subsequent chunks immediately.
 ///
-/// Kök neden (bug #3 — "terminal hep boş"): eski tasarım SwiftTerm view'ını
-/// `@State` üzerinden geri kaydediyordu; view-update içinde yapılan bu `@State`
-/// yazımı SwiftUI tarafından düşürülüyor/erteleniyordu, dolayısıyla view referansı
-/// hiç dolmuyor ve tüm chunk'lar yalnız "bir sonraki chunk gelince boşalan" yerel
-/// tamponda kalıyordu → terminal kalıcı olarak boş. Bu sınıf view referansını
-/// referans-tip olarak (SwiftUI update döngüsü dışında) tutar ve tamponu attach
-/// anında boşaltır; böylece boşta (yeni çıktı üretmeyen) oturumda da scrollback
-/// (seq=0) görünür.
+/// Root cause (bug #3 — "terminal always empty"): the old design saved the SwiftTerm
+/// view reference via `@State`; that `@State` write performed inside a view-update
+/// was dropped/deferred by SwiftUI, so the view reference was never populated and
+/// all chunks stayed in a local buffer that only drained when the next chunk arrived
+/// → terminal permanently empty. This class holds the view reference as a reference
+/// type (outside the SwiftUI update cycle) and drains the buffer at attach time, so
+/// scrollback (seq=0) is visible even in idle sessions that produce no further output.
 @MainActor
 public final class TerminalFeedBuffer {
     private var feeder: TerminalFeeder?
@@ -28,7 +27,7 @@ public final class TerminalFeedBuffer {
 
     public init() {}
 
-    /// Gerçek view hazır olduğunda çağrılır; birikmiş chunk'ları sırayla uygular.
+    /// Called when the real view is ready; applies accumulated chunks in order.
     public func attach(_ feeder: TerminalFeeder) {
         self.feeder = feeder
         let buffered = pending
@@ -36,12 +35,12 @@ public final class TerminalFeedBuffer {
         for chunk in buffered { apply(chunk) }
     }
 
-    /// View kaybolduğunda (onDisappear) çağrılır; sonraki chunk'lar yeniden tamponlanır.
+    /// Called when the view disappears (onDisappear); subsequent chunks are buffered again.
     public func detach() {
         feeder = nil
     }
 
-    /// Chunk'ı uygular; view yoksa tamponlar.
+    /// Applies a chunk; buffers it if no view is attached.
     public func feed(_ chunk: TerminalChunk) {
         guard feeder != nil else {
             pending.append(chunk)
@@ -50,7 +49,7 @@ public final class TerminalFeedBuffer {
         apply(chunk)
     }
 
-    /// Test görünürlüğü: bekleyen (henüz uygulanmamış) chunk sayısı.
+    /// Test visibility: number of pending (not yet applied) chunks.
     public var pendingCount: Int { pending.count }
 
     private func apply(_ chunk: TerminalChunk) {
@@ -58,7 +57,7 @@ public final class TerminalFeedBuffer {
         if let cols = chunk.cols, let rows = chunk.rows {
             feeder.resize(cols: cols, rows: rows)
         }
-        // seq==0: scrollback / reconnect tek-atışı → emülatörü sıfırla.
+        // seq==0: scrollback / reconnect one-shot → reset the emulator.
         if chunk.seq == 0 {
             feeder.reset()
         }

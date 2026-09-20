@@ -22,12 +22,12 @@ final class AppModelTurnStatusTests: XCTestCase {
 
     func testActiveSessionDisappearClearsTurnStatus() {
         let model = makeModel()
-        // s1 aktif oturum + turnStatus doldu.
+        // s1 is the active session + turnStatus is populated.
         model.handle(.sessions([meta("s1", repo: "lumi", "working")]))
         model.subscribe("s1")
         model.handle(.chatStatus(sessionId: "s1", status: ChatTurnStatus(working: true, startedAtMs: 10, tool: "Read")))
         XCTAssertNotNil(model.turnStatus["s1"])
-        // s1 listeden düşünce (kapandı/silindi) turnStatus temizlenmeli.
+        // When s1 drops from the list (closed/deleted), turnStatus should be cleared.
         model.handle(.sessions([]))
         XCTAssertNil(model.turnStatus["s1"])
     }

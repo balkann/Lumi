@@ -1,15 +1,16 @@
 import Foundation
 import LumiWire
 
-/// Katlanmış turn: bir "sahip" mesaj + ona ait tool-only aktivite mesajları.
+/// A folded turn: one "owner" message plus its tool-only activity messages.
 public struct FoldedTurn: Identifiable, Sendable, Equatable {
     public let id: String
     public let message: ChatMessage
     public let toolActivity: [ChatMessage]
 }
 
-/// tool-only mesajları (yalnız tool-call/tool-result blokları) önceki metinli
-/// turn'e katlar. Öncesinde sahip yoksa kendi turn'ü olur (orca fold alt kümesi).
+/// Folds tool-only messages (containing only tool-call/tool-result blocks) into the
+/// preceding text turn. If there is no preceding owner, they become their own turn
+/// (orca fold subset).
 public func foldChatMessages(_ messages: [ChatMessage]) -> [FoldedTurn] {
     var result: [FoldedTurn] = []
     for message in messages {

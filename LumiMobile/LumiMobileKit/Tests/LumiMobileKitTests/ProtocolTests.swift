@@ -3,12 +3,12 @@ import XCTest
 
 final class ProtocolTests: XCTestCase {
 
-    // MARK: Gelen mesajlar
+    // MARK: Incoming messages
 
     func testDecodeWelcomeMacOffline() {
         let text = #"{"v":1,"type":"welcome","payload":{"macOnline":false,"lastSeenAt":null}}"#
         guard case .welcome(let welcome)? = PhoneProtocol.decodeServerMessage(text) else {
-            return XCTFail("welcome bekleniyordu")
+            return XCTFail("expected welcome")
         }
         XCTAssertFalse(welcome.macOnline)
         XCTAssertNil(welcome.sessions)
@@ -18,29 +18,29 @@ final class ProtocolTests: XCTestCase {
     func testDecodeCommandResult() {
         let text = #"{"v":1,"type":"command_result","payload":{"commandId":"ph-1","ok":false,"error":"mac_offline"}}"#
         guard case .commandResult(let result)? = PhoneProtocol.decodeServerMessage(text) else {
-            return XCTFail("command_result bekleniyordu")
+            return XCTFail("expected command_result")
         }
         XCTAssertEqual(result, CommandResult(commandId: "ph-1", ok: false, error: "mac_offline"))
     }
 
     func testDecodePong() {
         guard case .pong? = PhoneProtocol.decodeServerMessage(#"{"v":1,"type":"pong","payload":{}}"#) else {
-            return XCTFail("pong bekleniyordu")
+            return XCTFail("expected pong")
         }
     }
 
-    // MARK: Tolerans (tasarım §12.2)
+    // MARK: Tolerance (design §12.2)
 
     func testUnknownMessageTypesAreSkipped() {
         XCTAssertNil(PhoneProtocol.decodeServerMessage(#"{"v":1,"type":"teleport","payload":{}}"#))
         XCTAssertNil(PhoneProtocol.decodeServerMessage(#"{"v":2,"type":"pong","payload":{}}"#))
         XCTAssertNil(PhoneProtocol.decodeServerMessage("bozuk json"))
-        // Kaldırılan chat tipleri artık tanınmamalı
+        // Removed chat types must no longer be recognized
         XCTAssertNil(PhoneProtocol.decodeServerMessage(#"{"v":1,"type":"snapshot","payload":{"sessions":[],"repos":[],"personas":[]}}"#))
         XCTAssertNil(PhoneProtocol.decodeServerMessage(#"{"v":1,"type":"event","payload":{"kind":"transcript","sessionId":"s1","item":{"itemType":"turn_done"}}}"#))
     }
 
-    // MARK: Giden mesajlar
+    // MARK: Outgoing messages
 
     private func payload(of frame: String, expectedType: String) throws -> [String: Any] {
         let dict = try XCTUnwrap(JSONSerialization.jsonObject(with: XCTUnwrap(frame.data(using: .utf8))) as? [String: Any])
@@ -57,12 +57,12 @@ final class ProtocolTests: XCTestCase {
 
     func testCommandFrames() throws {
         let start = OutgoingCommand(commandId: "ph-3",
-                                    action: .startSession(repoPath: "/r/lumi", personaId: "reviewer", prompt: "testleri koş"))
+                                    action: .startSession(repoPath: "/r/lumi", personaId: "reviewer", prompt: "run tests"))
         var payload = try self.payload(of: PhoneProtocol.commandFrame(start), expectedType: "command")
         XCTAssertEqual(payload["action"] as? String, "start_session")
         XCTAssertEqual(payload["repoPath"] as? String, "/r/lumi")
         XCTAssertEqual(payload["personaId"] as? String, "reviewer")
-        XCTAssertEqual(payload["prompt"] as? String, "testleri koş")
+        XCTAssertEqual(payload["prompt"] as? String, "run tests")
 
         let startNoPersona = OutgoingCommand(commandId: "ph-4",
                                              action: .startSession(repoPath: "/r/lumi", personaId: nil, prompt: "p"))
@@ -106,7 +106,7 @@ final class ProtocolTests: XCTestCase {
     }
 
     func testChatSendFrame() throws {
-        // Faz 2: telefon→Mac mesaj frame'i — type, sessionId ve text doğru encode edilmeli.
+        // Phase 2: phone→Mac message frame — type, sessionId and text must be encoded correctly.
         let frame = PhoneProtocol.chatSendFrame(sessionId: "s42", text: "Merhaba")
         let p = try payload(of: frame, expectedType: "chat_send")
         XCTAssertEqual(p["sessionId"] as? String, "s42")

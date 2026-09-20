@@ -9,19 +9,20 @@ struct TerminalSessionView: View {
     let model: AppModel
     let sessionId: String
 
-    /// View hazır olana dek chunk'ları tamponlayıp attach anında boşaltan referans-tip
-    /// tampon (bug #3: eski `@State` view handshake'i chunk'ları hiç teslim etmiyordu).
+    /// Reference-type buffer that accumulates chunks until the view is ready to attach
+    /// and drains them immediately on attach (bug #3: the old `@State` view handshake
+    /// never delivered the chunks).
     @State private var buffer = TerminalFeedBuffer()
-    /// Klavye yüksekliğini izler; alt çubuğu manuel olarak klavyenin üstüne taşır (bug #1).
+    /// Tracks keyboard height; manually shifts the bottom bar above the keyboard (bug #1).
     @StateObject private var keyboard = KeyboardObserver()
 
     var body: some View {
-        // Faz 2.1: görünüm oturum TÜRÜNE göre seçilir (reaktif — `isChatSession`
-        // `chatSessionIds`/`sessions`'a bakar). Chat oturumu → chat view; terminal
-        // oturumu → mirror. Eski `showChat=true` default'u terminal oturumlarını da
-        // ölü chat modunda açıp "yükleniyor"da bırakıyordu (regresyon). stream-json
-        // sonrası iki tür için de geçerli tek bir alternatif görünüm kalmadığından
-        // manuel toggle kaldırıldı.
+        // Phase 2.1: the view is chosen based on the session TYPE (reactive — `isChatSession`
+        // checks `chatSessionIds`/`sessions`). Chat session → chat view; terminal
+        // session → mirror. The old `showChat=true` default was opening terminal sessions
+        // in a dead chat mode and leaving them stuck on "loading" (regression). After
+        // stream-json there is no longer a single alternative view valid for both types,
+        // so the manual toggle was removed.
         Group {
             if model.isChatSession(sessionId) {
                 MobileChatView(model: model, sessionId: sessionId)
@@ -30,22 +31,22 @@ struct TerminalSessionView: View {
             }
         }
         .onDisappear { model.unsubscribe(sessionId) }
-        .navigationTitle(model.session(sessionId)?.repoName ?? "Oturum")
+        .navigationTitle(model.session(sessionId)?.repoName ?? "Session")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) { toolbarItems }
         }
     }
 
-    /// Mevcut terminal-mirror gövdesi (VStack + klavye padding + .task subscribe/feed).
+    /// Current terminal-mirror body (VStack + keyboard padding + .task subscribe/feed).
     private var terminalBody: some View {
         VStack(spacing: 0) {
             TerminalHostView(onInput: { model.sendInput(sessionId, $0) }, buffer: buffer)
             AccessoryBar(sendInput: { model.sendInput(sessionId, $0) },
                          submitText: { model.submitText(sessionId, $0) })
         }
-        // Otomatik klavye kaçınmasını kapat; yüksekliği manuel uygula → çubuk daima
-        // klavyenin üstünde, terminal onun üstünde kalır.
+        // Disable automatic keyboard avoidance; apply the height manually → the bar stays
+        // above the keyboard at all times, and the terminal stays above the bar.
         .padding(.bottom, keyboard.height)
         .ignoresSafeArea(.keyboard, edges: .bottom)
         .animation(.easeOut(duration: 0.25), value: keyboard.height)

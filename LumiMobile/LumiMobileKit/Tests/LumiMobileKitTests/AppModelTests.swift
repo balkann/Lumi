@@ -19,7 +19,7 @@ final class FakeRelayClient: RelayClienting, @unchecked Sendable {
 
     init() { (stream, continuation) = AsyncStream.makeStream() }
 
-    /// Test yardımcısı: relay'den bir mesaj geldiğini simüle eder.
+    /// Test helper: simulates a message arriving from the relay.
     func emit(_ message: ServerMessage) { continuation.yield(.message(message)) }
 
     func events() async -> AsyncStream<ClientEvent> { stream }
@@ -43,9 +43,9 @@ final class FakeRelayClient: RelayClienting, @unchecked Sendable {
     var pushUnregistrations: [String] { lock.withLock { _pushUnregistrations } }
     func registerPush(deviceToken: String) async { lock.withLock { _pushRegistrations.append(deviceToken) } }
     func unregisterPush(deviceToken: String) async { lock.withLock { _pushUnregistrations.append(deviceToken) } }
-    /// Test yardımcısı: gönderilen frame'leri temizler (reconnect testlerinde baseline sıfırlamak için).
+    /// Test helper: clears sent frames (to reset the baseline in reconnect tests).
     func clearSentFrames() { lock.withLock { _frames.removeAll() } }
-    /// Test yardımcısı: ClientEvent yayımlar (stateChanged dahil).
+    /// Test helper: emits a ClientEvent (including stateChanged).
     func emit(_ event: ClientEvent) { continuation.yield(event) }
 }
 
@@ -95,24 +95,24 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(client.sentFrames.contains { $0.contains(#""type":"subscribe""#) })
     }
 
-    /// Scrollback subscribe ile stream attach arasında geldiyse, yeni stream onu replay eder.
+    /// If scrollback arrives between subscribe and stream attach, the new stream replays it.
     func testTerminalStreamReplaysBufferedScrollback() async throws {
         let (model, _, _) = makeModel()
         model.subscribe("s1")
-        // Stream henüz bağlanmadan scrollback geldi (view geç mount oldu).
+        // Scrollback arrived before the stream connected (view mounted late).
         model.handle(.scrollback(TerminalChunk(sessionId: "s1", seq: 0, cols: 80, rows: 24,
                                                 bytes: "SCROLL".data(using: .utf8)!)))
-        // Şimdi view stream'e bağlanır → tamponlanan scrollback replay edilmeli.
+        // Now the view connects to the stream → buffered scrollback should be replayed.
         var got = Data()
         let stream = model.terminalStream("s1")
         for await chunk in stream { got.append(chunk.bytes); break }
         XCTAssertEqual(got, "SCROLL".data(using: .utf8))
     }
 
-    /// Terminal-mirror replay tamponu view bağlı değilken cap'te (2048) kalır ve EN
-    /// YENİ chunk'lar korunur (head-drop). Uzun-oturum bellek koruması — Faz1'de
-    /// eklenen replayBufferCap davranışını kilitler (ChatLiveStripTests sökülünce
-    /// buraya taşındı; artık terminal `subscribe` yoluyla exercise edilir).
+    /// Terminal-mirror replay buffer stays at the cap (2048) when the view is not attached,
+    /// and the NEWEST chunks are kept (head-drop). Long-session memory protection —
+    /// locks the replayBufferCap behaviour added in Phase 1 (moved here when
+    /// ChatLiveStripTests was removed; now exercised via terminal `subscribe`).
     func testTerminalReplayBufferIsCappedWhenViewUnattached() async {
         let (model, _, _) = makeModel()
         model.subscribe("s1")
@@ -126,11 +126,11 @@ final class AppModelTests: XCTestCase {
             if got.count == cap { break }
         }
         XCTAssertEqual(got.count, cap)
-        XCTAssertEqual(got.first?.seq, 10)       // en eski 10 düştü
-        XCTAssertEqual(got.last?.seq, cap + 9)   // en yeniler korundu
+        XCTAssertEqual(got.first?.seq, 10)       // oldest 10 were dropped
+        XCTAssertEqual(got.last?.seq, cap + 9)   // newest were kept
     }
 
-    /// subscribe/unsubscribe/sendInput frame'i bir Task içinde async gönderir; oluşana dek bekler.
+    /// subscribe/unsubscribe/sendInput send a frame asynchronously inside a Task; waits until it appears.
     private func awaitFrame(_ client: FakeRelayClient, containing needle: String) async {
         for _ in 0..<200 where !client.sentFrames.contains(where: { $0.contains(needle) }) {
             try? await Task.sleep(for: .milliseconds(5))
@@ -163,24 +163,24 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(frame!.contains("aGk="), "input base64 (\"hi\" == aGk=)")
     }
 
-    /// Chat/komut gönderimi: metin ve Enter (CR) AYRI iki input frame'i olmalı,
-    /// birleşik `metin\r` DEĞİL. Birleşik write Claude Code TUI'sinde paste ingest'i
-    /// tamamlanmadan gelen Enter olarak yutulur ve submit tetiklenmez (orca
-    /// runtime-terminal-writer paritesi: text → settle → CR).
+    /// Chat/command submission: text and Enter (CR) must be TWO separate input frames,
+    /// NOT a combined `text\r`. A combined write is swallowed by the Claude Code TUI as
+    /// an Enter before paste ingest completes and submit is not triggered (orca
+    /// runtime-terminal-writer parity: text → settle → CR).
     func testSubmitTextSplitsTextAndEnterIntoSeparateFrames() async {
         let (model, client, _) = makeModel()
-        model.submitSettle = .zero  // testi hızlandır (gecikme davranışı ayrı)
+        model.submitSettle = .zero  // speed up the test (delay behaviour tested separately)
         model.submitText("s1", "hi")
         await awaitFrame(client, containing: "DQ==")  // CR frame'i (en son gelir)
         let inputs = client.sentFrames.filter { $0.contains(#""type":"input""#) }
-        XCTAssertEqual(inputs.count, 2, "metin ve CR ayrı iki input frame olmalı")
-        XCTAssertTrue(inputs[0].contains("aGk="), #"ilk frame metin ("hi" == aGk=)"#)
-        XCTAssertTrue(inputs[1].contains("DQ=="), #"ikinci frame CR (\r == DQ==)"#)
+        XCTAssertEqual(inputs.count, 2, "text and CR must be two separate input frames")
+        XCTAssertTrue(inputs[0].contains("aGk="), #"first frame is text ("hi" == aGk=)"#)
+        XCTAssertTrue(inputs[1].contains("DQ=="), #"second frame is CR (\r == DQ==)"#)
         XCTAssertFalse(inputs.contains { $0.contains("aGkN") },
-                       #"birleşik "hi\r" (== aGkN) frame'i OLMAMALI"#)
+                       #"combined "hi\r" (== aGkN) frame must NOT be present"#)
     }
 
-    /// unsubscribe ÇAĞRILMADAN başka session'a subscribe edilince eski stream sonlanmalı.
+    /// When subscribing to another session WITHOUT calling unsubscribe, the old stream should be finished.
     func testSubscribeSwitchFinishesPreviousStream() async {
         let (model, _, _) = makeModel()
         model.subscribe("s1")
@@ -188,31 +188,31 @@ final class AppModelTests: XCTestCase {
         let drained = Task { () -> Int in
             var count = 0
             for await _ in s1Stream { count += 1 }
-            return count  // s1 for-await sonlanınca döner
+            return count  // returns when the s1 for-await ends
         }
 
-        // unsubscribe olmadan s2'ye geç → s1 sink'i finish edilmeli
+        // Switch to s2 without unsubscribing → s1 sink should be finished
         model.subscribe("s2")
 
-        // Geç gelen eski s1 data'sı artık s1 stream'ine yield EDİLMEMELİ.
+        // Late-arriving old s1 data must NOT be yielded to the s1 stream anymore.
         model.handle(.data(data("s1", seq: 9, "gec")))
 
-        let count = await drained.value  // finish olmazsa burada takılırdı
-        XCTAssertEqual(count, 0, "s1 stream'i chunk almadan sonlanmalı")
+        let count = await drained.value  // would hang here if not finished
+        XCTAssertEqual(count, 0, "s1 stream should end without receiving any chunks")
         XCTAssertEqual(model.activeSessionId, "s2")
     }
 
     func testDataForInactiveSessionIsDropped() async {
         let (model, _, _) = makeModel()
         model.subscribe("s1")
-        // s2 aktif değil → chunk düşürülür (tampon oluşmaz)
+        // s2 is not active → chunk is dropped (no buffer created)
         model.handle(.data(data("s2", seq: 1, "leak")))
-        // s2 stream'i bağlanınca bir şey replay edilmemeli — canlı bir chunk yield edip onu okuyalım
+        // When the s2 stream connects, nothing should be replayed — yield a live chunk and read it
         let stream = model.terminalStream("s2")
         model.handle(.data(data("s2", seq: 2, "live")))
         var got = Data()
         for await chunk in stream { got.append(chunk.bytes); break }
-        XCTAssertEqual(got, "live".data(using: .utf8), "sadece canlı chunk gelmeli, düşen 'leak' değil")
+        XCTAssertEqual(got, "live".data(using: .utf8), "only live chunk should arrive, not the dropped 'leak'")
     }
 
     // MARK: Session list (welcome/sessions)
@@ -231,10 +231,10 @@ final class AppModelTests: XCTestCase {
         let (model, _, _) = makeModel()
         model.handle(.sessions([meta("s1", repo: "lumi", "working"), meta("s2", repo: "beta", "idle")]))
         XCTAssertEqual(model.sessions.count, 2)
-        XCTAssertTrue(model.macOnline, "sessions mesajı Mac'ten gelir → online")
+        XCTAssertTrue(model.macOnline, "sessions message comes from Mac → online")
     }
 
-    // MARK: Repos (yeni oturum seçici — bug #2)
+    // MARK: Repos (new session picker — bug #2)
 
     func testWelcomeAppliesRepos() {
         let (model, _, _) = makeModel()
@@ -249,13 +249,13 @@ final class AppModelTests: XCTestCase {
         let (model, _, _) = makeModel()
         model.handle(.repos([Repo(name: "lumi", path: "/a/lumi")]))
         XCTAssertEqual(model.repos.count, 1)
-        XCTAssertTrue(model.macOnline, "repos mesajı Mac'ten gelir → online")
+        XCTAssertTrue(model.macOnline, "repos message comes from Mac → online")
     }
 
     func testReposDecodeFromWire() {
         let frame = #"{"v":1,"type":"repos","payload":{"repos":[{"name":"lumi","path":"/a/lumi"}]}}"#
         guard case .repos(let repos)? = PhoneProtocol.decodeServerMessage(frame) else {
-            return XCTFail("repos frame decode edilemedi")
+            return XCTFail("repos frame could not be decoded")
         }
         XCTAssertEqual(repos, [Repo(name: "lumi", path: "/a/lumi")])
     }
@@ -277,11 +277,11 @@ final class AppModelTests: XCTestCase {
         model.handle(.sessions([meta("s1", repo: "lumi", "working")]))
         model.subscribe("s1")
         let stream = model.terminalStream("s1")
-        // s1 kapandı: yeni sessions listesinde yok → sink finish → stream biter
+        // s1 closed: not in the new sessions list → sink finish → stream ends
         model.handle(.sessions([meta("s2", repo: "beta", "idle")]))
         var count = 0
         for await _ in stream { count += 1 }
-        XCTAssertEqual(count, 0, "kapanan oturumun stream'i sonlanmalı")
+        XCTAssertEqual(count, 0, "stream of a closed session should end")
     }
 
     // MARK: Model tracking (SessionMeta.model)
@@ -295,8 +295,8 @@ final class AppModelTests: XCTestCase {
     func testModelPersistsWhenLaterSessionsOmitsModel() {
         let (model, _, _) = makeModel()
         model.handle(.sessions([meta("s1", repo: "lumi", "working", model: "claude-opus-4-8")]))
-        model.handle(.sessions([meta("s1", repo: "lumi", "idle")]))  // model alanı yok
-        XCTAssertEqual(model.currentModel(for: "s1"), "claude-opus-4-8", "model kalıcı bilgidir")
+        model.handle(.sessions([meta("s1", repo: "lumi", "idle")]))  // no model field
+        XCTAssertEqual(model.currentModel(for: "s1"), "claude-opus-4-8", "model is persisted information")
     }
 
     func testSetModelDispatchesCommand() async {
@@ -323,12 +323,12 @@ final class AppModelTests: XCTestCase {
         let (model, client, _) = makeModel()
         XCTAssertEqual(model.startState, .idle)
 
-        await model.startSession(repoPath: "/r/lumi", personaId: nil, prompt: "merhaba")
+        await model.startSession(repoPath: "/r/lumi", personaId: nil, prompt: "hello")
         XCTAssertEqual(model.startState, .sending)
         guard case .startSession(let repoPath, let personaId, let prompt, _, _, _, _, _) = client.commands[0].action else { return XCTFail() }
         XCTAssertEqual(repoPath, "/r/lumi")
         XCTAssertNil(personaId)
-        XCTAssertEqual(prompt, "merhaba")
+        XCTAssertEqual(prompt, "hello")
 
         model.handle(.commandResult(CommandResult(commandId: client.commands[0].commandId, ok: true, error: nil)))
         XCTAssertEqual(model.startState, .succeeded)
@@ -344,8 +344,8 @@ final class AppModelTests: XCTestCase {
     func testStartSessionFailureLandsInFailed() async {
         let (model, client, _) = makeModel()
         client.sendResult = false
-        await model.startSession(repoPath: "/r/lumi", personaId: nil, prompt: "merhaba")
-        XCTAssertEqual(model.startState, .failed("bağlantı yok"))
+        await model.startSession(repoPath: "/r/lumi", personaId: nil, prompt: "hello")
+        XCTAssertEqual(model.startState, .failed("no connection"))
     }
 
     func testFailedCommandResultSurfacesErrorForSession() async {
@@ -354,20 +354,20 @@ final class AppModelTests: XCTestCase {
         await model.deleteSession(sessionId: "s1")
         let commandId = client.commands[0].commandId
 
-        model.handle(.commandResult(CommandResult(commandId: commandId, ok: false, error: "terminal kapandı")))
-        XCTAssertEqual(model.lastCommandError["s1"], "terminal kapandı")
+        model.handle(.commandResult(CommandResult(commandId: commandId, ok: false, error: "terminal closed")))
+        XCTAssertEqual(model.lastCommandError["s1"], "terminal closed")
 
-        // sonraki komut hatayı temizler
+        // next command clears the error
         await model.deleteSession(sessionId: "s1")
         XCTAssertNil(model.lastCommandError["s1"])
 
-        // bilinmeyen commandId (başka telefonun komutu) yok sayılır
-        model.handle(.commandResult(CommandResult(commandId: "baska-tel-9", ok: false, error: "x")))
+        // unknown commandId (another phone's command) is ignored
+        model.handle(.commandResult(CommandResult(commandId: "other-phone-9", ok: false, error: "x")))
         XCTAssertNil(model.lastCommandError["s1"])
     }
 
-    /// Silme başarılı → oturum telefon listesinden hemen kalkar (Mac chat silmede
-    /// sessions yayınlamıyor; "silemiyorum" regresyonu).
+    /// Delete succeeded → session is immediately removed from the phone list (Mac does not
+    /// broadcast sessions when deleting a chat session; "can't delete" regression).
     func testDeleteSessionRemovesFromListOnSuccess() async {
         let (model, client, _) = makeModel()
         model.handle(.sessions([meta("s1", repo: "r", "idle")]))
@@ -375,10 +375,10 @@ final class AppModelTests: XCTestCase {
         let cid = client.commands.last!.commandId
         model.handle(.commandResult(CommandResult(commandId: cid, ok: true, error: nil)))
         XCTAssertFalse(model.sessions.contains { $0.id == "s1" },
-                       "silme başarılıysa oturum listeden kalkmalı")
+                       "session should be removed from the list on successful delete")
     }
 
-    /// Hayalet oturum (Mac restart sonrası): session_not_found da yerel listeden kaldırır.
+    /// Ghost session (after a Mac restart): session_not_found also removes from the local list.
     func testDeleteSessionRemovesOnSessionNotFound() async {
         let (model, client, _) = makeModel()
         model.handle(.sessions([meta("s1", repo: "r", "idle")]))
@@ -386,7 +386,7 @@ final class AppModelTests: XCTestCase {
         let cid = client.commands.last!.commandId
         model.handle(.commandResult(CommandResult(commandId: cid, ok: false, error: "session_not_found")))
         XCTAssertFalse(model.sessions.contains { $0.id == "s1" },
-                       "hayalet oturum (session_not_found) da listeden kalkmalı")
+                       "ghost session (session_not_found) should also be removed from the list")
     }
 
     func testDeleteSessionDispatchesCommand() async {
@@ -396,15 +396,15 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(client.commands.count, 1)
         guard case .deleteSession(let sid) = client.commands[0].action else { return XCTFail() }
         XCTAssertEqual(sid, "s1")
-        XCTAssertEqual(model.sessions.count, 1, "deleteSession iyimser yerel kaldırma yapmaz — sessions bekler")
+        XCTAssertEqual(model.sessions.count, 1, "deleteSession does not optimistically remove locally — waits for sessions")
     }
 
-    // MARK: Yaşam döngüsü / bağlantı
+    // MARK: Lifecycle / connection
 
     func testStartConsumesClientEventStream() async {
         let (model, client, _) = makeModel()
         await model.start()
-        XCTAssertEqual(client.started.count, 1, "eşleşme varsa start client'ı başlatır")
+        XCTAssertEqual(client.started.count, 1, "start starts the client when paired")
 
         client.continuation.yield(.stateChanged(.connected))
         client.continuation.yield(.message(.sessions([meta("s1", repo: "lumi", "idle")])))
@@ -422,11 +422,11 @@ final class AppModelTests: XCTestCase {
 
         client.continuation.yield(.message(.welcome(Welcome(macOnline: true, lastSeenAt: nil))))
         for _ in 0..<200 where !model.macOnline { try? await Task.sleep(for: .milliseconds(10)) }
-        XCTAssertTrue(model.macOnline, "welcome sonrası mac online olmalı")
+        XCTAssertTrue(model.macOnline, "mac should be online after welcome")
 
         client.continuation.yield(.stateChanged(.disconnected))
         for _ in 0..<200 where model.macOnline { try? await Task.sleep(for: .milliseconds(10)) }
-        XCTAssertFalse(model.macOnline, "disconnected sonrası macOnline false olmalı")
+        XCTAssertFalse(model.macOnline, "macOnline should be false after disconnected")
     }
 
     func testPairStartsClientAndUnpairStops() async {
@@ -451,7 +451,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.startState, .idle)
     }
 
-    // MARK: Push state (Task 4 — korunur)
+    // MARK: Push state (Task 4 — preserved)
 
     func testApplyPushTokenRegistersWhenEnabled() async {
         let (model, client, prefs) = makeModelP()
@@ -499,27 +499,27 @@ final class AppModelTests: XCTestCase {
 
     // MARK: Reconnect subscription replay (Task 11)
 
-    /// Bağlantı kopup yeniden kurulunca aktif session için otomatik yeniden subscribe gönderilmeli.
+    /// When the connection drops and is re-established, an automatic re-subscribe should be sent for the active session.
     func testResubscribesActiveSessionOnReconnect() async throws {
         let (model, client, _) = makeModel()
         await model.start()
         model.subscribe("s1")
-        // subscribe frame'ini temizle — sadece yeniden bağlantı sonrası frame'i izle.
+        // Clear the subscribe frame — only watch for the frame sent after reconnect.
         await awaitFrame(client, containing: #""type":"subscribe""#)
         client.clearSentFrames()
-        // Bağlantı kopar sonra yeniden kurulur.
+        // Connection drops then is re-established.
         client.emit(.stateChanged(.disconnected))
         client.emit(.stateChanged(.connected))
         try await Task.sleep(for: .milliseconds(50))
         XCTAssertTrue(
             client.sentFrames.contains { $0.contains(#""type":"subscribe""#) && $0.contains("s1") },
-            "reconnect sonrası s1 için yeniden subscribe frame'i gönderilmeli"
+            "a re-subscribe frame for s1 should be sent after reconnect"
         )
     }
 
-    /// Chat modunda kopup dönünce reconnect TERMINAL değil CHAT modunda yeniden
-    /// subscribe etmeli — aksi halde chat sessizce terminale düşer ve mesajlar
-    /// telefona gelmez (handoff #6).
+    /// After a disconnect and reconnect in chat mode, should re-subscribe in CHAT mode
+    /// not TERMINAL — otherwise chat silently falls back to terminal and messages
+    /// stop reaching the phone (handoff #6).
     func testResubscribesInChatModeOnReconnectWhenChatActive() async throws {
         let (model, client, _) = makeModel()
         await model.start()
@@ -530,12 +530,12 @@ final class AppModelTests: XCTestCase {
         client.emit(.stateChanged(.connected))
         try await Task.sleep(for: .milliseconds(50))
         let sub = client.sentFrames.first { $0.contains(#""type":"subscribe""#) && $0.contains("s1") }
-        XCTAssertNotNil(sub, "reconnect sonrası s1 için yeniden subscribe gönderilmeli")
+        XCTAssertNotNil(sub, "a re-subscribe for s1 should be sent after reconnect")
         XCTAssertTrue(sub!.contains(#""mode":"chat""#),
-                      "chat modunda reconnect chat modunda yeniden subscribe etmeli, terminale düşmemeli")
+                      "reconnect in chat mode should re-subscribe in chat mode, not fall back to terminal")
     }
 
-    /// Terminal modunda reconnect terminal modunda kalmalı (chat'e sızmamalı).
+    /// Reconnect in terminal mode should stay in terminal mode (must not leak into chat).
     func testResubscribesInTerminalModeOnReconnectWhenTerminalActive() async throws {
         let (model, client, _) = makeModel()
         await model.start()
@@ -547,23 +547,23 @@ final class AppModelTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(50))
         let sub = client.sentFrames.first { $0.contains(#""type":"subscribe""#) && $0.contains("s1") }
         XCTAssertNotNil(sub)
-        XCTAssertTrue(sub!.contains(#""mode":"terminal""#), "terminal modunda reconnect terminal kalmalı")
+        XCTAssertTrue(sub!.contains(#""mode":"terminal""#), "reconnect in terminal mode should stay terminal")
     }
 
-    /// Aktif session yokken bağlantı kurulunca subscribe frame'i gönderilmemeli.
+    /// When there is no active session, connecting should not send a subscribe frame.
     func testNoResubscribeWhenNoActiveSessionOnConnect() async throws {
         let (model, client, _) = makeModel()
         await model.start()
-        // Hiç subscribe yapılmadı — activeSessionId nil.
+        // No subscribe was ever called — activeSessionId is nil.
         client.emit(.stateChanged(.connected))
         try await Task.sleep(for: .milliseconds(50))
         XCTAssertFalse(
             client.sentFrames.contains { $0.contains(#""type":"subscribe""#) },
-            "aktif session yokken connected'da subscribe frame'i gönderilmemeli"
+            "no subscribe frame should be sent on connected when there is no active session"
         )
     }
 
-    // MARK: Chat durumu + append merge (Task 10)
+    // MARK: Chat state + append merge (Task 10)
 
     func testChatSnapshotThenAppendMerges() async {
         let (model, _, _) = makeModel()
@@ -573,7 +573,7 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.chatMessages("s1").map(\.id), ["m1"])
         model.handle(.chatAppend(sessionId: "s1", messages: [m2]))
         XCTAssertEqual(model.chatMessages("s1").map(\.id), ["m1", "m2"])
-        // Aynı id tekrar gelirse güncellenir, çoğalmaz.
+        // If the same id arrives again it is updated, not duplicated.
         let m2b = ChatMessage(id: "m2", role: .assistant, blocks: [.text("yo!", presentation: nil)], timestampMs: nil, turnId: nil)
         model.handle(.chatAppend(sessionId: "s1", messages: [m2b]))
         XCTAssertEqual(model.chatMessages("s1").map(\.id), ["m1", "m2"])
@@ -587,71 +587,71 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(client.sentFrames.contains { $0.contains("\"mode\":\"chat\"") })
     }
 
-    // MARK: chat_send routing (Faz 2 Task 4)
+    // MARK: chat_send routing (Phase 2 Task 4)
 
-    /// Chat türü oturumda submitText → chat_send frame'i (PTY input DEĞİL).
+    /// submitText in a chat-kind session → chat_send frame (NOT PTY input).
     func testSubmitTextSendsChatSendFrameForChatSession() async {
         let (model, client, _) = makeModel()
-        // Chat oturumu olarak işaretle (kind = "chat")
+        // Mark as a chat session (kind = "chat")
         model.handle(.sessions([
             SessionMeta(id: "s1", repoName: "lumi", status: "working",
                         cols: 80, rows: 24, kind: "chat")
         ]))
         model.subscribeChat("s1")
-        model.submitText("s1", "merhaba")
-        // chat_send frame'ini bekle
+        model.submitText("s1", "hello")
+        // wait for chat_send frame
         await awaitFrame(client, containing: "\"type\":\"chat_send\"")
         let chatSend = client.sentFrames.first { $0.contains("\"type\":\"chat_send\"") }
-        XCTAssertNotNil(chatSend, "chat oturumunda submitText chat_send frame'i göndermeli")
-        XCTAssertTrue(chatSend!.contains("merhaba"), "chat_send içinde metin olmalı")
-        // PTY input frame'i gönderilmemeli
+        XCTAssertNotNil(chatSend, "submitText in a chat session should send a chat_send frame")
+        XCTAssertTrue(chatSend!.contains("hello"), "chat_send should contain the text")
+        // PTY input frame must NOT be sent
         XCTAssertFalse(client.sentFrames.contains { $0.contains("\"type\":\"input\"") },
-                       "chat oturumunda PTY input frame'i GÖNDERİLMEMELİ")
+                       "PTY input frame must NOT be sent in a chat session")
     }
 
-    /// Terminal oturumunda submitText mevcut PTY yolunu korumalı (chat_send değil).
+    /// submitText in a terminal session should keep the existing PTY path (not chat_send).
     func testSubmitTextKeepsTerminalRouteForTerminalSession() async {
         let (model, client, _) = makeModel()
-        // Terminal oturumu (kind yok)
+        // Terminal session (no kind)
         model.handle(.sessions([meta("s1", repo: "lumi", "working")]))
         model.subscribe("s1")
         model.submitSettle = .zero
         model.submitText("s1", "ls")
         await awaitFrame(client, containing: "\"type\":\"input\"")
         XCTAssertTrue(client.sentFrames.contains { $0.contains("\"type\":\"input\"") },
-                      "terminal oturumunda input frame'i gönderilmeli")
+                      "input frame should be sent in a terminal session")
         XCTAssertFalse(client.sentFrames.contains { $0.contains("\"type\":\"chat_send\"") },
-                       "terminal oturumunda chat_send frame'i GÖNDERİLMEMELİ")
+                       "chat_send frame must NOT be sent in a terminal session")
     }
 
-    // MARK: chatStreamingText (Faz 2 Task 4)
+    // MARK: chatStreamingText (Phase 2 Task 4)
 
-    /// chat_status streamingText → chatStreamingText working+leading → görünür.
+    /// chat_status streamingText → chatStreamingText working+leading → visible.
     func testChatStreamingTextVisibleWhenWorkingAndLeading() {
         let (model, _, _) = makeModel()
-        // Bir assistant mesajı var
+        // There is an assistant message
         let m1 = ChatMessage(id: "m1", role: .assistant,
-                             blocks: [.text("Selam", presentation: nil)],
+                             blocks: [.text("Hello", presentation: nil)],
                              timestampMs: nil, turnId: nil)
         model.handle(.chat(sessionId: "s1", messages: [m1]))
-        // Streaming metni son assistant metnini geçiyor → görünür
+        // Streaming text exceeds the last assistant text → visible
         model.handle(.chatStatus(sessionId: "s1",
             status: ChatTurnStatus(working: true, startedAtMs: 10, tool: nil,
-                                   streamingText: "Selam dünya")))
-        XCTAssertEqual(model.chatStreamingText("s1"), "Selam dünya")
+                                   streamingText: "Hello world")))
+        XCTAssertEqual(model.chatStreamingText("s1"), "Hello world")
     }
 
-    /// chat_status streamingText ≤ son assistant metni → nil (transcript yerleşti).
+    /// chat_status streamingText ≤ last assistant text → nil (transcript settled).
     func testChatStreamingTextNilWhenCaughtUp() {
         let (model, _, _) = makeModel()
         let m1 = ChatMessage(id: "m1", role: .assistant,
-                             blocks: [.text("Selam dünya", presentation: nil)],
+                             blocks: [.text("Hello world", presentation: nil)],
                              timestampMs: nil, turnId: nil)
         model.handle(.chat(sessionId: "s1", messages: [m1]))
         model.handle(.chatStatus(sessionId: "s1",
             status: ChatTurnStatus(working: true, startedAtMs: 10, tool: nil,
-                                   streamingText: "Selam")))
-        XCTAssertNil(model.chatStreamingText("s1"), "streaming kısa — transcript yerleşti, nil döner")
+                                   streamingText: "Hello")))
+        XCTAssertNil(model.chatStreamingText("s1"), "streaming text is shorter — transcript settled, returns nil")
     }
 
     /// working=false → streaming nil.
@@ -663,76 +663,76 @@ final class AppModelTests: XCTestCase {
         XCTAssertNil(model.chatStreamingText("s1"), "idle → nil")
     }
 
-    // MARK: startChatSession (Faz 2 Task 4)
+    // MARK: startChatSession (Phase 2 Task 4)
 
-    /// startChatSession start_session komutunu kind=chat ile gönderir.
+    /// startChatSession sends the start_session command with kind=chat.
     func testStartChatSessionSendsKindChat() async {
         let (model, client, _) = makeModel()
         await model.startChatSession(repoPath: "/r/lumi")
         XCTAssertEqual(model.startState, .sending)
         XCTAssertEqual(client.commands.count, 1)
         guard case .startSession(let repoPath, _, _, _, _, _, _, _) = client.commands[0].action else {
-            return XCTFail("startChatSession startSession action göndermeli")
+            return XCTFail("startChatSession should send a startSession action")
         }
         XCTAssertEqual(repoPath, "/r/lumi")
-        // kind=chat payload'da olmalı — commandFrame'in JSON çıktısını kontrol et
+        // kind=chat must be in the payload — check the commandFrame JSON output
         let frame = PhoneProtocol.commandFrame(client.commands[0])
-        XCTAssertTrue(frame.contains("\"kind\":\"chat\""), "start_session payload'ında kind:chat olmalı")
+        XCTAssertTrue(frame.contains("\"kind\":\"chat\""), "start_session payload must contain kind:chat")
     }
 
-    /// startChatSession commandResult sessionId → subscribeChat otomatik çağrılır.
-    /// Final review #1 regresyonu: chat oturumu başlatıldıktan sonra kullanıcının
-    /// yazdığı İKİNCİ mesaj `chat_send` olarak gitmeli — `sessions` broadcast'i elle
-    /// enjekte EDİLMEDEN (yerel chatSessionIds routing'i). Aksi halde mesaj sessizce
-    /// PTY input yoluna düşerdi ("ikinci mesaj ölü" bugı).
+    /// startChatSession commandResult sessionId → subscribeChat is called automatically.
+    /// Final review #1 regression: after starting a chat session, the SECOND message the user
+    /// types must go as `chat_send` — WITHOUT manually injecting a `sessions` broadcast
+    /// (local chatSessionIds routing). Otherwise the message would silently fall to the
+    /// PTY input path ("second message dead" bug).
     func testSubmitTextRoutesChatSendAfterStartWithoutSessionsBroadcast() async {
         let (model, client, _) = makeModel()
         await model.startChatSession(repoPath: "/r/lumi")
         let commandId = client.commands[0].commandId
         model.handle(.commandResult(CommandResult(commandId: commandId, ok: true,
                                                    error: nil, sessionId: "chat-xyz")))
-        // sessions frame'i HİÇ gelmedi; yine de chat_send'e yönlenmeli.
-        model.submitText("chat-xyz", "ikinci mesaj")
+        // sessions frame NEVER arrived; should still route to chat_send.
+        model.submitText("chat-xyz", "second message")
         await awaitFrame(client, containing: "\"type\":\"chat_send\"")
         let sent = client.sentFrames.first { $0.contains("\"type\":\"chat_send\"") }
-        XCTAssertNotNil(sent, "chat oturumunda submitText chat_send yollamalı (sessions broadcast'i olmadan)")
-        XCTAssertTrue(sent!.contains("ikinci mesaj"))
-        // PTY input yoluna DÜŞMEMELİ:
+        XCTAssertNotNil(sent, "submitText in a chat session should send chat_send (without sessions broadcast)")
+        XCTAssertTrue(sent!.contains("second message"))
+        // Must NOT fall through to PTY input:
         XCTAssertFalse(client.sentFrames.contains { $0.contains("\"type\":\"input\"") },
-                       "chat oturumunda input frame'i gönderilmemeli")
+                       "input frame must not be sent in a chat session")
     }
 
     func testStartChatSessionSubscribesChatOnSuccess() async {
         let (model, client, _) = makeModel()
         await model.startChatSession(repoPath: "/r/lumi")
         let commandId = client.commands[0].commandId
-        // Mac sessionId ile ok döndürür
+        // Mac returns ok with the sessionId
         model.handle(.commandResult(CommandResult(commandId: commandId, ok: true,
                                                    error: nil, sessionId: "new-session-42")))
         XCTAssertEqual(model.startState, .succeeded)
-        // subscribeChat frame'i gönderilmeli
+        // subscribeChat frame should be sent
         await awaitFrame(client, containing: "\"mode\":\"chat\"")
         let sub = client.sentFrames.first {
             $0.contains("\"type\":\"subscribe\"") && $0.contains("\"mode\":\"chat\"")
         }
-        XCTAssertNotNil(sub, "startChatSession başarıyla döndükten sonra chat subscribe gönderilmeli")
-        XCTAssertTrue(sub!.contains("new-session-42"), "subscribe new-session-42 için olmalı")
+        XCTAssertNotNil(sub, "a chat subscribe should be sent after startChatSession succeeds")
+        XCTAssertTrue(sub!.contains("new-session-42"), "subscribe should be for new-session-42")
     }
 
-    // MARK: isChatSession görünüm yönlendirmesi (Faz 2.1)
+    // MARK: isChatSession view routing (Phase 2.1)
 
-    /// REGRESYON: terminal oturumu (kind yok) chat oturumu SAYILMAMALI. Eskiden
-    /// TerminalSessionView her oturumu chat modunda açıp terminal oturumunu ölü
-    /// chat'te "yükleniyor"da bırakıyordu. isChatSession=false → mirror görünümü.
+    /// REGRESSION: a terminal session (no kind) must NOT be counted as a chat session.
+    /// Previously TerminalSessionView was opening every session in chat mode and leaving
+    /// terminal sessions stuck on "loading" in a dead chat. isChatSession=false → mirror view.
     func testIsChatSessionFalseForTerminalSession() {
         let (model, _, _) = makeModel()
         model.handle(.sessions([meta("s1", repo: "lumi", "working")]))
         XCTAssertFalse(model.isChatSession("s1"),
-                       "terminal oturumu (kind yok) chat sayılmamalı → mirror görünümü")
+                       "terminal session (no kind) must not be counted as chat → mirror view")
     }
 
-    /// Telefonun başlattığı chat oturumu → isChatSession true (yerel chatSessionIds;
-    /// sessions broadcast'i elle enjekte EDİLMEDEN → chat view'a yönlenir).
+    /// Chat session started by the phone → isChatSession true (local chatSessionIds;
+    /// WITHOUT manually injecting a sessions broadcast → routes to chat view).
     func testIsChatSessionTrueAfterPhoneStartedChat() async {
         let (model, client, _) = makeModel()
         await model.startChatSession(repoPath: "/r/lumi")
@@ -740,10 +740,10 @@ final class AppModelTests: XCTestCase {
         model.handle(.commandResult(CommandResult(commandId: commandId, ok: true,
                                                    error: nil, sessionId: "chat-xyz")))
         XCTAssertTrue(model.isChatSession("chat-xyz"),
-                      "telefonun başlattığı chat oturumu isChatSession=true olmalı")
+                      "a chat session started by the phone should have isChatSession=true")
     }
 
-    /// Dışarıda başlatılıp kind:chat ile yayınlanan chat oturumu → isChatSession true.
+    /// A chat session started externally and broadcast with kind:chat → isChatSession true.
     func testIsChatSessionTrueForChatKindBroadcast() {
         let (model, _, _) = makeModel()
         model.handle(.sessions([
@@ -751,16 +751,16 @@ final class AppModelTests: XCTestCase {
                         cols: 80, rows: 24, kind: "chat")
         ]))
         XCTAssertTrue(model.isChatSession("s1"),
-                      "kind:chat yayınlanan oturum chat sayılmalı")
+                      "a session broadcast with kind:chat should be counted as chat")
     }
 
-    /// Bilinmeyen/mevcut olmayan oturum id'si → false (güvenli varsayılan: mirror).
+    /// Unknown/non-existent session id → false (safe default: mirror).
     func testIsChatSessionFalseForUnknownSession() {
         let (model, _, _) = makeModel()
-        XCTAssertFalse(model.isChatSession("yok"))
+        XCTAssertFalse(model.isChatSession("nonexistent"))
     }
 
-    // MARK: optimistic echo + streaming persistence (orca port; kullanıcı şikâyeti)
+    // MARK: optimistic echo + streaming persistence (orca port; user complaint)
 
     private func hasText(_ messages: [ChatMessage], role: ChatRole, _ text: String) -> Bool {
         messages.contains { m in
@@ -770,39 +770,40 @@ final class AppModelTests: XCTestCase {
         }
     }
 
-    /// Gönderilen mesaj ANINDA (server onayı beklemeden) render listesinde görünür.
+    /// The sent message appears in the render list IMMEDIATELY (without waiting for server acknowledgement).
     func testSubmitTextChatShowsOptimisticUserMessageImmediately() async {
         let (model, client, _) = makeModel()
         await model.startChatSession(repoPath: "/r")
         model.handle(.commandResult(CommandResult(commandId: client.commands[0].commandId,
                                                   ok: true, error: nil, sessionId: "cs1")))
-        model.submitText("cs1", "merhaba")
-        XCTAssertTrue(hasText(model.chatRenderMessages("cs1"), role: .user, "merhaba"),
-                      "gönderilen mesaj optimistic olarak hemen listede olmalı")
+        model.submitText("cs1", "hello")
+        XCTAssertTrue(hasText(model.chatRenderMessages("cs1"), role: .user, "hello"),
+                      "the sent message should appear immediately as an optimistic entry")
     }
 
-    /// KRİTİK (vanish yok): Mac'in GERÇEK yayın sırası — chat_append (gerçek mesaj)
-    /// önce, chat_status(working=false) sonra. Balon append'te gizlenir çünkü gerçek
-    /// mesaj o an listede; turn bitince de metin listede kalır (silinmez).
+    /// CRITICAL (no vanish): Mac's REAL broadcast order — chat_append (real message)
+    /// first, chat_status(working=false) second. The bubble is hidden on append because the
+    /// real message is in the list at that point; after the turn ends the text stays in the
+    /// list (not deleted).
     func testStreamingReplacedByRealMessageNoVanish() {
         let (model, _, _) = makeModel()
-        // Akış başlıyor.
+        // Streaming starts.
         model.handle(.chatStatus(sessionId: "s1", status: ChatTurnStatus(
-            working: true, startedAtMs: 1, tool: nil, streamingText: "Cevap")))
+            working: true, startedAtMs: 1, tool: nil, streamingText: "Response")))
         XCTAssertTrue(model.chatRenderMessages("s1").contains { $0.id == "streaming" },
-                      "akış sırasında streaming balonu görünmeli")
-        // Mac önce gerçek mesajı append eder (status hâlâ working=true).
+                      "streaming bubble should be visible during streaming")
+        // Mac appends the real message first (status is still working=true).
         model.handle(.chatAppend(sessionId: "s1", messages: [ChatMessage(
-            id: "a1", role: .assistant, blocks: [.text("Cevap tamamlandı", presentation: nil)],
+            id: "a1", role: .assistant, blocks: [.text("Response complete", presentation: nil)],
             timestampMs: nil, turnId: nil)]))
         var render = model.chatRenderMessages("s1")
-        XCTAssertTrue(render.contains { $0.id == "a1" }, "gerçek mesaj listede")
-        XCTAssertFalse(render.contains { $0.id == "streaming" }, "gerçek mesaj gelince balon gizlenir")
-        // Sonra turn biter.
+        XCTAssertTrue(render.contains { $0.id == "a1" }, "real message is in the list")
+        XCTAssertFalse(render.contains { $0.id == "streaming" }, "bubble is hidden when real message arrives")
+        // Then the turn ends.
         model.handle(.chatStatus(sessionId: "s1", status: ChatTurnStatus(
             working: false, startedAtMs: nil, tool: nil, streamingText: nil)))
         render = model.chatRenderMessages("s1")
-        XCTAssertTrue(render.contains { $0.id == "a1" }, "turn bitince mesaj hâlâ listede (vanish yok)")
-        XCTAssertFalse(render.contains { $0.id == "streaming" }, "turn bitince balon yok")
+        XCTAssertTrue(render.contains { $0.id == "a1" }, "message is still in the list after turn ends (no vanish)")
+        XCTAssertFalse(render.contains { $0.id == "streaming" }, "no bubble after turn ends")
     }
 }

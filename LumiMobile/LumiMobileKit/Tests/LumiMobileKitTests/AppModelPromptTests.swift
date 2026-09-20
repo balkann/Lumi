@@ -21,7 +21,7 @@ final class AppModelPromptTests: XCTestCase {
         m.handle(.prompt(sessionId: "s1", prompt: prompt("i1", state: .pending)))
         XCTAssertEqual(m.prompts["s1"]?.count, 1)
         m.handle(.prompt(sessionId: "s1", prompt: prompt("i1", state: .resolved)))
-        XCTAssertTrue((m.prompts["s1"] ?? []).isEmpty)   // resolved → düşer
+        XCTAssertTrue((m.prompts["s1"] ?? []).isEmpty)   // resolved → dropped
     }
 
     func testCancelledPromptRemoved() {
@@ -37,15 +37,15 @@ final class AppModelPromptTests: XCTestCase {
         m.handle(.prompt(sessionId: "s1", prompt: ChatPrompt(
             itemId: "i1", revision: 1, kind: .approval, title: "t2", detail: nil,
             options: [], state: .pending, selectedOptionId: nil)))
-        XCTAssertEqual(m.prompts["s1"]?.count, 1)   // dedup by itemId
+        XCTAssertEqual(m.prompts["s1"]?.count, 1)   // deduped by itemId
         XCTAssertEqual(m.prompts["s1"]?.first?.revision, 1)
     }
 
     func testDeadActiveSessionClearsPrompts() {
         let m = makeModel()
         m.handle(.prompt(sessionId: "s1", prompt: prompt("i1", state: .pending)))
-        m.subscribeChat("s1")   // aktif oturum = s1
-        m.handle(.sessions([]))  // s1 artık canlı değil
+        m.subscribeChat("s1")   // active session = s1
+        m.handle(.sessions([]))  // s1 is no longer live
         XCTAssertNil(m.prompts["s1"])
     }
 }

@@ -3,8 +3,8 @@ import SwiftUI
 import LumiMobileKit
 import Foundation
 
-/// Native chat görünümü: transcript'ten türeyen mesajları satır-saran balonlar
-/// olarak gösterir (yatay scroll yok). Composer serbest metin gönderir.
+/// Native chat view: displays messages derived from the transcript as
+/// line-wrapping bubbles (no horizontal scroll). The composer sends free text.
 struct MobileChatView: View {
     let model: AppModel
     let sessionId: String
@@ -13,10 +13,10 @@ struct MobileChatView: View {
     @State private var draft = ""
     @FocusState private var composerFocused: Bool
 
-    // Birleşik render listesi (orca): optimistic pending + journal mesajları +
-    // gated streaming balonu → tek liste, sonra turn'lere katlanır. Streaming
-    // artık ayrı bir blok DEĞİL; listenin içinde sentetik assistant turn'ü —
-    // gerçek mesaj düşene kadar kalır (turn bitince silinmez).
+    // Combined render list (orca): optimistic pending + journal messages +
+    // gated streaming bubble → single list, then folded into turns. Streaming
+    // is NO LONGER a separate block; it is a synthetic assistant turn inside
+    // the list — it persists until the real message arrives (not removed on turn end).
     private var turns: [FoldedTurn] { foldChatMessages(model.chatRenderMessages(sessionId)) }
 
     var body: some View {
@@ -26,10 +26,10 @@ struct MobileChatView: View {
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: 10) {
                             if turns.isEmpty {
-                                // Faz 2.1: chat oturumu artık yalnız kind=chat için açılıyor
-                                // (TerminalSessionView tür yönlendirmesi). Boş chat = "henüz
-                                // mesaj yok" → yanıltıcı "yükleniyor" yerine eyleme çağıran metin.
-                                Text("Sohbet boş — aşağıya yazıp başlat.")
+                                // Phase 2.1: a chat session is now opened only for kind=chat
+                                // (TerminalSessionView type routing). Empty chat = "no messages
+                                // yet" → call-to-action text instead of misleading "loading".
+                                Text("Chat is empty — type below to start.")
                                     .foregroundStyle(.secondary)
                                     .frame(maxWidth: .infinity)
                                     .padding(.top, 40)
@@ -45,7 +45,7 @@ struct MobileChatView: View {
                     .onChange(of: turns.count) { _, _ in
                         withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
                     }
-                    // Streaming metni büyüdükçe de dibe kaydır (token akışı sırasında).
+                    // Also scroll to bottom as streaming text grows (during token stream).
                     .onChange(of: model.gatedStreaming[sessionId]) { _, _ in
                         withAnimation { proxy.scrollTo("bottom", anchor: .bottom) }
                     }
@@ -67,15 +67,15 @@ struct MobileChatView: View {
                             model.respondPromptSelections(sessionId, itemId: pending.itemId, revision: pending.revision, selections: selections)
                         }
                     )
-                    // Her pending prompt için taze @State (seçim/free-text/sending sızmasın);
-                    // art arda farklı prompt'larda bayat seçim/takılı buton olmaz.
+                    // Fresh @State for each pending prompt (prevent selection/free-text/sending leaking);
+                    // avoids stale selection or a stuck button across consecutive different prompts.
                     .id(pending.itemId)
                 } else if let hq = model.heuristicQuestion(sessionId) {
-                    // Hook prompt'u yoksa: AI'ın metindeki seçeneklerini tıklanabilir kart yap.
+                    // No hook prompt: turn the AI's in-text options into a tappable card.
                     MobileHeuristicQuestionCard(question: hq) { indexes in
                         model.answerHeuristicQuestion(sessionId, hq, selectedIndexes: indexes)
                     }
-                    // Farklı soru → taze seçim state'i.
+                    // Different question → fresh selection state.
                     .id(hq.options.joined(separator: "|"))
                 }
                 composer
@@ -85,8 +85,8 @@ struct MobileChatView: View {
         .ignoresSafeArea(.keyboard, edges: .bottom)
         .animation(.easeOut(duration: 0.25), value: keyboard.height)
         .task(id: sessionId) { model.subscribeChat(sessionId) }
-        // Boş chat açılışında composer'a odaklan → "ne yapmalıyım" belirsizliği
-        // kalkar, kullanıcı hemen yazmaya başlar (Faz 2.1 §4).
+        // Focus the composer when opening an empty chat → removes "what do I do?"
+        // ambiguity, letting the user start typing right away (Phase 2.1 §4).
         .onAppear { if turns.isEmpty { composerFocused = true } }
     }
 
@@ -94,14 +94,14 @@ struct MobileChatView: View {
         VStack(spacing: 0) {
             Divider()
             HStack(spacing: 8) {
-                TextField("Mesaj…", text: $draft, axis: .vertical)
+                TextField("Message…", text: $draft, axis: .vertical)
                     .textFieldStyle(.roundedBorder)
                     .lineLimit(1...5)
                     .focused($composerFocused)
                 Button {
                     guard !draft.isEmpty else { return }
-                    // Metni yaz → settle → Enter'ı AYRI yolla (submitText). Tek
-                    // write'taki birleşik `metin\r` Claude TUI'sinde submit olmaz.
+                    // Write text → settle → send Enter via a SEPARATE path (submitText).
+                    // A combined `text\r` in a single write does not submit in the Claude TUI.
                     model.submitText(sessionId, draft)
                     draft = ""
                 } label: {

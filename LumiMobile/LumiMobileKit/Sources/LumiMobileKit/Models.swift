@@ -1,13 +1,13 @@
 import Foundation
 
-/// Mac'in yayınladığı oturum durumu (docs/spec/50-remote-protocol.md snapshot payload).
+/// Session status broadcast by the Mac (docs/spec/50-remote-protocol.md snapshot payload).
 public enum SessionStatus: String, Sendable, Equatable {
     case idle, working, error
     case waitingUnseen = "waiting-unseen"
     case waitingFocused = "waiting-focused"
     case waitingSeen = "waiting-seen"
 
-    /// Telefon rozeti 4 duruma indirger (tasarım §2).
+    /// Reduces to the 4 phone badge states (design §2).
     public var badge: Badge {
         switch self {
         case .idle: .idle
@@ -21,7 +21,7 @@ public enum SessionStatus: String, Sendable, Equatable {
 extension SessionStatus: Decodable {
     public init(from decoder: Decoder) throws {
         let raw = try decoder.singleValueContainer().decode(String.self)
-        // Tolerans (tasarım §12.2): ileride eklenen durumlar akışı kırmasın.
+        // Tolerance (design §12.2): future status values must not break the stream.
         self = SessionStatus(rawValue: raw) ?? .idle
     }
 }
@@ -36,9 +36,9 @@ public struct SessionSummary: Decodable, Sendable, Equatable, Identifiable {
     public let title: String?
     public let awaitingDecision: Bool
     public let model: String?
-    /// O an ekranda duran interaktif prompt (ekran-scrape; spec 4). Reconnect'te kartı kurar.
+    /// The interactive prompt currently on screen (screen-scrape; spec 4). Rebuilds the card on reconnect.
     public let activePrompt: [Question]?
-    /// Yapısal prompt yokken ham ekran özeti (bare kart bağlamı; spec 4 §K3).
+    /// Raw screen summary when no structured prompt is present (bare card context; spec 4 §K3).
     public let screenText: [String]?
 
     public init(id: String, repoPath: String, repoName: String,
@@ -109,7 +109,7 @@ public struct Snapshot: Decodable, Sendable, Equatable {
     }
 }
 
-/// Terminal oturum meta verisi (terminal-mirror protokolü; relay sessions mesajı).
+/// Terminal session metadata (terminal-mirror protocol; relay sessions message).
 public struct SessionMeta: Decodable, Sendable, Equatable, Identifiable {
     public let id: String
     public let repoName: String
@@ -118,7 +118,7 @@ public struct SessionMeta: Decodable, Sendable, Equatable, Identifiable {
     public let model: String?
     public let cols: Int
     public let rows: Int
-    public let kind: String?   // oturum türü (örn. "chat", "terminal"); Faz 2 — yoksa nil
+    public let kind: String?   // session type (e.g. "chat", "terminal"); Phase 2 — nil if absent
 
     public init(id: String, repoName: String, status: String,
                 title: String? = nil, model: String? = nil,
@@ -151,14 +151,14 @@ public struct SessionMeta: Decodable, Sendable, Equatable, Identifiable {
         )
     }
 
-    /// Ham durum dizgesini telefon rozetine indirger (SessionStatus toleransıyla aynı).
+    /// Reduces the raw status string to a phone badge (same tolerance as SessionStatus).
     public var badge: Badge {
         (SessionStatus(rawValue: status) ?? .idle).badge
     }
 }
 
-/// Ham terminal bayt dilimi (data veya scrollback mesajından).
-/// `bytes` base64-decoded ham PTY verisidir.
+/// Raw terminal byte slice (from a data or scrollback message).
+/// `bytes` is the base64-decoded raw PTY data.
 public struct TerminalChunk: Sendable, Equatable {
     public let sessionId: String
     public let seq: Int
@@ -175,14 +175,14 @@ public struct TerminalChunk: Sendable, Equatable {
     }
 }
 
-/// Relay'in telefona ilk cevabı; `lastSeenAt` epoch milisaniye (relay `Date.now()`).
-/// Terminal-ayna protokolünde oturum listesi `sessions` alanında gelir (eski `snapshot` kaldırıldı).
+/// The relay's first response to the phone; `lastSeenAt` is epoch milliseconds (relay `Date.now()`).
+/// In the terminal-mirror protocol, the session list arrives in the `sessions` field (old `snapshot` removed).
 public struct Welcome: Decodable, Sendable, Equatable {
     public let macOnline: Bool
     public let lastSeenAt: Double?
-    /// Terminal-mirror protokolü: aktif terminal oturumlarının listesi.
+    /// Terminal-mirror protocol: list of active terminal sessions.
     public let sessions: [SessionMeta]?
-    /// Telefondan yeni oturum başlatmak için repo listesi (relay room cache'inden).
+    /// Repo list for starting a new session from the phone (from the relay room cache).
     public let repos: [Repo]?
 
     public init(macOnline: Bool, lastSeenAt: Double?, sessions: [SessionMeta]? = nil, repos: [Repo]? = nil) {
@@ -221,9 +221,9 @@ public struct CommandResult: Decodable, Sendable, Equatable {
     public let commandId: String
     public let ok: Bool
     public let error: String?
-    /// start_session kind=chat'ta Mac'in döndürdüğü yeni oturum kimliği (Faz 2).
+    /// New session id returned by the Mac for start_session kind=chat (Phase 2).
     public let sessionId: String?
-    /// list_branches komutuna yanıt olarak Mac'in döndürdüğü branch listesi.
+    /// Branch list returned by the Mac in response to the list_branches command.
     public let branches: [String]?
 
     public init(commandId: String, ok: Bool, error: String?, sessionId: String? = nil, branches: [String]? = nil) {

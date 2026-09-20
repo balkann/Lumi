@@ -3,7 +3,7 @@ import XCTest
 
 final class PairingTests: XCTestCase {
 
-    // Mac tarafı üretimi (RemoteStore.pairingString): ':' ve '/' de encode edilir.
+    // Mac-side generated string (RemoteStore.pairingString): ':' and '/' are also encoded.
     func testParseMacGeneratedPairingString() {
         let string = "lumi-remote://pair?url=wss%3A%2F%2Flumi-relay-production.up.railway.app&token=abcDEF123-_456789xyzABCDEF0123456789abcdefg"
         let info = Pairing.parse(string)
@@ -19,17 +19,17 @@ final class PairingTests: XCTestCase {
     }
 
     func testParseRejectsInvalidInputs() {
-        // yanlış şema / host
+        // wrong scheme / host
         XCTAssertNil(Pairing.parse("https://pair?url=wss%3A%2F%2Fr&token=0123456789abcdef"))
         XCTAssertNil(Pairing.parse("lumi-remote://settings?url=wss%3A%2F%2Fr&token=0123456789abcdef"))
-        // eksik parametre
+        // missing parameter
         XCTAssertNil(Pairing.parse("lumi-remote://pair?token=0123456789abcdef"))
         XCTAssertNil(Pairing.parse("lumi-remote://pair?url=wss%3A%2F%2Fr.example"))
-        // kısa token (protokol: ≥16)
+        // short token (protocol: ≥16)
         XCTAssertNil(Pairing.parse("lumi-remote://pair?url=wss%3A%2F%2Fr.example&token=kisa"))
-        // ws(s) olmayan relay url'i
+        // relay url without ws(s)
         XCTAssertNil(Pairing.parse("lumi-remote://pair?url=https%3A%2F%2Fr.example&token=0123456789abcdef"))
-        // düz metin
+        // plain text (Turkish; kept as-is — it is a parse input, not human text)
         XCTAssertNil(Pairing.parse("hic url degil"))
     }
 

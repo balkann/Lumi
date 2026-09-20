@@ -29,7 +29,7 @@ import Foundation
     @Test func commandResultDecodesBranches() throws {
         let json = #"{"v":1,"type":"command_result","payload":{"commandId":"c2","ok":true,"branches":["main","dev"]}}"#
         let msg = PhoneProtocol.decodeServerMessage(json)
-        guard case .commandResult(let r) = msg else { Issue.record("beklenen commandResult"); return }
+        guard case .commandResult(let r) = msg else { Issue.record("expected commandResult"); return }
         #expect(r.branches == ["main", "dev"])
     }
 
@@ -46,7 +46,7 @@ import Foundation
         let (model, client) = makeModelWithFakeClient()
         await model.loadBranches(repoPath: "/tmp/r")
         #expect(model.branchesLoading == true)
-        // Mac yanıtı simüle: son gönderilen commandId'yi al
+        // Simulate Mac response: get the last sent commandId
         let cid = client.commands.last!.commandId
         model.handle(.commandResult(CommandResult(commandId: cid, ok: true, error: nil, branches: ["main", "dev"])))
         #expect(model.branchesForRepo == ["main", "dev"])

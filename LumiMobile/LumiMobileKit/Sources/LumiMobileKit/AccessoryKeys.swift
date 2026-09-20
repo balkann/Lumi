@@ -1,13 +1,13 @@
 import Foundation
 
-/// Aksesuar çubuğundaki özel tuşların tanımları.
+/// Definitions for the custom keys in the accessory bar.
 public enum AccessoryKey: Sendable {
     case up, down, left, right
     case esc, tab, enter, ctrlC
 }
 
-/// Verilen `AccessoryKey` için terminale gönderilecek ham baytları döndürür.
-/// ANSI/VT100 kaçış dizileri: ok tuşları ESC [ X, kontrol tuşları tek bayt.
+/// Returns the raw bytes to send to the terminal for a given `AccessoryKey`.
+/// ANSI/VT100 escape sequences: arrow keys ESC [ X, control keys single byte.
 public func bytes(for key: AccessoryKey) -> Data {
     switch key {
     case .esc:   return Data([0x1B])

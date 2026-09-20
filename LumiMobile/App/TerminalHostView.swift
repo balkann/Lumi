@@ -2,16 +2,16 @@ import SwiftUI
 import SwiftTerm
 import LumiMobileKit
 
-/// Ayna terminal görünümü: Mac'in PTY baytlarını gösterir; giriş yalnız AccessoryBar'dan
-/// gelir. Bu yüzden terminal KENDİ klavyesini açmamalı — aksi halde terminale dokununca
-/// SwiftTerm first responder olup kendi klavyesini açar ve AccessoryBar TextField'ıyla
-/// yarışır (bug #1: "yukarı dokununca yazamıyorum", çubuk klavye altında kalıyor).
+/// Mirror terminal view: displays the Mac's PTY bytes; input comes only from AccessoryBar.
+/// The terminal must NOT open its OWN keyboard — otherwise touching the terminal makes
+/// SwiftTerm become the first responder, opening its own keyboard and competing with the
+/// AccessoryBar TextField (bug #1: "can't type after scrolling up", bar stuck under keyboard).
 final class MirrorTerminalView: TerminalView {
     override var canBecomeFirstResponder: Bool { false }
     override var canBecomeFocused: Bool { false }
 }
 
-/// Gerçek `TerminalView`'ı `TerminalFeeder` olarak sarar (LumiMobileKit sınırı).
+/// Wraps a real `TerminalView` as a `TerminalFeeder` (LumiMobileKit boundary).
 @MainActor
 final class TerminalViewFeeder: TerminalFeeder {
     private let view: TerminalView
@@ -23,8 +23,8 @@ final class TerminalViewFeeder: TerminalFeeder {
 
 /// UIViewRepresentable wrapping SwiftTerm's TerminalView for iOS.
 /// - `onInput`: called when the user types in the terminal (sends bytes to Mac PTY).
-/// - `buffer`: view hazır olunca `attach` edilir; SwiftUI `@State` handshake'i yerine
-///   referans-tip tampon kullanılır (bkz. `TerminalFeedBuffer` — bug #3).
+/// - `buffer`: `attach`ed once the view is ready; a reference-type buffer is used
+///   instead of a SwiftUI `@State` handshake (see `TerminalFeedBuffer` — bug #3).
 struct TerminalHostView: UIViewRepresentable {
     let onInput: @MainActor (Data) -> Void
     let buffer: TerminalFeedBuffer
@@ -37,7 +37,7 @@ struct TerminalHostView: UIViewRepresentable {
     func makeUIView(context: Context) -> TerminalView {
         let v = MirrorTerminalView(frame: .zero)
         v.terminalDelegate = context.coordinator
-        // View hazır: tamponu bağla → birikmiş scrollback/data hemen uygulanır.
+        // View ready: attach the buffer → accumulated scrollback/data is applied immediately.
         buffer.attach(TerminalViewFeeder(v))
         return v
     }

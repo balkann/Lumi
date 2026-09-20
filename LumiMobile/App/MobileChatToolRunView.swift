@@ -3,7 +3,7 @@ import SwiftUI
 import LumiMobileKit
 import LumiWire
 
-/// Katlanmış araç aktivitesi: "🔧 3 işlem" satırı; tap → tool-call/result detayları.
+/// Folded tool activity: "🔧 3 actions" row; tap → tool-call/result details.
 struct MobileChatToolRunView: View {
     let activity: [ChatMessage]
     @State private var expanded = false
@@ -19,7 +19,7 @@ struct MobileChatToolRunView: View {
                             .font(.caption2)
                         Image(systemName: "wrench.and.screwdriver")
                             .font(.caption2)
-                        Text("\(toolCount) işlem")
+                        Text("\(toolCount) actions")
                             .font(.caption)
                     }
                     .foregroundStyle(.secondary)

@@ -2,10 +2,10 @@
 import SwiftUI
 import LumiMobileKit
 
-/// AI'ın metinde sunduğu seçenekleri tıklanabilir düğmeler olarak gösterir
-/// (orca heuristic yolu). Tek-seçim: dokun → hemen gönder. Çok-seçim: işaretle
-/// → Gönder. Cevap normal chat mesajı olarak gider (stream-json'da AskUserQuestion
-/// tool'u yok; seçenek metni yanıt olur).
+/// Shows the options the AI presented in text as tappable buttons
+/// (orca heuristic path). Single-select: tap → send immediately. Multi-select: toggle
+/// → Send. The answer goes as a normal chat message (no AskUserQuestion tool in
+/// stream-json; the option text becomes the response).
 struct MobileHeuristicQuestionCard: View {
     let question: ChatHeuristicQuestion
     let onAnswer: ([Int]) -> Void
@@ -46,7 +46,7 @@ struct MobileHeuristicQuestionCard: View {
                 Button {
                     onAnswer(question.options.indices.filter { selected.contains($0) }.sorted())
                 } label: {
-                    Text("Gönder")
+                    Text("Send")
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
                         .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 10))

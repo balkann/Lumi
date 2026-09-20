@@ -10,17 +10,17 @@ struct PairingView: View {
         NavigationStack {
             Form {
                 Section {
-                    Text("Mac'te Lumi → Ayarlar → Remote ekranındaki QR'ı okut ya da eşleştirme bağlantısını yapıştır.")
+                    Text("On the Mac, scan the QR from Lumi → Settings → Remote, or paste the pairing link.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 }
                 scannerSection
-                Section("Bağlantıyı yapıştır") {
+                Section("Paste connection") {
                     TextField("lumi-remote://pair?...", text: $pastedLink)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .accessibilityIdentifier("pairingField")
-                    Button("Eşleştir") {
+                    Button("Pair") {
                         Task {
                             let ok = await model.pair(from: pastedLink)
                             showError = !ok
@@ -29,19 +29,19 @@ struct PairingView: View {
                     .accessibilityIdentifier("pairButton")
                     .disabled(pastedLink.isEmpty)
                     if showError {
-                        Text("Bağlantı çözümlenemedi. `lumi-remote://pair?...` biçiminde olmalı.")
+                        Text("Couldn't resolve the connection. It must be in the form `lumi-remote://pair?...`.")
                             .font(.footnote)
                             .foregroundStyle(.red)
                     }
                 }
             }
-            .navigationTitle("Eşleştirme")
+            .navigationTitle("Pairing")
         }
     }
 
     @ViewBuilder private var scannerSection: some View {
         if QRScannerView.isAvailable {
-            Section("QR okut") {
+            Section("Scan QR") {
                 QRScannerView { value in
                     Task {
                         let ok = await model.pair(from: value)

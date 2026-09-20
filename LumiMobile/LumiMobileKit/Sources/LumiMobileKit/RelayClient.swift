@@ -10,7 +10,7 @@ public enum ClientEvent: Sendable, Equatable {
     case message(ServerMessage)
 }
 
-/// 1,2,4,8,…60 sn üstel geri çekilme (Mac tarafındaki ReconnectBackoff'un aynısı).
+/// 1, 2, 4, 8, … 60 s exponential back-off (mirrors the Mac-side ReconnectBackoff).
 public struct ReconnectBackoff: Sendable {
     private var attempt = 0
     private let capSeconds: Double = 60
@@ -26,20 +26,20 @@ public struct ReconnectBackoff: Sendable {
     public mutating func reset() { attempt = 0 }
 }
 
-/// AppModel'in gördüğü sınır — testlerde FakeRelayClient bunu implemente eder.
+/// The boundary AppModel sees — tests implement this via FakeRelayClient.
 public protocol RelayClienting: Sendable {
     func events() async -> AsyncStream<ClientEvent>
     func start(pairing: PairingInfo) async
     func stop() async
     @discardableResult func send(command: OutgoingCommand) async -> Bool
-    /// Ham zarf frame'i gönderir (terminal-ayna subscribe/unsubscribe/input).
+    /// Sends a raw envelope frame (terminal-mirror subscribe/unsubscribe/input).
     @discardableResult func send(frame: String) async -> Bool
     func registerPush(deviceToken: String) async
     func unregisterPush(deviceToken: String) async
 }
 
-/// Relay'e telefon rolüyle bağlanan istemci: hello → welcome → mesaj akışı;
-/// kopunca üstel backoff ile yeniden bağlanır (tasarım §9).
+/// Client that connects to the relay as the phone role: hello → welcome → message stream;
+/// reconnects with exponential back-off on disconnect (design §9).
 public actor RelayClient: RelayClienting {
     public private(set) var state: ConnectionState = .disconnected
 
@@ -105,12 +105,12 @@ public actor RelayClient: RelayClienting {
         _ = await sendFrame(PhoneProtocol.unregisterPushFrame(deviceToken: deviceToken))
     }
 
-    // MARK: İç işleyiş
+    // MARK: Internal
 
     private func run(url: URL, token: String) async {
         while !Task.isCancelled {
             setState(.connecting)
-            DiagLog.shared.log("relay", "bağlanıyor \(url.host ?? url.absoluteString)")
+            DiagLog.shared.log("relay", "connecting \(url.host ?? url.absoluteString)")
             let conn = connect(url)
             connection = conn
             do {
@@ -126,10 +126,10 @@ public actor RelayClient: RelayClienting {
                     }
                     yield(.message(message))
                 }
-                DiagLog.shared.log("relay", "akış kapandı (sunucu tarafı)")
+                DiagLog.shared.log("relay", "stream closed (server side)")
             } catch {
-                // kopma → aşağıda backoff ile yeniden dene
-                DiagLog.shared.log("relay", "koptu: \(error.localizedDescription)")
+                // disconnected → retry below with back-off
+                DiagLog.shared.log("relay", "dropped: \(error.localizedDescription)")
             }
             connection = nil
             if Task.isCancelled { return }
@@ -140,14 +140,14 @@ public actor RelayClient: RelayClienting {
 
     private func sendFrame(_ frame: String) async -> Bool {
         guard let connection else {
-            DiagLog.shared.log("relay", "send atlandı (bağlantı yok)")
+            DiagLog.shared.log("relay", "send skipped (no connection)")
             return false
         }
         do {
             try await connection.send(frame)
             return true
         } catch {
-            DiagLog.shared.log("relay", "send başarısız: \(error.localizedDescription)")
+            DiagLog.shared.log("relay", "send failed: \(error.localizedDescription)")
             return false
         }
     }

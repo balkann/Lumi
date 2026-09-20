@@ -21,30 +21,30 @@ struct SessionListView: View {
                         Button(role: .destructive) {
                             pendingDelete = session
                         } label: {
-                            Label("Sil", systemImage: "trash")
+                            Label("Delete", systemImage: "trash")
                         }
                     }
                 }
                 if model.orderedSessions.isEmpty {
-                    Text("Aktif oturum yok")
+                    Text("No active sessions")
                         .foregroundStyle(.secondary)
                 }
             }
             .confirmationDialog(
-                "Oturum sonlandırılsın mı?",
+                "End session?",
                 isPresented: Binding(
                     get: { pendingDelete != nil },
                     set: { if !$0 { pendingDelete = nil } }
                 ),
                 presenting: pendingDelete
             ) { session in
-                Button("Sonlandır", role: .destructive) {
+                Button("End", role: .destructive) {
                     Task { await model.deleteSession(sessionId: session.id) }
                     pendingDelete = nil
                 }
-                Button("Vazgeç", role: .cancel) { pendingDelete = nil }
+                Button("Cancel", role: .cancel) { pendingDelete = nil }
             } message: { session in
-                Text("\(session.repoName) oturumu Mac'te sonlandırılacak.")
+                Text("The \(session.repoName) session will be ended on the Mac.")
             }
             .navigationTitle("Lumi")
             .navigationDestination(for: String.self) { sessionId in
@@ -64,7 +64,7 @@ struct SessionListView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
-                        Toggle("Bildirimler", isOn: Binding(
+                        Toggle("Notifications", isOn: Binding(
                             get: { model.notificationsEnabled },
                             set: { isOn in
                                 Task {
@@ -79,7 +79,7 @@ struct SessionListView: View {
                                 }
                             }
                         ))
-                        Button("Eşleştirmeyi kaldır", role: .destructive) {
+                        Button("Unpair", role: .destructive) {
                             Task { await model.unpair() }
                         }
                     } label: {
@@ -95,7 +95,7 @@ struct SessionListView: View {
 
     private var offlineBanner: some View {
         Label {
-            Text("Mac çevrimdışı" + lastSeenSuffix)
+            Text("Mac offline" + lastSeenSuffix)
         } icon: {
             Image(systemName: "desktopcomputer.trianglebadge.exclamationmark")
         }
@@ -105,7 +105,7 @@ struct SessionListView: View {
 
     private var lastSeenSuffix: String {
         guard let lastSeenAt = model.lastSeenAt else { return "" }
-        return " — son görülme " + lastSeenAt.formatted(date: .omitted, time: .shortened)
+        return " — last seen " + lastSeenAt.formatted(date: .omitted, time: .shortened)
     }
 
     private var connectionDot: some View {
@@ -113,7 +113,7 @@ struct SessionListView: View {
             .fill(model.connection == .connected ? .green :
                   model.connection == .connecting ? .yellow : .red)
             .frame(width: 10, height: 10)
-            .accessibilityLabel("Relay bağlantısı")
+            .accessibilityLabel("Relay connection")
     }
 }
 
@@ -148,10 +148,10 @@ struct StatusBadge: View {
 
     private var label: String {
         switch badge {
-        case .idle: "boşta"
-        case .working: "çalışıyor"
-        case .waiting: "bekliyor"
-        case .error: "hata"
+        case .idle: "idle"
+        case .working: "running"
+        case .waiting: "waiting"
+        case .error: "error"
         }
     }
 

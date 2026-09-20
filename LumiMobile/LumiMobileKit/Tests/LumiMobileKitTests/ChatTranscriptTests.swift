@@ -13,116 +13,116 @@ final class ChatTranscriptTests: XCTestCase {
                     timestampMs: nil, turnId: nil)
     }
 
-    // MARK: streaming gate
+    // MARK: Streaming gate
 
-    /// Yanıt akarken (henüz transcript'e düşmemiş) → metin görünür.
+    /// While the response is streaming (not yet in the transcript) → text is visible.
     func testStreamingShowsWhileNoRealMessage() {
         var gate = ChatStreamGate()
-        let prev = [assistant("a1", "önceki cevap")]
-        let (g1, s1) = chatDeriveStreaming(gate: gate, folded: prev, incoming: "Merhab", streamLive: true)
+        let prev = [assistant("a1", "previous response")]
+        let (g1, s1) = chatDeriveStreaming(gate: gate, folded: prev, incoming: "Hell", streamLive: true)
         gate = g1
-        XCTAssertEqual(s1, "Merhab")
-        let (g2, s2) = chatDeriveStreaming(gate: gate, folded: prev, incoming: "Merhaba dünya", streamLive: true)
+        XCTAssertEqual(s1, "Hell")
+        let (g2, s2) = chatDeriveStreaming(gate: gate, folded: prev, incoming: "Hello world", streamLive: true)
         gate = g2
-        XCTAssertEqual(s2, "Merhaba dünya")
+        XCTAssertEqual(s2, "Hello world")
     }
 
-    /// Gerçek mesaj transcript'e düşünce (tail metinle önden gidiyor + tail taşındı)
-    /// → balon gizlenir (nil), gerçek mesaj kalır. Mac append'i status-canlıyken yollar.
+    /// When the real message lands in the transcript (tail text gets ahead + tail moved)
+    /// → bubble is hidden (nil), real message stays. Mac sends append while status is still live.
     func testStreamingHidesWhenRealMessageLands() {
         var gate = ChatStreamGate()
-        let prev = [assistant("a1", "önceki")]
-        let (g1, _) = chatDeriveStreaming(gate: gate, folded: prev, incoming: "Merhaba dünya", streamLive: true)
+        let prev = [assistant("a1", "previous")]
+        let (g1, _) = chatDeriveStreaming(gate: gate, folded: prev, incoming: "Hello world", streamLive: true)
         gate = g1
-        // Yanıt landi (append), status hâlâ canlı: yeni assistant tail metinle başlıyor.
-        let landed = prev + [assistant("a2", "Merhaba dünya!")]
-        let (g2, s2) = chatDeriveStreaming(gate: gate, folded: landed, incoming: "Merhaba dünya", streamLive: true)
+        // Response landed (append), status still live: new assistant tail starts with the text.
+        let landed = prev + [assistant("a2", "Hello world!")]
+        let (g2, s2) = chatDeriveStreaming(gate: gate, folded: landed, incoming: "Hello world", streamLive: true)
         gate = g2
-        XCTAssertNil(s2, "gerçek mesaj tail'e düşünce streaming balonu gizlenmeli")
+        XCTAssertNil(s2, "streaming bubble must be hidden when real message lands in the tail")
     }
 
-    /// Turn bitince (streamLive=false → önizleme yok) balon gizlenir (orca). Gerçek
-    /// mesaj o an transcript'te olduğundan (Mac append'i status-nil'den önce yollar)
-    /// vanish olmaz — bkz. AppModel entegrasyon testi.
+    /// When the turn ends (streamLive=false → no preview) the bubble is hidden (orca). The real
+    /// message is in the transcript at that moment (Mac sends append before setting status to nil)
+    /// so there is no vanish — see AppModel integration test.
     func testStreamingHiddenWhenTurnEnds() {
         var gate = ChatStreamGate()
-        let landed = [assistant("a1", "Cevap tamam")]
-        let (g1, _) = chatDeriveStreaming(gate: gate, folded: landed, incoming: "Cevap", streamLive: true)
+        let landed = [assistant("a1", "Answer complete")]
+        let (g1, _) = chatDeriveStreaming(gate: gate, folded: landed, incoming: "Answ", streamLive: true)
         gate = g1
         let (g2, s2) = chatDeriveStreaming(gate: gate, folded: landed, incoming: nil, streamLive: false)
         gate = g2
-        XCTAssertNil(s2, "turn bitince balon gizlenir")
+        XCTAssertNil(s2, "bubble is hidden when turn ends")
     }
 
-    /// Yeni segment (önceki yanıtın önekini tekrarlamayan yeni metin) yeniden çıpalar.
+    /// A new segment (text that doesn't extend the previous response) re-anchors.
     func testNewSegmentReanchors() {
         var gate = ChatStreamGate()
-        let base = [assistant("a1", "ilk")]
-        let (g1, _) = chatDeriveStreaming(gate: gate, folded: base, incoming: "ilk yanıt", streamLive: true)
+        let base = [assistant("a1", "first")]
+        let (g1, _) = chatDeriveStreaming(gate: gate, folded: base, incoming: "first response", streamLive: true)
         gate = g1
-        let landed = base + [assistant("a2", "ilk yanıt")]
-        let (g2, s2) = chatDeriveStreaming(gate: gate, folded: landed, incoming: "ilk yanıt", streamLive: true)
+        let landed = base + [assistant("a2", "first response")]
+        let (g2, s2) = chatDeriveStreaming(gate: gate, folded: landed, incoming: "first response", streamLive: true)
         gate = g2
         XCTAssertNil(s2)
-        // Yeni turn başlar: farklı metin → yeni balon görünür.
-        let (g3, s3) = chatDeriveStreaming(gate: gate, folded: landed, incoming: "ikinci", streamLive: true)
+        // New turn starts: different text → new bubble is visible.
+        let (g3, s3) = chatDeriveStreaming(gate: gate, folded: landed, incoming: "second", streamLive: true)
         gate = g3
-        XCTAssertEqual(s3, "ikinci")
+        XCTAssertEqual(s3, "second")
     }
 
     // MARK: pending echo
 
     func testPendingAppendComputesExpectedOccurrence() {
         var pend: [ChatPending] = []
-        pend = chatPendingAppend(current: pend, id: "p1", text: "selam",
+        pend = chatPendingAppend(current: pend, id: "p1", text: "hello",
                                  baselineOccurrences: 0, baselineTailMessageId: "a1")
         XCTAssertEqual(pend.first?.expectedOccurrence, 1)
-        // Aynı metni tekrar gönder (henüz landmadı) → 2. beklenir.
-        pend = chatPendingAppend(current: pend, id: "p2", text: "selam",
+        // Send the same text again (not yet landed) → 2nd occurrence is expected.
+        pend = chatPendingAppend(current: pend, id: "p2", text: "hello",
                                  baselineOccurrences: 0, baselineTailMessageId: "a1")
         XCTAssertEqual(pend.last?.expectedOccurrence, 2)
     }
 
     func testPendingRetiredWhenTranscriptEchoesText() {
-        var pend = chatPendingAppend(current: [], id: "p1", text: "selam",
+        var pend = chatPendingAppend(current: [], id: "p1", text: "hello",
                                      baselineOccurrences: 0, baselineTailMessageId: "a1")
-        // Transcript'e user "selam" düştü → emekliye ayrılır.
-        let msgs = [assistant("a1", "..."), user("u1", "selam")]
+        // User "hello" appeared in the transcript → pending is retired.
+        let msgs = [assistant("a1", "..."), user("u1", "hello")]
         pend = chatRetireLandedPending(messages: msgs, current: pend)
-        XCTAssertTrue(pend.isEmpty, "transcript metni yankılayınca pending kalkmalı")
+        XCTAssertTrue(pend.isEmpty, "pending must be removed when transcript echoes the text")
     }
 
     func testPendingKeptWhenNoTranscriptEcho() {
-        // stream-json kullanıcı mesajını yankılamıyorsa pending KALIR (kalıcı gösterim).
-        let pend = chatPendingAppend(current: [], id: "p1", text: "selam",
+        // If stream-json does not echo the user message, the pending STAYS (persistent display).
+        let pend = chatPendingAppend(current: [], id: "p1", text: "hello",
                                      baselineOccurrences: 0, baselineTailMessageId: "a1")
-        let msgs = [assistant("a1", "cevap")]
+        let msgs = [assistant("a1", "response")]
         let after = chatRetireLandedPending(messages: msgs, current: pend)
-        XCTAssertEqual(after.count, 1, "yankı yoksa kullanıcı mesajı ekranda kalmalı")
+        XCTAssertEqual(after.count, 1, "user message must remain on screen when there is no echo")
     }
 
     // MARK: assemble
 
     func testAssembleAnchorsPendingAfterBaselineAndStreamingAtEnd() {
-        let messages = [assistant("a1", "önceki cevap")]
-        let pending = [ChatPending(id: "p1", text: "sorum", expectedOccurrence: 1,
+        let messages = [assistant("a1", "previous response")]
+        let pending = [ChatPending(id: "p1", text: "my question", expectedOccurrence: 1,
                                    baselineTailMessageId: "a1")]
         let data = chatAssembleRenderMessages(messages: messages, pending: pending,
-                                              streaming: "yanıt yazılıyor")
+                                              streaming: "writing response")
         XCTAssertEqual(data.map(\.id), ["a1", "p1", "streaming"])
         XCTAssertEqual(data[1].role, .user)
         XCTAssertEqual(data[2].role, .assistant)
     }
 
     func testAssembleLeadingWhenNoBaselineAndTrailingWhenBaselineMissing() {
-        // baseline nil → başta
+        // baseline nil → at the start
         let d1 = chatAssembleRenderMessages(messages: [], pending: [
-            ChatPending(id: "p1", text: "ilk mesaj", expectedOccurrence: 1, baselineTailMessageId: nil)
+            ChatPending(id: "p1", text: "first message", expectedOccurrence: 1, baselineTailMessageId: nil)
         ], streaming: nil)
         XCTAssertEqual(d1.map(\.id), ["p1"])
-        // baseline mesajı listede yok → sonda
+        // baseline message not in the list → at the end
         let d2 = chatAssembleRenderMessages(messages: [assistant("a1", "x")], pending: [
-            ChatPending(id: "p2", text: "geç", expectedOccurrence: 1, baselineTailMessageId: "yok")
+            ChatPending(id: "p2", text: "late", expectedOccurrence: 1, baselineTailMessageId: "missing")
         ], streaming: nil)
         XCTAssertEqual(d2.map(\.id), ["a1", "p2"])
     }

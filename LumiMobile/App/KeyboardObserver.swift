@@ -1,19 +1,19 @@
 import SwiftUI
 import UIKit
 
-/// Klavyenin görünür yüksekliğini (güvenli-alan üstünde kalan örtüşme) yayınlar.
+/// Publishes the keyboard's visible height (the overlap above the safe area).
 ///
-/// Neden manuel (bug #1): terminal + alt giriş çubuğu düzeninde SwiftUI'nin
-/// otomatik `.safeAreaInset` klavye kaçınması çubuğu klavyenin üstüne taşımıyordu
-/// (UIViewRepresentable ağırlıklı hiyerarşi). Bu gözlemci klavye çerçevesini
-/// doğrudan izler; view `.ignoresSafeArea(.keyboard)` ile otomatik kaçınmayı
-/// kapatıp bu yüksekliği alt boşluk olarak uygular → çubuk daima klavyenin üstünde.
+/// Why manual (bug #1): in the terminal + bottom input bar layout, SwiftUI's automatic
+/// `.safeAreaInset` keyboard avoidance was not moving the bar above the keyboard
+/// (UIViewRepresentable-heavy hierarchy). This observer watches the keyboard frame
+/// directly; the view disables automatic avoidance with `.ignoresSafeArea(.keyboard)`
+/// and applies this height as bottom padding → the bar always stays above the keyboard.
 @MainActor
 final class KeyboardObserver: ObservableObject {
-    /// Klavyenin güvenli-alan altındaki kısmı çıkarılmış görünür yüksekliği.
+    /// The keyboard's visible height with the portion below the safe area subtracted.
     @Published var height: CGFloat = 0
 
-    // deinit (nonisolated) erişebilsin diye unsafe; yalnız init (main) yazar, dealloc okur.
+    // Marked unsafe so deinit (nonisolated) can access it; only init (main) writes, dealloc reads.
     nonisolated(unsafe) private var tokens: [NSObjectProtocol] = []
 
     init() {
@@ -22,7 +22,7 @@ final class KeyboardObserver: ObservableObject {
             forName: UIResponder.keyboardWillChangeFrameNotification,
             object: nil, queue: .main
         ) { [weak self] note in
-            // `note` non-Sendable → main'e hop'lamadan ÖNCE Sendable CGRect'i çıkar.
+            // `note` is non-Sendable → extract the Sendable CGRect BEFORE hopping to main.
             let frameEnd = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect
             MainActor.assumeIsolated { self?.update(frameEnd: frameEnd) }
         })
@@ -43,8 +43,8 @@ final class KeyboardObserver: ObservableObject {
         guard let frameEnd else { return }
         let screenHeight = UIScreen.main.bounds.height
         let overlap = max(0, screenHeight - frameEnd.origin.y)
-        // Güvenli-alan (home indicator) zaten layout tarafından ayrıldığı için çıkar;
-        // aksi halde ~34pt çift sayılır.
+        // Subtract the safe area (home indicator) since it is already reserved by the layout;
+        // otherwise ~34pt would be double-counted.
         let safeBottom = Self.safeAreaBottom()
         height = overlap <= 0 ? 0 : max(0, overlap - safeBottom)
     }

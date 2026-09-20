@@ -3,7 +3,7 @@ import UserNotifications
 import LumiMobileKit
 import LumiWire
 
-/// UNUserNotificationCenter sarmalayıcısı (Kit protokolünün prod implementasyonu).
+/// UNUserNotificationCenter wrapper (production implementation of the Kit protocol).
 struct SystemNotificationAuthorizer: NotificationAuthorizing {
     func authorizationStatus() async -> NotificationAuthStatus {
         let settings = await UNUserNotificationCenter.current().notificationSettings()
@@ -21,14 +21,14 @@ struct SystemNotificationAuthorizer: NotificationAuthorizing {
     }
 }
 
-/// UIApplication sarmalayıcısı.
+/// UIApplication wrapper.
 @MainActor
 struct SystemRemoteRegistrar: RemoteRegistering {
     func registerForRemoteNotifications() { UIApplication.shared.registerForRemoteNotifications() }
     func unregisterForRemoteNotifications() { UIApplication.shared.unregisterForRemoteNotifications() }
 }
 
-/// APNs callback'lerini PushCoordinator'a köprüler.
+/// Bridges APNs callbacks to PushCoordinator.
 @MainActor final class AppDelegate: NSObject, UIApplicationDelegate {
     var coordinator: PushCoordinator?
 
@@ -40,6 +40,6 @@ struct SystemRemoteRegistrar: RemoteRegistering {
 
     func application(_ application: UIApplication,
                      didFailToRegisterForRemoteNotificationsWithError error: Error) {
-        DiagLog.shared.log("push", "APNs kayıt başarısız: \(error.localizedDescription)")
+        DiagLog.shared.log("push", "APNs registration failed: \(error.localizedDescription)")
     }
 }

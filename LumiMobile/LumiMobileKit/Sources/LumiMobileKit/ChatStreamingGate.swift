@@ -1,8 +1,9 @@
 import Foundation
 
-/// Canlı streaming metnini göster/gizle kuralı (orca native-chat-streaming paritesi;
-/// spec Faz 2 §E). working değilse veya streaming boşsa nil; streaming son assistant
-/// metnini geçmiyorsa (içeriyorsa/kısaysa) nil — transcript yerleşince overlay düşer.
+/// Show/hide rule for live streaming text (orca native-chat-streaming parity;
+/// spec Phase 2 §E). Returns nil when not working or streaming is empty; also nil
+/// when streaming does not go beyond the last assistant text (contained/shorter) —
+/// overlay drops when the transcript settles.
 public func chatStreamingText(working: Bool, streaming: String?, lastAssistantText: String) -> String? {
     guard working, let text = streaming?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else { return nil }
     if lastAssistantText.contains(text) || text.count <= lastAssistantText.count { return nil }

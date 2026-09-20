@@ -1,7 +1,7 @@
 import XCTest
 @testable import LumiMobileKit
 
-/// Kontrol edilebilir sahte bağlantı: gelen frame'ler dışarıdan itilir, gidenler kaydedilir.
+/// Controllable fake connection: incoming frames are pushed from outside, outgoing ones are recorded.
 final class FakeConnection: WebSocketConnection, @unchecked Sendable {
     let incoming: AsyncThrowingStream<String, Error>
     private let feed: AsyncThrowingStream<String, Error>.Continuation
@@ -20,7 +20,7 @@ final class FakeConnection: WebSocketConnection, @unchecked Sendable {
     func close() { feed.finish() }
 }
 
-/// Bağlantı fabrikası + backoff uykularını kaydeden test tezgahı.
+/// Test harness that records connection factory calls and back-off sleeps.
 final class Harness: @unchecked Sendable {
     private let lock = NSLock()
     private var _connections: [FakeConnection] = []
@@ -47,7 +47,7 @@ final class Harness: @unchecked Sendable {
 private let pairing = PairingInfo(relayUrl: "wss://r.example", token: "0123456789abcdef")
 private let welcomeFrame = #"{"v":1,"type":"welcome","payload":{"macOnline":true,"lastSeenAt":null}}"#
 
-/// `condition` doğru olana dek bekler (en çok ~2 sn).
+/// Polls until `condition` returns true (up to ~2 s).
 func waitUntil(_ condition: @escaping () async -> Bool) async -> Bool {
     for _ in 0..<200 {
         if await condition() { return true }
@@ -115,7 +115,7 @@ final class RelayClientTests: XCTestCase {
         harness.connections[1].dropConnection()
         let thirdConnection = await waitUntil { harness.connections.count >= 3 }
 
-        XCTAssertTrue(thirdConnection, "kopan bağlantı yeniden denenmedi")
+        XCTAssertTrue(thirdConnection, "dropped connection was not retried")
         XCTAssertEqual(Array(harness.sleeps.prefix(2)), [1, 2])
         await client.stop()
     }
@@ -126,11 +126,11 @@ final class RelayClientTests: XCTestCase {
         await client.start(pairing: pairing)
 
         _ = await waitUntil { harness.connections.count >= 1 }
-        harness.connections[0].dropConnection()                 // → 1 sn
+        harness.connections[0].dropConnection()                 // → 1 s
         _ = await waitUntil { harness.connections.count >= 2 }
-        harness.connections[1].push(welcomeFrame)               // backoff sıfırlanır
+        harness.connections[1].push(welcomeFrame)               // back-off resets
         _ = await waitUntil { await client.state == .connected }
-        harness.connections[1].dropConnection()                 // → yine 1 sn
+        harness.connections[1].dropConnection()                 // → 1 s again
         _ = await waitUntil { harness.connections.count >= 3 }
 
         XCTAssertEqual(Array(harness.sleeps.prefix(2)), [1, 1])
@@ -161,7 +161,7 @@ final class RelayClientTests: XCTestCase {
         _ = await waitUntil { await client.state == .disconnected }
         for _ in 0..<50 { await Task.yield() }
 
-        XCTAssertEqual(harness.connections.count, 1, "stop sonrası yeniden bağlanmamalı")
+        XCTAssertEqual(harness.connections.count, 1, "should not reconnect after stop")
         let state = await client.state
         XCTAssertEqual(state, .disconnected)
 
@@ -220,15 +220,15 @@ final class RelayClientTests: XCTestCase {
         XCTAssertEqual(backoff.nextDelay(), 1)
     }
 
-    // MARK: Yeni testler — Fix 1+2
+    // MARK: New tests — Fix 1+2
 
     func testSendWithNoConnectionReturnsFalseAndRecordsNoFrame() async {
         let harness = Harness()
         let client = harness.makeClient()
-        // Bağlantı başlatılmadan gönderim → false dönmeli, frame kaydedilmemeli
+        // Send without starting a connection → should return false, no frame recorded
         let ok = await client.send(command: OutgoingCommand(commandId: "ph-1", action: .pressKey(sessionId: "s1", key: "a")))
-        XCTAssertFalse(ok, "bağlantı yokken send false dönmeli")
-        XCTAssertTrue(harness.connections.isEmpty, "bağlantı oluşturulmamalı")
+        XCTAssertFalse(ok, "send should return false when there is no connection")
+        XCTAssertTrue(harness.connections.isEmpty, "no connection should be created")
     }
 
     func testSendAfterConnectedReturnsTrue() async {
@@ -240,10 +240,10 @@ final class RelayClientTests: XCTestCase {
         _ = await waitUntil { await client.state == .connected }
 
         let ok = await client.send(command: OutgoingCommand(commandId: "ph-1", action: .pressKey(sessionId: "s1", key: "enter")))
-        XCTAssertTrue(ok, "bağlı iken send true dönmeli")
+        XCTAssertTrue(ok, "send should return true when connected")
 
         let sent = await waitUntil { harness.connections[0].sent.count >= 2 }
-        XCTAssertTrue(sent, "frame gönderilmeli")
+        XCTAssertTrue(sent, "frame should be sent")
         await client.stop()
     }
 }

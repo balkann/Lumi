@@ -1,12 +1,12 @@
 import SwiftUI
 import LumiMobileKit
 
-/// Aksesuar tuş çubuğu: ok tuşları, kontrol tuşları ve serbest metin girişi.
-/// Her buton veya metin gönderimi `sendInput` closure'ı üzerinden PTY'ye iletilir.
+/// Accessory key bar: arrow keys, control keys, and free-text input.
+/// Every button press or text submission is forwarded to the PTY via the `sendInput` closure.
 struct AccessoryBar: View {
-    /// Gönderilecek ham baytları alan closure; caller PTY'ye yönlendirir (ok/kontrol tuşları).
+    /// Closure receiving raw bytes to send; the caller routes them to the PTY (arrow/control keys).
     let sendInput: (Data) -> Void
-    /// Serbest metin gönderimi; caller metni yazar, settle bekler, Enter'ı AYRI yollar.
+    /// Free-text submission; the caller writes the text, waits for settle, then sends Enter SEPARATELY.
     let submitText: (String) -> Void
 
     @State private var text: String = ""
@@ -16,7 +16,7 @@ struct AccessoryBar: View {
         VStack(spacing: 0) {
             Divider()
             VStack(spacing: 6) {
-                // Birinci satır: ok tuşları + kontrol tuşları
+                // First row: arrow keys + control keys
                 HStack(spacing: 6) {
                     accessoryButton("↑", key: .up)
                     accessoryButton("↓", key: .down)
@@ -29,9 +29,9 @@ struct AccessoryBar: View {
                     accessoryButton("^C",    key: .ctrlC)
                 }
 
-                // İkinci satır: serbest metin girişi + gönder
+                // Second row: free-text input + send
                 HStack(spacing: 8) {
-                    TextField("Gönder…", text: $text)
+                    TextField("Send…", text: $text)
                         .textFieldStyle(.roundedBorder)
                         .autocorrectionDisabled(true)
                         .textInputAutocapitalization(.never)
@@ -52,7 +52,7 @@ struct AccessoryBar: View {
         }
     }
 
-    // MARK: - Yardımcılar
+    // MARK: - Helpers
 
     @ViewBuilder
     private func accessoryButton(_ label: String, key: AccessoryKey) -> some View {
@@ -68,9 +68,9 @@ struct AccessoryBar: View {
 
     private func commitText() {
         guard !text.isEmpty else { return }
-        // "Gönder" = metni yaz → settle → Enter'ı AYRI yolla (submitText). Tek
-        // write'taki birleşik `metin\r` Claude TUI'sinde paste ingest'i bitmeden
-        // gelen Enter olarak yutulur; metin görünür ama satır submit edilmez.
+        // "Send" = write text → settle → send Enter SEPARATELY (submitText). A combined
+        // `text\r` in a single write is consumed by the Claude TUI as an Enter that arrives
+        // before paste ingest finishes; the text appears but the line is never submitted.
         submitText(text)
         text = ""
     }

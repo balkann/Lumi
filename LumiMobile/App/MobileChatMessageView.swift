@@ -3,7 +3,7 @@ import SwiftUI
 import LumiMobileKit
 import LumiWire
 
-/// Bir katlanmış turn: sahip mesajın metin balonu + altına katlanmış araç aktivitesi.
+/// A folded turn: the owner message's text bubble + tool activity folded beneath it.
 struct MobileChatMessageView: View {
     let turn: FoldedTurn
 
@@ -31,7 +31,7 @@ struct MobileChatMessageView: View {
                     .foregroundStyle(Color.white)
                     .frame(maxWidth: 300, alignment: .trailing)
             } else {
-                // Assistant: balonsuz düz prose (orca dili; spec 2026-09-17).
+                // Assistant: plain prose without a bubble (orca style; spec 2026-09-17).
                 Text(LocalizedStringKey(text))
                     .textSelection(.enabled)
                     .foregroundStyle(Color.primary)

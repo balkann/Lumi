@@ -1,32 +1,32 @@
 import Foundation
 import LumiWire
 
-// Orca'nın mobil chat render mantığının Swift portu (kaynak:
+// Swift port of orca's mobile chat render logic (source:
 // orca `mobile/src/session/mobile-native-chat-{streaming-gate,pending-echo,
-// pending-retirement,render-data}.ts`). İki davranışı birebir kopyalar:
-//   1. Canlı streaming metni turn bitince EKRANDAN SİLİNMEZ — gerçek transcript
-//      mesajı listeye düşene kadar sentetik balon olarak kalır (orca "caught-up"
-//      geçidi). Mac streamingText'i null'a çekse bile telefon metni TUTAR ve
-//      yalnız transcript tail metinle "önden gidince" gizler.
-//   2. Kullanıcının kendi gönderdiği mesaj ANINDA görünür (optimistic echo,
-//      client-side; sunucu onayı beklenmez). Transcript metni yankıladığında
-//      (varsa) sayım-tabanlı dedup ile emekliye ayrılır.
-// Orca'nın görüntü/çoklu-sekme/glue-run uç durumları bu fazın kapsamı dışında
-// (tek oturum, görüntüsüz) — kasıtlı olarak alınmadı.
+// pending-retirement,render-data}.ts`). Faithfully replicates two behaviors:
+//   1. Live streaming text is NOT REMOVED FROM THE SCREEN when a turn ends — it
+//      stays as a synthetic bubble until the real transcript message lands (orca
+//      "caught-up" gate). Even if the Mac sets streamingText to null, the phone
+//      HOLDS the text and hides it only when the transcript tail text "gets ahead."
+//   2. The user's own sent message appears IMMEDIATELY (optimistic echo,
+//      client-side; no server acknowledgment is waited for). When the transcript
+//      echoes the text (if it does), it is retired via count-based dedup.
+// Orca's image/multi-tab/glue-run edge cases are out of scope for this phase
+// (single session, no images) — intentionally not ported.
 
-// MARK: - Metin normalizasyonu (orca normalizeReconcileText / normalizedUserText)
+// MARK: - Text normalization (orca normalizeReconcileText / normalizedUserText)
 
-/// Kontrol karakterlerini atar, kırpar, ardışık boşlukları tek boşluğa indirger.
+/// Drops control characters, trims, and collapses consecutive whitespace to a single space.
 public func normalizeChatUserText(_ text: String) -> String {
     let noControls = String(text.unicodeScalars.filter { scalar in
-        // ANSI/terminal kontrol karakterlerini (C0, DEL) düşür; \n \t normal boşluğa katlanır.
+        // Drop ANSI/terminal control characters (C0, DEL); \n \t fold into normal space.
         scalar.value >= 0x20 || scalar == " " || scalar == "\n" || scalar == "\t"
     })
     let parts = noControls.split(whereSeparator: { $0 == " " || $0 == "\n" || $0 == "\t" || $0 == "\r" })
     return parts.joined(separator: " ")
 }
 
-/// Bir user mesajının normalize metni (assistant/diğer → nil).
+/// Normalized text of a user message (assistant/other → nil).
 public func normalizedChatUserText(_ message: ChatMessage) -> String? {
     guard message.role == .user else { return nil }
     let joined = message.blocks.compactMap { block -> String? in
@@ -38,13 +38,13 @@ public func normalizedChatUserText(_ message: ChatMessage) -> String? {
 
 // MARK: - Optimistic pending echo (orca pending-echo + pending-retirement)
 
-/// Sunucu onayı beklenmeden listeye eklenen kullanıcı mesajı yankısı.
+/// A user message echo appended to the list without waiting for server acknowledgment.
 public struct ChatPending: Identifiable, Sendable, Equatable {
     public let id: String
     public let text: String
-    /// Transcript'te bu metnin KAÇINCI kopyası olduğunda emekliye ayrılacağı.
+    /// Which occurrence of this text in the transcript triggers retirement.
     public let expectedOccurrence: Int
-    /// Gönderim anındaki transcript tail mesaj id'si (echo bu satırdan sonra çizilir).
+    /// The transcript tail message id at send time (the echo is drawn after this row).
     public let baselineTailMessageId: String?
 
     public init(id: String, text: String, expectedOccurrence: Int, baselineTailMessageId: String?) {
@@ -55,8 +55,8 @@ public struct ChatPending: Identifiable, Sendable, Equatable {
     }
 }
 
-/// Yeni pending ekler. expectedOccurrence = transcript'teki mevcut kopya sayısı
-/// (baselineOccurrences) + bekleyen aynı-metin yankı sayısı + 1 (orca).
+/// Appends a new pending. expectedOccurrence = current copy count in the transcript
+/// (baselineOccurrences) + outstanding same-text echo count + 1 (orca).
 public func chatPendingAppend(current: [ChatPending], id: String, text: String,
                               baselineOccurrences: Int, baselineTailMessageId: String?) -> [ChatPending] {
     let normalized = normalizeChatUserText(text)
@@ -68,8 +68,8 @@ public func chatPendingAppend(current: [ChatPending], id: String, text: String,
                                   baselineTailMessageId: baselineTailMessageId)]
 }
 
-/// Transcript'te aynı metin expectedOccurrence kadar göründüyse pending emekliye
-/// ayrılır (orca exact-landing count pass). Glue-run/görüntü dalları alınmadı.
+/// Retires a pending when the same text has appeared expectedOccurrence times in the
+/// transcript (orca exact-landing count pass). Glue-run/image branches not ported.
 public func chatRetireLandedPending(messages: [ChatMessage], current: [ChatPending]) -> [ChatPending] {
     var landedCounts: [String: Int] = [:]
     for m in messages {
@@ -83,19 +83,20 @@ public func chatRetireLandedPending(messages: [ChatMessage], current: [ChatPendi
     }
 }
 
-/// Verilen metnin transcript'teki user-mesajı kopya sayısı (baselineOccurrences).
+/// Number of user-message copies of the given text in the transcript (baselineOccurrences).
 public func chatCountUserTextOccurrences(_ messages: [ChatMessage], _ normalized: String) -> Int {
     messages.reduce(0) { acc, m in normalizedChatUserText(m) == normalized ? acc + 1 : acc }
 }
 
-// MARK: - Streaming geçidi (orca deriveMobileNativeChatStreaming + hold uyarlaması)
+// MARK: - Streaming gate (orca deriveMobileNativeChatStreaming + hold adaptation)
 
-/// Streaming balonu geçidi (orca deriveMobileNativeChatStreaming birebir portu).
-/// Balon yalnız transcript tail metinle "önden gidince VE segment başından beri
-/// taşınınca" (caughtUp = gerçek yanıt landi) gizlenir; eski özdeş bir turn'ün
-/// önekini tekrarlayan yeni yanıt yanlışlıkla gizlenmez (baselineTailId koruması).
-/// Turn bitince (streamLive=false → incoming nil) balon gizlenir — gerçek mesaj o
-/// an transcript'te (Mac append'i status-nil'den ÖNCE yollar) → boşluk/vanish yok.
+/// Streaming bubble gate (exact port of orca deriveMobileNativeChatStreaming).
+/// The bubble is hidden only when the transcript tail text "gets ahead AND has moved
+/// since the segment start" (caughtUp = real response landed); a new response that
+/// repeats the prefix of an older identical turn is not accidentally hidden
+/// (baselineTailId guard). When the turn ends (streamLive=false → incoming nil) the
+/// bubble is hidden — the real message is in the transcript at that moment (Mac sends
+/// the append BEFORE setting status to nil) → no gap/vanish.
 public struct ChatStreamGate: Sendable, Equatable {
     public var prevText: String
     public var baselineTailId: String?
@@ -112,9 +113,9 @@ private func assistantTailText(_ tail: ChatMessage?) -> String {
     }.joined().trimmingCharacters(in: .whitespacesAndNewlines)
 }
 
-/// Geçidi bir tık ilerletir ve görünür streaming metnini döndürür (nil = gizle).
-/// `folded`: journal mesajlarının katlanmış hali. `incoming`: bu tıktaki streaming
-/// metni (turn canlı değilse nil → "gözlem yok"). `streamLive`: ajan hâlâ turn'de mi.
+/// Advances the gate by one tick and returns the visible streaming text (nil = hide).
+/// `folded`: folded journal messages. `incoming`: streaming text at this tick
+/// (nil when turn is not live → "no observation"). `streamLive`: is the agent still in a turn?
 public func chatDeriveStreaming(gate: ChatStreamGate, folded: [ChatMessage],
                                 incoming: String?, streamLive: Bool)
     -> (gate: ChatStreamGate, streaming: String?) {
@@ -122,14 +123,14 @@ public func chatDeriveStreaming(gate: ChatStreamGate, folded: [ChatMessage],
     let text = (incoming ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
     let tailId = folded.last?.id
     if text.isEmpty {
-        // Metinsiz tık: yalnız turn dışıysa (veya geçit hiç çıpalanmadıysa) tail'i
-        // güvenilir tarih olarak çıpala; turn-içi boşlukta yeni yanıtı ikinci kez
-        // balon olarak çizmemek için çıpalama.
+        // Empty-text tick: anchor the tail as reliable history only when outside a turn
+        // (or when the gate has never been anchored); skip anchoring mid-turn so a new
+        // response is not drawn as a bubble a second time.
         let canAnchor = tailId != nil && (!streamLive || g.baselineTailId == nil)
         if canAnchor { g.prevText = ""; g.baselineTailId = tailId }
         return (g, nil)
     }
-    // prevText'i uzatmıyorsa yeni segment (yeni yanıt parçası) → tail'i yeniden çıpala.
+    // Not extending prevText → new segment (new response chunk) → re-anchor the tail.
     let segmentStart = !g.prevText.isEmpty && !text.hasPrefix(g.prevText)
     let baseline = segmentStart ? tailId : g.baselineTailId
     let tailLeads = assistantTailText(folded.last).hasPrefix(text)
@@ -139,11 +140,11 @@ public func chatDeriveStreaming(gate: ChatStreamGate, folded: [ChatMessage],
     return (g, caughtUp ? nil : text)
 }
 
-// MARK: - Render listesi birleştirme (orca buildMobileNativeChatTransientData)
+// MARK: - Render list assembly (orca buildMobileNativeChatTransientData)
 
-/// leading pending + (journal mesajları, her birinin ardına çıpalı pending) +
-/// streaming balonu + trailing pending. Sentetik mesajlar da normal ChatMessage
-/// olduğundan çağıran taraf sonucu `foldChatMessages` ile turn'lere katlar.
+/// leading pending + (journal messages, each followed by its anchored pending) +
+/// streaming bubble + trailing pending. Synthetic messages are also normal ChatMessage
+/// values, so the caller folds the result with `foldChatMessages` into turns.
 public func chatAssembleRenderMessages(messages: [ChatMessage], pending: [ChatPending],
                                        streaming: String?) -> [ChatMessage] {
     let ids = Set(messages.map { $0.id })
@@ -156,9 +157,9 @@ public func chatAssembleRenderMessages(messages: [ChatMessage], pending: [ChatPe
                                  timestampMs: nil, turnId: nil)
         if let base = p.baselineTailMessageId {
             if ids.contains(base) { anchored[base, default: []].append(bubble) }
-            else { trailing.append(bubble) }   // satır henüz gelmedi/katlandı → sonda (yeri korunur)
+            else { trailing.append(bubble) }   // row not yet arrived / folded → at end (position preserved)
         } else {
-            leading.append(bubble)             // boş chat'e gönderim → başta
+            leading.append(bubble)             // sent to empty chat → at the start
         }
     }
     var result: [ChatMessage] = leading

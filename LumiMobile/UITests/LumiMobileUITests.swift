@@ -4,7 +4,7 @@ final class LumiMobileUITests: XCTestCase {
 
     // MARK: - testPairManually
     /// Reads PAIRING_STRING from the test environment, enters it into the pairing
-    /// TextField, taps "Eşleştir", and asserts the session list screen appears.
+    /// TextField, taps "Pair", and asserts the session list screen appears.
     func testPairManually() throws {
         guard let pairingString = ProcessInfo.processInfo.environment["PAIRING_STRING"],
               !pairingString.isEmpty else {
@@ -28,7 +28,7 @@ final class LumiMobileUITests: XCTestCase {
         sleep(1)
         pairingField.typeText(pairingString)
 
-        // Tap the Eşleştir button.
+        // Tap the Pair button.
         let pairButton = app.buttons["pairButton"]
         XCTAssertTrue(pairButton.waitForExistence(timeout: 3), "pairButton not found")
         pairButton.tap()
@@ -41,7 +41,7 @@ final class LumiMobileUITests: XCTestCase {
 
         // Assert offline banner is NOT shown: wait up to 10s for either a
         // session row or the empty-state text to appear (meaning we're online).
-        let emptyState = app.staticTexts["Aktif oturum yok"]
+        let emptyState = app.staticTexts["No active sessions"]
         let firstCell = app.cells.firstMatch
 
         let deadline = Date().addingTimeInterval(10)
@@ -56,7 +56,7 @@ final class LumiMobileUITests: XCTestCase {
         XCTAssertTrue(connectionSettled, "App did not reach a settled online state within 10s after pairing")
 
         // Verify the offline banner is absent.
-        let offlinePredicate = NSPredicate(format: "label BEGINSWITH %@", "Mac çevrimdışı")
+        let offlinePredicate = NSPredicate(format: "label BEGINSWITH %@", "Mac offline")
         let offlineTexts = app.staticTexts.matching(offlinePredicate)
         XCTAssertEqual(offlineTexts.count, 0, "Offline banner should not be visible while Mac is online")
     }
@@ -108,10 +108,10 @@ final class LumiMobileUITests: XCTestCase {
         }
         XCTAssertTrue(fieldCleared, "Message field was not cleared after send — send may have failed")
 
-        // Ensure no "komut iletilemedi" error appeared.
+        // Ensure no "command failed to send" error appeared.
         XCTAssertFalse(
-            app.staticTexts["komut iletilemedi"].exists,
-            "Error label 'komut iletilemedi' should not appear after a successful send"
+            app.staticTexts["command failed to send"].exists,
+            "Error label 'command failed to send' should not appear after a successful send"
         )
     }
 
@@ -127,11 +127,11 @@ final class LumiMobileUITests: XCTestCase {
         XCTAssertTrue(lumiNav.waitForExistence(timeout: 10), "Session list 'Lumi' nav bar not found")
 
         // Assert offline banner appears within 20s.
-        let offlinePredicate = NSPredicate(format: "label BEGINSWITH %@", "Mac çevrimdışı")
+        let offlinePredicate = NSPredicate(format: "label BEGINSWITH %@", "Mac offline")
         let offlineBanner = app.staticTexts.matching(offlinePredicate).firstMatch
         XCTAssertTrue(
             offlineBanner.waitForExistence(timeout: 20),
-            "Offline banner starting with 'Mac çevrimdışı' did not appear within 20s"
+            "Offline banner starting with 'Mac offline' did not appear within 20s"
         )
     }
 }

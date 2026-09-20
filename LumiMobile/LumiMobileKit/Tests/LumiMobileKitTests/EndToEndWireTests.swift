@@ -2,28 +2,28 @@ import XCTest
 @testable import LumiMobileKit
 
 // ---------------------------------------------------------------------------
-// EndToEndWireTests — Telefon tarafı E2E tel testi
+// EndToEndWireTests — Phone-side E2E wire test
 //
-// Gerçek relay'e bağlanmadan, relay'in ürettiği TAM JSON zarf dizgelerini
-// gerçek bir AppModel'e enjekte ederek PhoneProtocol decode → AppModel rota
-// zincirinin bütünüyle doğrular.
+// Verifies the full PhoneProtocol decode → AppModel routing chain by injecting
+// COMPLETE JSON envelope strings (as produced by the relay) into a real AppModel,
+// without connecting to a real relay.
 //
-// Sahte katman: FakeRelayClient (RelayClientTests'ten) — gelen frame'ler dışarıdan
-// itilir, giden frame'ler kaydedilir.
-// Gerçek katman: AppModel + PhoneProtocol (kaynak kodu değişmeden).
+// Fake layer: FakeRelayClient (from RelayClientTests) — incoming frames are pushed
+// from outside, outgoing frames are recorded.
+// Real layer: AppModel + PhoneProtocol (source unchanged).
 //
-// Örtülen senaryo (task-12-brief §Part B):
-//   1. welcome/sessions mesajı → model.sessions dolar.
-//   2. model.subscribe("s1") → client'a subscribe frame gönderilir.
+// Covered scenario (task-12-brief §Part B):
+//   1. welcome/sessions message → model.sessions is populated.
+//   2. model.subscribe("s1") → subscribe frame is sent to the client.
 //   3. scrollback (base64 "SCROLL") + data (base64 "LIVE") → terminalStream
-//      bunları SIRAYLA "SCROLL" sonra "LIVE" olarak verir.
-//   4. model.sendInput("s1", Data("hi")) → client'a input frame gönderilir,
-//      base64 "aGk=" payload içerir.
+//      delivers them IN ORDER: "SCROLL" then "LIVE".
+//   4. model.sendInput("s1", Data("hi")) → input frame is sent to the client,
+//      payload contains base64 "aGk=".
 // ---------------------------------------------------------------------------
 
-// MARK: - Yardımcılar
+// MARK: - Helpers
 
-/// Verilen frame string'ini relay'den gelen mesaj olarak AppModel'e enjekte eder.
+/// Injects the given frame string into AppModel as a message arriving from the relay.
 @MainActor
 private func injectFrame(_ frame: String, into client: FakeRelayClient) {
     if let message = PhoneProtocol.decodeServerMessage(frame) {
@@ -31,7 +31,7 @@ private func injectFrame(_ frame: String, into client: FakeRelayClient) {
     }
 }
 
-/// `condition` doğru olana dek bekler (en çok ~2 sn).
+/// Waits until `condition` is true (up to ~2 s).
 @MainActor
 private func waitFor(_ condition: @escaping @MainActor () -> Bool) async -> Bool {
     for _ in 0..<200 {
@@ -41,7 +41,7 @@ private func waitFor(_ condition: @escaping @MainActor () -> Bool) async -> Bool
     return condition()
 }
 
-/// `client.sentFrames` içinde `needle` geçen bir frame gelene dek bekler.
+/// Waits until a frame containing `needle` appears in `client.sentFrames`.
 @MainActor
 private func awaitFrame(_ client: FakeRelayClient, containing needle: String) async {
     for _ in 0..<200 where !client.sentFrames.contains(where: { $0.contains(needle) }) {
@@ -54,7 +54,7 @@ private func awaitFrame(_ client: FakeRelayClient, containing needle: String) as
 @MainActor
 final class EndToEndWireTests: XCTestCase {
 
-    // MARK: Adım 1: welcome+sessions mesajı — model.sessions dolar
+    // MARK: Step 1: welcome+sessions message — model.sessions is populated
 
     func testStep1_WelcomeWithSessionsPopulatesModel() {
         let client = FakeRelayClient()
@@ -62,8 +62,8 @@ final class EndToEndWireTests: XCTestCase {
         store.write(PairingInfo(relayUrl: "wss://r.example", token: "0123456789abcdef"))
         let model = AppModel(client: client, store: store)
 
-        // Relay'in ürettiği gerçek wire JSON'u (envelope {v:1,type,payload}).
-        // sessions: SessionMeta dizisi; alanlar: id, repoName, status, cols, rows.
+        // Actual wire JSON produced by the relay (envelope {v:1,type,payload}).
+        // sessions: SessionMeta array; fields: id, repoName, status, cols, rows.
         let frame = #"""
         {"v":1,"type":"sessions","payload":{"sessions":[
           {"id":"s1","repoName":"lumi","status":"working","cols":220,"rows":50}
@@ -71,7 +71,7 @@ final class EndToEndWireTests: XCTestCase {
         """#
 
         guard let msg = PhoneProtocol.decodeServerMessage(frame) else {
-            return XCTFail("PhoneProtocol frame'i decode edemedi")
+            return XCTFail("PhoneProtocol could not decode the frame")
         }
         model.handle(msg)
 
@@ -82,10 +82,10 @@ final class EndToEndWireTests: XCTestCase {
         XCTAssertEqual(meta.status, "working")
         XCTAssertEqual(meta.cols, 220)
         XCTAssertEqual(meta.rows, 50)
-        XCTAssertTrue(model.macOnline, "sessions mesajı Mac'ten gelir → macOnline true")
+        XCTAssertTrue(model.macOnline, "sessions message comes from the Mac → macOnline true")
     }
 
-    // MARK: Adım 2: subscribe → client subscribe frame gönderir
+    // MARK: Step 2: subscribe → client sends subscribe frame
 
     func testStep2_SubscribeSendsSubscribeFrame() async {
         let client = FakeRelayClient()
@@ -99,11 +99,11 @@ final class EndToEndWireTests: XCTestCase {
         await awaitFrame(client, containing: #""type":"subscribe""#)
 
         let subscribeFrames = client.sentFrames.filter { $0.contains(#""type":"subscribe""#) }
-        XCTAssertFalse(subscribeFrames.isEmpty, "subscribe frame gönderilmeli")
-        XCTAssertTrue(subscribeFrames.contains { $0.contains("s1") }, "s1 sessionId içermeli")
+        XCTAssertFalse(subscribeFrames.isEmpty, "subscribe frame must be sent")
+        XCTAssertTrue(subscribeFrames.contains { $0.contains("s1") }, "must contain s1 sessionId")
     }
 
-    // MARK: Adım 3: scrollback + data → terminalStream sıralı verir
+    // MARK: Step 3: scrollback + data → terminalStream delivers in order
 
     func testStep3_ScrollbackThenDataArrivedInOrder() async throws {
         let client = FakeRelayClient()
@@ -111,10 +111,10 @@ final class EndToEndWireTests: XCTestCase {
         store.write(PairingInfo(relayUrl: "wss://r.example", token: "0123456789abcdef"))
         let model = AppModel(client: client, store: store)
 
-        // Subscribe: hem activeSessionId'yi set eder hem replay tamponunu başlatır.
+        // Subscribe: sets activeSessionId and initializes the replay buffer.
         model.subscribe("s1")
 
-        // Relay'in ürettiği gerçek wire JSON'ları.
+        // Actual wire JSON produced by the relay.
         // "SCROLL" → base64 = "U0NST0xM"
         let scrollB64 = Data("SCROLL".utf8).base64EncodedString()
         let scrollbackFrame = """
@@ -126,22 +126,22 @@ final class EndToEndWireTests: XCTestCase {
         {"v":1,"type":"data","payload":{"sessionId":"s1","seq":1,"data":"\(liveB64)"}}
         """
 
-        // scrollback view stream'e bağlanmadan önce geldi → replay tamponuna birikir.
+        // scrollback arrived before the view connects to the stream → buffered for replay.
         guard let scrollMsg = PhoneProtocol.decodeServerMessage(scrollbackFrame) else {
-            return XCTFail("scrollback frame decode edilemedi")
+            return XCTFail("scrollback frame could not be decoded")
         }
         model.handle(scrollMsg)
 
-        // Şimdi view stream'e bağlanır → tamponlanan scrollback ilk olarak replay edilir.
+        // Now the view connects to the stream → buffered scrollback is replayed first.
         let stream = model.terminalStream("s1")
 
-        // Canlı data chunk'ı gönderilir.
+        // Send the live data chunk.
         guard let dataMsg = PhoneProtocol.decodeServerMessage(dataFrame) else {
-            return XCTFail("data frame decode edilemedi")
+            return XCTFail("data frame could not be decoded")
         }
         model.handle(dataMsg)
 
-        // Stream'den 2 chunk toplayıp sırayı doğrula.
+        // Collect 2 chunks from the stream and verify order.
         var chunks: [TerminalChunk] = []
         for await chunk in stream {
             chunks.append(chunk)
@@ -149,15 +149,14 @@ final class EndToEndWireTests: XCTestCase {
         }
 
         XCTAssertEqual(chunks.count, 2)
-        XCTAssertEqual(chunks[0].bytes, Data("SCROLL".utf8), "ilk chunk scrollback olmalı")
+        XCTAssertEqual(chunks[0].bytes, Data("SCROLL".utf8), "first chunk must be scrollback")
         XCTAssertEqual(chunks[0].seq, 0)
         XCTAssertEqual(chunks[0].cols, 80)
         XCTAssertEqual(chunks[0].rows, 24)
-        XCTAssertEqual(chunks[1].bytes, Data("LIVE".utf8), "ikinci chunk canlı data olmalı")
-        XCTAssertEqual(chunks[1].seq, 1)
+        XCTAssertEqual(chunks[1].bytes, Data("LIVE".utf8), "second chunk must be live data")
     }
 
-    // MARK: Adım 4: sendInput → base64 input frame gönderilir
+    // MARK: Step 4: sendInput → base64 input frame is sent
 
     func testStep4_SendInputSendsBase64InputFrame() async {
         let client = FakeRelayClient()
@@ -170,22 +169,22 @@ final class EndToEndWireTests: XCTestCase {
         await awaitFrame(client, containing: #""type":"input""#)
 
         let inputFrames = client.sentFrames.filter { $0.contains(#""type":"input""#) }
-        XCTAssertFalse(inputFrames.isEmpty, "input frame gönderilmeli")
+        XCTAssertFalse(inputFrames.isEmpty, "input frame must be sent")
 
         // "hi" → base64 = "aGk="
         let expectedB64 = Data("hi".utf8).base64EncodedString()  // "aGk="
         XCTAssertEqual(expectedB64, "aGk=")
         XCTAssertTrue(
             inputFrames.contains { $0.contains(expectedB64) },
-            "input frame base64(\\'hi\\') = '\(expectedB64)' içermeli"
+            "input frame must contain base64('hi') = '\(expectedB64)'"
         )
         XCTAssertTrue(
             inputFrames.contains { $0.contains("s1") },
-            "input frame sessionId \\'s1\\' içermeli"
+            "input frame must contain sessionId 's1'"
         )
     }
 
-    // MARK: Birleşik tam tur E2E testi
+    // MARK: Combined full round-trip E2E test
 
     func testFullRoundTrip_WelcomeSubscribeScrollbackDataInput() async throws {
         let client = FakeRelayClient()
@@ -193,14 +192,14 @@ final class EndToEndWireTests: XCTestCase {
         store.write(PairingInfo(relayUrl: "wss://r.example", token: "0123456789abcdef"))
         let model = AppModel(client: client, store: store)
 
-        // --- Adım 1: welcome sessions ile gelir ---
+        // --- Step 1: welcome arrives with sessions ---
         let welcomeFrame = #"""
         {"v":1,"type":"welcome","payload":{"macOnline":true,"lastSeenAt":null,"sessions":[
           {"id":"s1","repoName":"myrepo","status":"idle","cols":200,"rows":50}
         ]}}
         """#
         guard let welcomeMsg = PhoneProtocol.decodeServerMessage(welcomeFrame) else {
-            return XCTFail("welcome frame decode edilemedi")
+            return XCTFail("welcome frame could not be decoded")
         }
         model.handle(welcomeMsg)
 
@@ -209,39 +208,39 @@ final class EndToEndWireTests: XCTestCase {
         XCTAssertEqual(model.sessions[0].repoName, "myrepo")
         XCTAssertTrue(model.macOnline)
 
-        // --- Adım 2: phone subscribe gönderir ---
+        // --- Step 2: phone sends subscribe ---
         model.subscribe("s1")
         await awaitFrame(client, containing: #""type":"subscribe""#)
         XCTAssertTrue(
             client.sentFrames.contains { $0.contains(#""type":"subscribe""#) && $0.contains("s1") },
-            "subscribe frame gönderilmiş olmalı"
+            "subscribe frame must have been sent"
         )
         client.clearSentFrames()
 
-        // --- Adım 3: scrollback gelir (view bağlanmadan önce → replay tamponunda) ---
+        // --- Step 3: scrollback arrives (before view connects → in replay buffer) ---
         let scrollB64 = Data("SCROLL".utf8).base64EncodedString()
         let scrollbackFrame = """
         {"v":1,"type":"scrollback","payload":{"sessionId":"s1","seq":0,"cols":80,"rows":24,"data":"\(scrollB64)"}}
         """
         guard let scrollMsg = PhoneProtocol.decodeServerMessage(scrollbackFrame) else {
-            return XCTFail("scrollback frame decode edilemedi")
+            return XCTFail("scrollback frame could not be decoded")
         }
         model.handle(scrollMsg)
 
-        // View stream'e bağlanır.
+        // Connect to the view stream.
         let stream = model.terminalStream("s1")
 
-        // Canlı data chunk'ı gelir.
+        // Live data chunk arrives.
         let liveB64 = Data("LIVE".utf8).base64EncodedString()
         let dataFrame = """
         {"v":1,"type":"data","payload":{"sessionId":"s1","seq":1,"data":"\(liveB64)"}}
         """
         guard let dataMsg = PhoneProtocol.decodeServerMessage(dataFrame) else {
-            return XCTFail("data frame decode edilemedi")
+            return XCTFail("data frame could not be decoded")
         }
         model.handle(dataMsg)
 
-        // Stream'den 2 chunk toplayıp sırayı doğrula.
+        // Collect 2 chunks from the stream and verify order.
         var chunks: [TerminalChunk] = []
         for await chunk in stream {
             chunks.append(chunk)
@@ -249,16 +248,16 @@ final class EndToEndWireTests: XCTestCase {
         }
 
         XCTAssertEqual(chunks.count, 2)
-        XCTAssertEqual(chunks[0].bytes, Data("SCROLL".utf8), "ilk chunk scrollback olmalı")
-        XCTAssertEqual(chunks[1].bytes, Data("LIVE".utf8), "ikinci chunk canlı data olmalı")
+        XCTAssertEqual(chunks[0].bytes, Data("SCROLL".utf8), "first chunk must be scrollback")
+        XCTAssertEqual(chunks[1].bytes, Data("LIVE".utf8), "second chunk must be live data")
 
-        // --- Adım 4: phone input gönderir → mac alır ---
+        // --- Step 4: phone sends input → mac receives it ---
         model.sendInput("s1", Data("hi".utf8))
         await awaitFrame(client, containing: #""type":"input""#)
 
         let inputFrame = client.sentFrames.first { $0.contains(#""type":"input""#) }
-        XCTAssertNotNil(inputFrame, "input frame gönderilmiş olmalı")
-        XCTAssertTrue(inputFrame!.contains("aGk="), "base64(\\'hi\\') = 'aGk=' input frame içinde olmalı")
-        XCTAssertTrue(inputFrame!.contains("s1"), "sessionId 's1' input frame içinde olmalı")
+        XCTAssertNotNil(inputFrame, "input frame must have been sent")
+        XCTAssertTrue(inputFrame!.contains("aGk="), "base64('hi') = 'aGk=' must be in input frame")
+        XCTAssertTrue(inputFrame!.contains("s1"), "sessionId 's1' must be in input frame")
     }
 }

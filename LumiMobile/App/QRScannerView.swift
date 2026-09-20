@@ -2,8 +2,8 @@ import SwiftUI
 import VisionKit
 import LumiMobileKit
 
-/// VisionKit QR tarayıcısı. Yalnız gerçek cihazda çalışır
-/// (DataScannerViewController.isSupported simülatörde false).
+/// VisionKit QR scanner. Works on real devices only
+/// (DataScannerViewController.isSupported is false in the simulator).
 struct QRScannerView: UIViewControllerRepresentable {
     let onScan: (String) -> Void
 
@@ -45,7 +45,7 @@ struct QRScannerView: UIViewControllerRepresentable {
                         Task { @MainActor in self.onScan(value) }
                         return
                     }
-                    // geçersiz QR: tarayıcı silahlı kalır, sonraki kareyi dener
+                    // invalid QR: scanner stays armed and tries the next frame
                 }
             }
         }

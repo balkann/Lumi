@@ -1,7 +1,7 @@
 import Foundation
 
-/// Tek bir ws bağlantısının soyutlaması. `incoming` bağlantı kopunca biter
-/// (hata ile ya da normal); RelayClient bunu yeniden bağlanma sinyali sayar.
+/// Abstraction for a single WebSocket connection. `incoming` ends when the connection
+/// drops (with an error or normally); RelayClient treats this as the reconnect signal.
 public protocol WebSocketConnection: Sendable {
     var incoming: AsyncThrowingStream<String, Error> { get }
     func send(_ text: String) async throws
@@ -10,10 +10,10 @@ public protocol WebSocketConnection: Sendable {
 
 public typealias ConnectionFactory = @Sendable (URL) -> any WebSocketConnection
 
-/// URLSessionWebSocketTask sarmalayıcısı — ince I/O katmanı, birim testi yok
-/// (Task 10 uçtan uca doğrulamasıyla kapsanır).
-/// @unchecked Sendable: task'e yalnız init'te atanır; URLSessionWebSocketTask
-/// thread-safe API sunar.
+/// URLSessionWebSocketTask wrapper — thin I/O layer, no unit tests
+/// (covered by Task 10 end-to-end verification).
+/// @unchecked Sendable: task is assigned only in init; URLSessionWebSocketTask
+/// provides a thread-safe API.
 public final class URLSessionWebSocketConnection: WebSocketConnection, @unchecked Sendable {
     private let task: URLSessionWebSocketTask
     public let incoming: AsyncThrowingStream<String, Error>
@@ -29,7 +29,7 @@ public final class URLSessionWebSocketConnection: WebSocketConnection, @unchecke
                         continuation.yield(text)
                         receiveNext()
                     case .success:
-                        receiveNext() // binary frame beklenmez; atla
+                        receiveNext() // binary frames are not expected; skip
                     case .failure(let error):
                         continuation.finish(throwing: error)
                     }

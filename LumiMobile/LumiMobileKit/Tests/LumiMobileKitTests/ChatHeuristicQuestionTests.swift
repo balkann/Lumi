@@ -4,18 +4,18 @@ import XCTest
 final class ChatHeuristicQuestionTests: XCTestCase {
 
     func testNumberedOptionsWithQuestion() {
-        let q = parseAgentQuestion("Hangisini tercih edersin?\n1. Çay\n2. Kahve")
+        let q = parseAgentQuestion("Which do you prefer?\n1. Tea\n2. Coffee")
         XCTAssertNotNil(q)
-        XCTAssertEqual(q?.question, "Hangisini tercih edersin?")
-        XCTAssertEqual(q?.options, ["Çay", "Kahve"])
+        XCTAssertEqual(q?.question, "Which do you prefer?")
+        XCTAssertEqual(q?.options, ["Tea", "Coffee"])
         XCTAssertEqual(q?.optionTokens, ["1", "2"])
         XCTAssertEqual(q?.multiSelect, false)
     }
 
     func testParenNumberedAndPointerStripped() {
-        // Seçili satırdaki ❯ işaretçisi sökülmeli.
-        let q = parseAgentQuestion("Seçim:\n❯ 1) Alfa\n2) Beta")
-        XCTAssertEqual(q?.options, ["Alfa", "Beta"])
+        // The ❯ pointer on the selected line must be stripped.
+        let q = parseAgentQuestion("Selection:\n❯ 1) Alpha\n2) Beta")
+        XCTAssertEqual(q?.options, ["Alpha", "Beta"])
         XCTAssertEqual(q?.optionTokens, ["1", "2"])
     }
 
@@ -32,18 +32,18 @@ final class ChatHeuristicQuestionTests: XCTestCase {
     }
 
     func testSingleBareOptionWithoutPromptIsNotAQuestion() {
-        // Tek başına bir bullet, giriş sorusu yoksa → prose, nil.
+        // A lone bullet without an intro question → treated as prose, returns nil.
         XCTAssertNil(parseAgentQuestion("Here is a note\n- just one item"))
     }
 
     func testSingleOptionWithQuestionPromptIsAccepted() {
-        // Soru-benzeri giriş satırı (?/:) varsa tek seçenek de kabul.
-        let q = parseAgentQuestion("Devam edeyim mi?\n1. Evet")
-        XCTAssertEqual(q?.options, ["Evet"])
+        // A question-like intro line (?/:) makes even a single option acceptable.
+        let q = parseAgentQuestion("Should I continue?\n1. Yes")
+        XCTAssertEqual(q?.options, ["Yes"])
     }
 
     func testPlainProseReturnsNil() {
-        XCTAssertNil(parseAgentQuestion("Bu sadece normal bir cevap cümlesi, seçenek yok."))
+        XCTAssertNil(parseAgentQuestion("This is just a normal answer sentence, no options."))
         XCTAssertNil(parseAgentQuestion(""))
     }
 
@@ -53,10 +53,10 @@ final class ChatHeuristicQuestionTests: XCTestCase {
     }
 
     func testFormatAnswerUsesTokenThenLabel() {
-        let q = ChatHeuristicQuestion(question: "q", options: ["Çay", "Kahve"],
+        let q = ChatHeuristicQuestion(question: "q", options: ["Tea", "Coffee"],
                                       multiSelect: false, optionTokens: ["1", "2"])
         XCTAssertEqual(formatChatQuestionAnswer(q, selectedIndexes: [1]), "2")
-        // Token yoksa etiket:
+        // No token → use the label:
         let q2 = ChatHeuristicQuestion(question: "q", options: ["Red", "Green"],
                                        multiSelect: false, optionTokens: [nil, nil])
         XCTAssertEqual(formatChatQuestionAnswer(q2, selectedIndexes: [0]), "Red")

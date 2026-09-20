@@ -92,7 +92,7 @@ final class PushCoordinatorTests: XCTestCase {
         let (_, coord, auth, reg, _) = make()
         auth.status = .authorized
         await coord.onPairingSucceeded()
-        XCTAssertEqual(auth.requestCount, 0)   // notDetermined değil → prompt yok
+        XCTAssertEqual(auth.requestCount, 0)   // not notDetermined → no prompt
         XCTAssertEqual(reg.registerCount, 0)
 
         auth.status = .notDetermined; auth.grantResult = true
@@ -104,7 +104,7 @@ final class PushCoordinatorTests: XCTestCase {
     func testHandleDeviceTokenForwardsToModelAndRegisters() async {
         let (model, coord, auth, _, client) = make()
         auth.status = .authorized
-        _ = await coord.enable()               // enabled + token yok → kayıt tetiklenmez
+        _ = await coord.enable()               // enabled + no token → registration not triggered
         XCTAssertTrue(client.pushRegistrations.isEmpty)
         await coord.handleDeviceToken("tok-xyz")   // token geldi + enabled → registerPush
         XCTAssertEqual(model.notificationAuthStatus, .authorized)
