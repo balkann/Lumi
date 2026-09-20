@@ -138,7 +138,12 @@ final class FakeTerminalServicing: TerminalServicing {
 
     @discardableResult
     func spawn(repoPath: String, task: String?, command: String?) throws -> TerminalMeta {
-        let meta = TerminalMeta(id: TerminalID(), name: "T", repoPath: repoPath, createdAt: Date())
+        // Üretim taklidi (TerminalSessionManager): provider spawn anında launch
+        // komutundan sentaks olarak çıkarılır ("claude …" → .claude). Karar 80'de
+        // telefon chat'i bir claude terminali açtığı için sendSessions'ın kind:"chat"
+        // işaretlemesi buna bağlı.
+        var meta = TerminalMeta(id: TerminalID(), name: "T", repoPath: repoPath, createdAt: Date())
+        meta.provider = AgentProvider.detect(launchCommand: command)
         metas.append(meta)
         broadcaster.send(.spawned(meta))
         return meta
@@ -435,10 +440,10 @@ final class FakeTerminalServicing: TerminalServicing {
         let created = ProjectWorkspace(projectPath: "/tmp/r", path: wsPath, name: "feature-x",
             branch: "feature-x", scm: .git)
         await ws.setCreateOutcome(.success(WorkspaceCreateResult(workspace: created, warning: nil)))
-        let chat = FakeChatSessionService()
+        let term = FakeTerminalServicing()
         let handler = RemoteCommandHandler(
-            terminal: FakeTerminalServicing(), trust: NoopClaudeWorkspaceTrust(),
-            chatSessions: chat, repos: repoSvc, workspaces: ws)
+            terminal: term, trust: NoopClaudeWorkspaceTrust(),
+            chatSessions: FakeChatSessionService(), repos: repoSvc, workspaces: ws)
 
         let result = await handler.handle([
             "action": "start_session", "kind": "chat", "repoPath": "/tmp/r",
@@ -449,23 +454,27 @@ final class FakeTerminalServicing: TerminalServicing {
         #expect(calls.count == 1)
         #expect(calls.first?.request.branchMode == .new)
         #expect(calls.first?.request.branchName == "feature-x")
-        #expect(chat.createdRepoPaths == [wsPath])
+        // Karar 80: chat = worktree path'inde açılan claude terminali.
+        #expect(term.metas.count == 1)
+        #expect(term.metas.last?.repoPath == wsPath)
     }
 
     @Test @MainActor
     func startSessionCurrentModeSkipsWorkspaceCreate() async throws {
         let repo = Repo(name: "R", path: "/tmp/r", isGitRepo: true, source: .projectsRoot)
         let ws = FakeWorkspaceService()
-        let chat = FakeChatSessionService()
+        let term = FakeTerminalServicing()
         let handler = RemoteCommandHandler(
-            terminal: FakeTerminalServicing(), trust: NoopClaudeWorkspaceTrust(),
-            chatSessions: chat, repos: FakeRepoService(repos: [repo]), workspaces: ws)
+            terminal: term, trust: NoopClaudeWorkspaceTrust(),
+            chatSessions: FakeChatSessionService(), repos: FakeRepoService(repos: [repo]), workspaces: ws)
         let result = await handler.handle([
             "action": "start_session", "kind": "chat", "repoPath": "/tmp/r",
             "prompt": "", "branchMode": "current", "commandId": "c1"])
         #expect(result["ok"] as? Bool == true)
         #expect(await ws.createCalls.isEmpty)
-        #expect(chat.createdRepoPaths == ["/tmp/r"])
+        // Karar 80: current mod → mevcut repo path'inde claude terminali.
+        #expect(term.metas.count == 1)
+        #expect(term.metas.last?.repoPath == "/tmp/r")
     }
 
     @Test @MainActor
@@ -473,14 +482,15 @@ final class FakeTerminalServicing: TerminalServicing {
         let repo = Repo(name: "R", path: "/tmp/r", isGitRepo: true, source: .projectsRoot)
         let ws = FakeWorkspaceService()
         await ws.setCreateOutcome(.failure(WorkspaceFailure("kirli worktree")))
-        let chat = FakeChatSessionService()
+        let term = FakeTerminalServicing()
         let handler = RemoteCommandHandler(
-            terminal: FakeTerminalServicing(), trust: NoopClaudeWorkspaceTrust(),
-            chatSessions: chat, repos: FakeRepoService(repos: [repo]), workspaces: ws)
+            terminal: term, trust: NoopClaudeWorkspaceTrust(),
+            chatSessions: FakeChatSessionService(), repos: FakeRepoService(repos: [repo]), workspaces: ws)
         let result = await handler.handle([
             "action": "start_session", "kind": "chat", "repoPath": "/tmp/r",
             "prompt": "", "branchMode": "existing", "branchName": "dev", "commandId": "c1"])
         #expect(result["ok"] as? Bool == false)
-        #expect(chat.createdRepoPaths.isEmpty)
+        // Karar 80: workspace create başarısız → terminal AÇILMAZ (chat da yok).
+        #expect(term.metas.isEmpty)
     }
 }

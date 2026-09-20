@@ -39,14 +39,15 @@ struct RemoteCommandHandlerTests {
         #expect(meta?.claudeSessionID != nil)   // chat modu bağlanabilsin
     }
 
-    // MARK: - kind=chat start_session
+    // MARK: - kind=chat start_session (karar 80: telefon chat'i de claude TERMİNALİ açar)
 
-    @Test func startSessionKindChatCreatesChatSession() async throws {
+    /// Karar 80: telefon-başlatılan chat, başsız stream-json değil, masaüstünde de
+    /// görünen bir claude TERMİNALİ olarak açılır (karar 79 birleşimi). sessionId =
+    /// spawn edilen terminalin id'sidir (telefon subscribeChat için).
+    @Test func startSessionKindChatSpawnsClaudeTerminal() async throws {
         let term = FakeTerminalService()
         let trust = FakeClaudeWorkspaceTrust()
         let chatSvc = FakeChatSessionService()
-        let meta = ChatSessionMeta(id: "cs-test-1", repoPath: "/repo", createdAt: Date())
-        chatSvc.stub(meta: meta, snapshots: [])
         let handler = RemoteCommandHandler(terminal: term, trust: trust, chatSessions: chatSvc)
         let result = await handler.handle([
             "action": "start_session",
@@ -55,20 +56,20 @@ struct RemoteCommandHandlerTests {
             "commandId": "cmd-chat-1"
         ])
         #expect(result["ok"] as? Bool == true)
-        #expect(result["sessionId"] as? String == "cs-test-1")
-        // Terminal spawn OLMAMALIYDI
-        #expect(term.spawnedMetas.isEmpty)
-        // ChatService create çağrıldı
-        #expect(chatSvc.created.count == 1)
+        // Claude terminali spawn edildi (masaüstü grid'de görünsün)
+        #expect(term.spawnedMetas.count == 1)
+        #expect(term.spawnCalls.last?.repoPath == "/repo")
+        #expect(term.spawnCalls.last?.command == "claude")
+        // sessionId = spawn edilen terminalin id'si
+        #expect(result["sessionId"] as? String == term.spawnedMetas.last?.id.description)
+        // Başsız stream-json chat oturumu OLUŞTURULMADI
+        #expect(chatSvc.created.isEmpty)
     }
 
-    @Test func startSessionKindChatWithPromptSendsText() async throws {
+    @Test func startSessionKindChatWithPromptBakesIntoCommand() async throws {
         let term = FakeTerminalService()
         let trust = FakeClaudeWorkspaceTrust()
-        let chatSvc = FakeChatSessionService()
-        let meta = ChatSessionMeta(id: "cs-test-2", repoPath: "/repo", createdAt: Date())
-        chatSvc.stub(meta: meta, snapshots: [])
-        let handler = RemoteCommandHandler(terminal: term, trust: trust, chatSessions: chatSvc)
+        let handler = RemoteCommandHandler(terminal: term, trust: trust)
         _ = await handler.handle([
             "action": "start_session",
             "kind": "chat",
@@ -76,27 +77,24 @@ struct RemoteCommandHandlerTests {
             "prompt": "Merhaba Claude",
             "commandId": "cmd-chat-2"
         ])
-        // send çağrıldı
-        #expect(chatSvc.sentText.count == 1)
-        #expect(chatSvc.sentText.first?.id == "cs-test-2")
-        #expect(chatSvc.sentText.first?.text == "Merhaba Claude")
+        // prompt komuta gömülür (claude '<prompt>'), terminal path'iyle aynı
+        let cmd = term.spawnCalls.last?.command
+        #expect(cmd?.hasPrefix("claude ") == true)
+        #expect(cmd?.contains("Merhaba Claude") == true)
     }
 
-    @Test func startSessionKindChatEmptyPromptDoesNotSend() async throws {
+    @Test func startSessionKindChatEmptyPromptSpawnsBareClaude() async throws {
         let term = FakeTerminalService()
         let trust = FakeClaudeWorkspaceTrust()
-        let chatSvc = FakeChatSessionService()
-        let meta = ChatSessionMeta(id: "cs-test-3", repoPath: "/repo", createdAt: Date())
-        chatSvc.stub(meta: meta, snapshots: [])
-        let handler = RemoteCommandHandler(terminal: term, trust: trust, chatSessions: chatSvc)
+        let handler = RemoteCommandHandler(terminal: term, trust: trust)
         _ = await handler.handle([
             "action": "start_session",
             "kind": "chat",
             "repoPath": "/repo",
             "commandId": "cmd-chat-3"
         ])
-        // prompt yok → send çağrılmadı
-        #expect(chatSvc.sentText.isEmpty)
+        // prompt yok → çıplak claude
+        #expect(term.spawnCalls.last?.command == "claude")
     }
 
     // MARK: - delete_session (chat oturumu)
@@ -111,10 +109,9 @@ struct RemoteCommandHandlerTests {
         let meta = ChatSessionMeta(id: "cs-del-1", repoPath: "/repo", createdAt: Date())
         chatSvc.stub(meta: meta, snapshots: [])
         let handler = RemoteCommandHandler(terminal: term, trust: trust, chatSessions: chatSvc)
-        // Önce chat oturumu yarat (list() bunu döndürür).
-        _ = await handler.handle([
-            "action": "start_session", "kind": "chat", "repoPath": "/repo", "commandId": "c1"
-        ])
+        // Bir stream-json chat oturumunu doğrudan seed'le (karar 80: start_session artık
+        // terminal açar, chatSessions.create çağırmaz — bu test delete dalını izole eder).
+        _ = await chatSvc.create(repoPath: "/repo")
         let result = await handler.handle([
             "action": "delete_session", "sessionId": "cs-del-1", "commandId": "c2"
         ])

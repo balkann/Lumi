@@ -81,8 +81,11 @@ final class RemoteCommandHandler {
         let kind = payload["kind"] as? String
 
         if kind == "chat" {
-            // Chat oturumu: ChatSessionService aracılığıyla oluştur (terminal PTY değil).
-            // branchMode != "current" ise önce workspace/worktree oluştur.
+            // Karar 80: telefon-başlatılan chat, başsız stream-json alt-süreci DEĞİL,
+            // masaüstü grid'de de görünen bir claude TERMİNALİ olarak açılır — böylece
+            // Mac'te takip edilebilir ve telefon onu transcript-tail chat ile izler
+            // (karar 79 birleşimi; Mac-başlatılan claude terminalleriyle simetrik).
+            // branchMode != "current" ise önce workspace/worktree oluşturulur.
             var chatRepoPath = repoPath
             let mode = payload["branchMode"] as? String
             if let mode, mode != "current" {
@@ -104,11 +107,16 @@ final class RemoteCommandHandler {
                     return ["commandId": commandId, "ok": false, "error": "\(error)"]
                 }
             }
-            let meta = await chatSessions.create(repoPath: chatRepoPath)
-            if !prompt.isEmpty {
-                await chatSessions.send(id: meta.id, text: prompt)
+            // İlk-açılış güven menüsünde takılmasın diye spawn'dan ÖNCE güvenli işaretle.
+            trust.markTrusted(repoPath: chatRepoPath)
+            let command = prompt.isEmpty ? "claude" : "claude " + shellQuoted(prompt)
+            do {
+                // sessionId = spawn edilen terminalin id'si → telefon subscribeChat için.
+                let meta = try terminal.spawn(repoPath: chatRepoPath, task: nil, command: command)
+                return ["commandId": commandId, "ok": true, "sessionId": meta.id.description]
+            } catch {
+                return ["commandId": commandId, "ok": false, "error": "\(error)"]
             }
-            return ["commandId": commandId, "ok": true, "sessionId": meta.id]
         }
 
         // Terminal oturumu (varsayılan): PTY spawn.
