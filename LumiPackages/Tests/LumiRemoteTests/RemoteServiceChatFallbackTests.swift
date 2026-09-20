@@ -4,17 +4,18 @@ import LumiKit
 import LumiTestSupport
 @testable import LumiRemote
 
-/// Faz 2 sonrası: eski transcript-tail chat yolu SÖKÜLDÜ.
-/// Artık `mode=chat` yalnız chat oturumları (ChatSessionServicing) için geçerli.
-/// Terminal oturumlarına mode=chat subscribe → boş chat + idle; feed kurulmaz.
+/// Faz 2 sonrası / Karar 79 sonrası: non-claude terminal oturumları mirror-only kalır.
+/// Claude provider terminal → transcript köprüsü (bkz. RemoteServiceClaudeChatTests).
+/// Non-claude (bash/codex/shell/provider=nil) → boş chat + idle; feed kurulmaz.
 ///
-/// DEĞİŞTİRİLEN TESTLER (Faz 2 söküm):
+/// DEĞİŞTİRİLEN TESTLER (Faz 2 söküm — karar 79 kapsamı dışında):
 /// - chatSubscribeWithoutClaudeSessionEmitsChatUnavailablePlusFeed:
 ///     Eski: PTY feed de başlatılırdı. Yeni: feed BAŞLATILMAZ; sadece boş chat + idle.
 /// - chatSubscribeAlsoStreamsFeed: KALDIRILDI (Faz 2 söküm).
 ///     Eski: chat mode terminale de feed başlatırdı. Yeni: terminal feed yalnız terminal mode'da.
 /// - externalSessionResolvesViaLocatorThenStreamsChat: KALDIRILDI (Faz 2 söküm).
-///     Eski: awaitTranscript/locator döngüsü. Yeni: chatSessions.snapshots nil → sessiz.
+///     Eski: awaitTranscript/locator döngüsü. Yeni: chatSessions.snapshots nil → sessiz
+///     (non-claude terminaller için); claude terminaller için RemoteServiceClaudeChatTests::T2.
 @Suite @MainActor struct RemoteServiceChatFallbackTests {
 
     /// Terminal UUID'si ile mode=chat subscribe → boş chat + idle (feed yok).

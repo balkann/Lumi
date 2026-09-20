@@ -254,7 +254,10 @@ public final class RemoteService: RemoteServicing {
                 title: meta.oscTitle,
                 model: modelCache[meta.id],
                 cols: 80,
-                rows: 24
+                rows: 24,
+                // Karar 79: Claude provider'lı terminal → telefonda chat view (kind:"chat").
+                // Bash/Codex/shell terminal'lar nil kalır (terminal view).
+                kind: meta.provider == .claude ? "chat" : nil
             )
         }
         // Stream-json chat oturumları (Faz 2): kind:"chat" ile listeye eklenir —
@@ -317,11 +320,11 @@ public final class RemoteService: RemoteServicing {
             guard let id = terminalID(from: raw) else { return }
             cancelSubscription(id)
             cancelChatSubscription(id)
-            // Chat modu ama chat oturumu değil → eski transcript-tail SÖKÜLDÜ (Faz 2).
-            // Sessizce boş chat + idle döndür; terminal oturumları mirror-only.
-            // Hook-tabanlı turn-status bu terminal için aktif (register et).
+            // Karar 79: Claude terminali → transcript-tail köprüsü kur (Faz 2 geri alındı).
+            // Non-claude terminal → eski mirror-only davranış korunur (boş chat + idle).
+            // Hook-tabanlı turn-status bu terminal için her iki durumda da aktif.
             chatModeTerminals.insert(id)
-            rlog("chat subscribe: chat oturumu yok sid=\(raw.prefix(8)) — boş chat + idle")
+            rlog("chat subscribe: terminal sid=\(raw.prefix(8)) provider=\(terminal.terminals.first(where: { $0.id == id })?.provider?.rawValue ?? "nil")")
             await connection.send(type: "chat",
                 payload: RemoteProtocol.chatPayload(sessionId: raw, messages: []))
             await emitTurnStatus(id: id, status: .idle)
@@ -330,6 +333,14 @@ public final class RemoteService: RemoteServicing {
             if snapshot != .idle { await emitTurnStatus(id: id, status: snapshot) }
             for item in (promptJournals[id]?.items ?? []) where item.state == .pending {
                 await emitPrompt(id: id, prompt: item)
+            }
+            // Karar 79: Claude provider terminali için transcript köprüsü başlat.
+            // Non-claude terminaller (bash/codex/shell) mirror-only kalır.
+            if let meta = terminal.terminals.first(where: { $0.id == id }), meta.provider == .claude {
+                rlog("chat subscribe: claude terminali — transcript köprüsü başlatılıyor sid=\(raw.prefix(8))")
+                chatSubscriptions[id] = Task { [weak self] in
+                    await self?.awaitTranscript(id: id, raw: raw, meta: meta)
+                }
             }
             return
         }
@@ -438,10 +449,17 @@ public final class RemoteService: RemoteServicing {
     }
 
     /// `chat_send` frame'i: telefon → chat oturumuna metin gönderir.
+    /// Karar 79: stream-json oturumu yoksa terminal PTY'sine yaz (macOS-başlatılan Claude terminali).
     private func handleChatSend(_ payload: [String: Any]) async {
         guard let (sessionId, text) = RemoteProtocol.decodeChatSend(payload) else { return }
         rlog("chat_send: sid=\(sessionId.prefix(8)) text=\(text.prefix(40))")
-        await chatSessions.send(id: sessionId, text: text)
+        let isStreamJsonChat = await chatSessions.list().contains { $0.id == sessionId }
+        if isStreamJsonChat {
+            await chatSessions.send(id: sessionId, text: text)
+        } else if let id = terminalID(from: sessionId) {
+            // macOS-başlatılan Claude terminali chat olarak görülüyor → PTY'ye yaz (send_text gibi).
+            try? terminal.write(id: id, text: text + "\r")
+        }
     }
 
     /// Dış/taze oturum: transcript belirene kadar sınırlı poll (10 × 500ms).

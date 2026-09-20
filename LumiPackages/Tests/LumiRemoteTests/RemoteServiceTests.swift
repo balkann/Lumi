@@ -130,6 +130,7 @@ final class FakeTerminalServicing: TerminalServicing {
     var metas: [TerminalMeta] = []
     var scrollback: (data: Data, cols: Int, rows: Int) = (Data(), 80, 24)
     private(set) var writtenInput: [TerminalID: Data] = [:]
+    private(set) var writes: [(TerminalID, String)] = []
     private(set) var subscribedIDs: [TerminalID] = []
     private var inputContinuations: [AsyncStream<Void>.Continuation] = []
 
@@ -143,7 +144,10 @@ final class FakeTerminalServicing: TerminalServicing {
         return meta
     }
 
-    func write(id: TerminalID, text: String) throws {}
+    func write(id: TerminalID, text: String) throws {
+        writes.append((id, text))
+        for c in inputContinuations { c.yield(()) }
+    }
     func kill(id: TerminalID) throws {}
     func killAll() {}
     func resize(id: TerminalID, cols: Int, rows: Int) {}
@@ -192,6 +196,15 @@ final class FakeTerminalServicing: TerminalServicing {
         let (stream, continuation) = AsyncStream.makeStream(of: Void.self)
         inputContinuations.append(continuation)
         if !writtenInput.isEmpty { return }
+        for await _ in stream { return }
+    }
+
+    /// write(id:text:) çağrısı gelene kadar bekler (PTY metin yazımı için).
+    func waitForWrite() async throws {
+        if !writes.isEmpty { return }
+        let (stream, continuation) = AsyncStream.makeStream(of: Void.self)
+        inputContinuations.append(continuation)
+        if !writes.isEmpty { return }
         for await _ in stream { return }
     }
 
@@ -317,9 +330,9 @@ final class FakeTerminalServicing: TerminalServicing {
         svc.stop()
     }
 
-    /// Faz 2 söküm: mode=chat + terminal UUID → chat oturumu yok (NoopChatSessionService nil döndürür).
-    /// Eski davranış: transcript-tail başlatılır + feed açılır → SÖKÜLDÜ.
-    /// Yeni davranış: boş chat + idle status; scrollback/feed KURULMAZ.
+    /// Faz 2 söküm / Karar 79: mode=chat + terminal UUID, provider=nil (bash) →
+    /// chat oturumu yok → boş chat + idle; feed KURULMAZ.
+    /// Claude provider terminaller için transcript köprüsü kur (bkz. RemoteServiceClaudeChatTests).
     @Test func subscribeChatModeForTerminalUUIDEmitsEmptyChatAndIdle() async throws {
         let conn = FakeRelayConnection()
         let term = FakeTerminalServicing()

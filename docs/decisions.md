@@ -773,3 +773,12 @@ Durum noktası (`StatusDot`) ve ajan glifi (`AgentActivityIcon`) değişmedi: no
 - **Ek A muafiyeti:** Chat lane PTY→UI backpressure, render-crash izolasyonu ve replay güvenliği gereksinimlerinden muaftır (pipe I/O, TUI yok; kayıp-uyanma yarışı söz konusu değildir). `FlowController`/`OutputCoalescer`/`FeedWatchdog` kullanılmaz.
 - **DI:** `StreamJsonAgentSession.init` canlı default'lar taşır (`spawner: LiveStreamingProcess()`, `binaryLocator: SystemBinaryLocator()`); testler her zamanki gibi `FakeStreamingProcess`/`FakeBinaryLocator` enjekte eder. `ServiceRegistry`'e yeni slot eklenmez — Faz 2 tüketim noktasında doğrudan default'lu init kullanır.
 - **Mimari yeri:** `docs/design/00-architecture.md §5 "Chat lane (stream-json)"` bağlayıcı referans oldu.
+
+### 79. macOS-başlatılan Claude terminalleri telefonda chat view'de görünür (2026-09-20)
+
+Faz 2'nin "terminal oturumları mirror-only" kararı Claude provider terminalleri için geri çevrildi. Bash/Codex/shell terminal'lar değişmez.
+
+- **`sendSessions`:** `meta.provider == .claude` ise `SessionMeta.kind = "chat"` set edilir. Telefon bu işareti görünce ilgili oturumu chat view'de açar ve yanıtları `chat_send` ile gönderir.
+- **`handleSubscribe` (chat modu, terminal ID):** Claude terminali için `awaitTranscript(id:raw:meta:)` iptal-edilebilir task olarak `chatSubscriptions[id]`'e bağlanır. Non-claude terminaller (bash/codex/shell) eski boş-chat + idle davranışını korur.
+- **`handleChatSend`:** `chatSessions.list()`'te id yoksa (stream-json oturumu değil) ve terminal ID ise `terminal.write(id:text+"\r")` ile PTY'ye yazar — `send_text` gibi davranır.
+- **Veri kaynağı:** Canlı token-token yerine transcript-tail (`TranscriptChatSource`) — macOS-başlatılan terminal claude'da tek mevcut kaynak. Phone-başlatılan stream-json chat aynen kalır.
