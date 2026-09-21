@@ -1,6 +1,6 @@
 name: LumiMobile
 options:
-  bundleIdPrefix: com.lumi
+  bundleIdPrefix: com.uncosoft
   deploymentTarget:
     iOS: "17.0"
 packages:
@@ -38,16 +38,17 @@ targets:
         SWIFT_STRICT_CONCURRENCY: complete
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         CODE_SIGN_ENTITLEMENTS: App/LumiMobile.entitlements
-        # Test build: mevcut uygulamanın YANINA ayrı app olarak kurulsun (farklı bundle id).
-        PRODUCT_BUNDLE_IDENTIFIER: com.lumi.LumiRemoteNew
+        # Dağıtım kimliği (TestFlight / com.uncosoft.lumi).
+        PRODUCT_BUNDLE_IDENTIFIER: com.uncosoft.lumi
     info:
       path: App/Info.plist
       properties:
-        CFBundleDisplayName: Lumi Remote New
+        CFBundleDisplayName: Lumi
+        CFBundleName: Lumi
         NSCameraUsageDescription: Eşleştirme QR kodunu okumak için kamera gerekir.
         UILaunchScreen: {}
         CFBundleURLTypes:
-          - CFBundleURLName: com.lumi.LumiMobile.pair
+          - CFBundleURLName: com.uncosoft.lumi.pair
             CFBundleURLSchemes: [lumi-remote]
   LumiMobileUITests:
     type: bundle.ui-testing
