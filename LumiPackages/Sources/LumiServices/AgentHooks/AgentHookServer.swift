@@ -17,7 +17,7 @@ public final class AgentHookServer: AgentHookServing, @unchecked Sendable {
     private var endpoint: AgentHookEndpoint?
     /// Canlı bağlantılar — NWConnection referans tutulmazsa erken serbest kalır.
     private var connections: [ObjectIdentifier: NWConnection] = [:]
-    private let broadcaster = EventBroadcaster<AgentHookEvent>()
+    private let broadcaster = EventBroadcaster<AgentHookEvent>(label: "agentHooks")
     private let tokenGenerator: @Sendable () -> String
 
     /// Bağlantı başına okuma parçası.

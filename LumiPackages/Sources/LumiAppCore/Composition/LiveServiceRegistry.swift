@@ -22,6 +22,7 @@ final class LiveServiceRegistry: ServiceRegistry {
     let deepSeek: any DeepSeekEnvironmentServicing
     let deepSeekBalance: any DeepSeekBalanceServicing
     let claudeAccounts: any ClaudeAccountServicing
+    let codexAccounts: any CodexAccountServicing
     let git: any GitServicing
     let plastic: any PlasticServicing
     let commitMessages: any CommitMessageGenerating
@@ -78,6 +79,8 @@ final class LiveServiceRegistry: ServiceRegistry {
         // Anahtar tek kaynaktan (env dosyası) okunur — servis onu saklamaz.
         deepSeekBalance = DeepSeekBalanceService(environment: deepSeekEnvironment)
         claudeAccounts = ClaudeAccountService(config: configService, paths: paths)
+        let codexAccountService = CodexAccountService(config: configService, paths: paths)
+        codexAccounts = codexAccountService
         highlighter = HighlightrEngine(style: HighlightrStyle(
             plainTextColor: Theme.NS.textPrimary,
             font: { LumiFonts.mono(size: $0) }
@@ -93,7 +96,9 @@ final class LiveServiceRegistry: ServiceRegistry {
             // Karar 55: Codex probe'u (süreç spawn'ı + RPC) asılabiliyordu;
             // 30 sn üst sınırı cache'in ALTINDA durur ki zaman aşımı
             // cache'lenmesin, bir sonraki yenileme yeniden denesin.
-            .codex: Self.cached(TimeoutUsageService(wrapping: CodexUsageService())),
+            .codex: Self.cached(TimeoutUsageService(wrapping: CodexUsageService(
+                codexHome: { await codexAccountService.selectedHome() }
+            ))),
         ]
         activityMonitor = SystemActivityMonitor()
         processSampler = PSProcessSampler()

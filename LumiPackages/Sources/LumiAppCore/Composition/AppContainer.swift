@@ -1,6 +1,7 @@
 import Foundation
 import LumiKit
 import LumiState
+import os
 
 /// Composition root'un koşucusu (design/00 §3, refactor 3.3).
 ///
@@ -14,6 +15,8 @@ import LumiState
 /// Yeni özellik eklemek bu dosyaya DOKUNMAZ — composition listesine bir satır.
 @MainActor
 final class AppContainer {
+    /// Teşhis izi (karar 83): bootstrap ve shutdown adımları süreleriyle.
+    private static let logger = LumiLog.logger("lifecycle")
     let services: any ServiceRegistry
     let shared: SharedStores
 
@@ -84,32 +87,58 @@ final class AppContainer {
         await services.system.fixProcessPath()
         if Task.isCancelled { return }
 
+        let clock = ContinuousClock()
+        let bootBegin = clock.now
+        Self.logger.log("bootstrap begin")
         await shared.start()
 
         for assembly in assemblies {
-            if Task.isCancelled { return }
+            if Task.isCancelled {
+                Self.logger.log("bootstrap cancelled before \(Self.name(of: assembly), privacy: .public)")
+                return
+            }
+            let stepBegin = clock.now
             await assembly.start()
+            Self.logger.log(
+                "bootstrap: \(Self.name(of: assembly), privacy: .public) started in \(LumiLog.milliseconds(clock.now - stepBegin)) ms"
+            )
         }
 
         configCoordinator.start()
+        Self.logger.log("bootstrap end in \(LumiLog.milliseconds(clock.now - bootBegin)) ms")
+    }
+
+    private static func name(of assembly: any FeatureAssembly) -> String {
+        String(describing: type(of: assembly))
     }
 
     func shutdown() async {
+        let clock = ContinuousClock()
+        let begin = clock.now
+        Self.logger.log("shutdown begin (bootstrap in flight: \(self.startTask != nil))")
         // Refactor 3.13: uçuştaki bootstrap'i durdur ve BİTMESİNİ bekle.
         startTask?.cancel()
         await startTask?.value
         startTask = nil
+        Self.logger.log("shutdown: bootstrap settled +\(LumiLog.milliseconds(clock.now - begin)) ms")
 
         configCoordinator.stop()
         // Paylaşılan tüketiciler ÖNCE susar: aşağıdaki `killAll()`'ın ürettiği
         // `.exited` event'leri kapanış anında toast doğurmasın.
         shared.stop()
+        Self.logger.log("shutdown: shared stores stopped +\(LumiLog.milliseconds(clock.now - begin)) ms")
         for assembly in assemblies.reversed() {
+            let stepBegin = clock.now
             await assembly.shutdown()
+            Self.logger.log(
+                "shutdown: \(Self.name(of: assembly), privacy: .public) done in \(LumiLog.milliseconds(clock.now - stepBegin)) ms"
+            )
         }
         await services.config.flushPendingWrites()
+        Self.logger.log("shutdown: writes flushed +\(LumiLog.milliseconds(clock.now - begin)) ms")
         // Temp dizini (Electron will-quit paritesi + karar 11)
         try? FileManager.default.removeItem(at: services.paths.tempDir)
+        Self.logger.log("shutdown end in \(LumiLog.milliseconds(clock.now - begin)) ms")
     }
 
     func defaultRepoPath() async -> String {

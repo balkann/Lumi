@@ -13,7 +13,7 @@ public actor RepoService: RepoServicing {
     public static let fileTreeWatchLatency: TimeInterval = 0.5
 
     private let runner: any ProcessRunning
-    private let broadcaster = EventBroadcaster<RepoEvent>()
+    private let broadcaster = EventBroadcaster<RepoEvent>(label: "repo")
     private let watchQueue = DispatchQueue(label: "lumi.repo.watch", qos: .utility)
     private let watchDebounce: TimeInterval
     private let managedWorkspaceRoot: String

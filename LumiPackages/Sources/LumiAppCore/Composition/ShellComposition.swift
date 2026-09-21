@@ -39,6 +39,7 @@ struct ShellComposition {
         remote: RemoteFeatureAssembly,
         deepSeek: DeepSeekAssembly,
         claudeAccounts: ClaudeAccountsAssembly,
+        codexAccounts: CodexAccountsAssembly,
         terminalLinks: TerminalLinkActionsAssembly,
         contributors: [any ShellContributing]
     ) -> ShellComposition {
@@ -66,6 +67,7 @@ struct ShellComposition {
             deepSeek: deepSeek.deepSeek,
             deepSeekBalance: usage.deepSeekBalance,
             claudeAccounts: claudeAccounts.claudeAccounts,
+            codexAccounts: codexAccounts.codexAccounts,
             terminalLinks: terminalLinks.makeStore(shared: shared, repo: repo),
             computerAwake: statusBar.computerAwake,
             resourceUsage: statusBar.resourceUsage,

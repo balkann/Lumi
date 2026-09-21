@@ -4,7 +4,7 @@ import SwiftUI
 /// `Theme.Motion` sabitlerine taşınır"; bağlayıcı).
 ///
 /// Üç süre basamağı vardır ve tasarımın 0.1–0.3s bandını kapsar; tekrarlayan
-/// durum nabzı (StatusDot) ile hover zamanlayıcıları da burada durur, böylece
+/// durum animasyonları ile hover zamanlayıcıları da burada durur, böylece
 /// "kaç ms sonra açılır" kararı view'lara dağılmaz.
 public extension Theme {
     enum Motion {
@@ -16,7 +16,7 @@ public extension Theme {
         public static let standard: TimeInterval = 0.2
         /// 0.3s — panel/overlay giriş-çıkışı.
         public static let panel: TimeInterval = 0.3
-        /// 1s — durum noktasının nabız periyodu.
+        /// 1s — yeniden kullanılabilir durum nabzı periyodu.
         public static let pulse: TimeInterval = 1
 
         // MARK: - Hazır eğriler
@@ -26,7 +26,7 @@ public extension Theme {
         public static let standardOut = Animation.easeOut(duration: standard)
         public static let panelEase = Animation.easeInOut(duration: panel)
 
-        /// Working / waiting-unseen durum noktasının sonsuz nabzı.
+        /// Uzun süren canlı durumlar için sonsuz nabız.
         public static let statusPulse = Animation
             .easeInOut(duration: pulse)
             .repeatForever(autoreverses: true)

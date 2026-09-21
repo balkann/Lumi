@@ -14,9 +14,8 @@ public struct UIState: Sendable, Equatable {
     public var projectGridLayouts: [String: GridLayout]
     public var windowBounds: WindowBounds?
     public var windowMaximized: Bool?
-    /// Karar 23 (additive): graceful quit'te canlı claude oturumları buraya
-    /// yazılır; açılışta tüketilir (okunur + boşaltılır) ve `claude --resume`
-    /// ile aynı chat'ten devam edilir. Boş liste = devam edilecek oturum yok.
+    /// Karar 23/79 (additive): graceful quit'te canlı Claude/Codex oturumları
+    /// buraya yazılır; açılışta tüketilip provider'ın resume komutuyla açılır.
     public var resumeSessions: [ResumeSession]
     /// K34 (additive): repo-dışı route kimliği (`WorkspaceRoute.content`
     /// rawValue'su). nil = route bir repo tab'ı ya da yok; o durumda
@@ -94,17 +93,26 @@ public struct UIState: Sendable, Equatable {
     }
 }
 
-/// Karar 23: quit anında canlı olan bir claude oturumunun kaydı — açılışta
-/// `claude --resume <sessionID>` ile aynı repo'da devam edilir.
+/// Karar 23/79: quit anında canlı olan resumable ajan oturumunun kaydı.
 ///
 /// **Persistence yalnız `ConfigCodec` üzerinden — karar 9.**
 public struct ResumeSession: Sendable, Equatable {
     public let repoPath: String
     public let sessionID: String
+    public let provider: AgentProvider
+    /// Yalnız Codex için; thread'in rollout/auth kökünü sabitler.
+    public let codexHome: String?
 
-    public init(repoPath: String, sessionID: String) {
+    public init(
+        repoPath: String,
+        sessionID: String,
+        provider: AgentProvider = .claude,
+        codexHome: String? = nil
+    ) {
         self.repoPath = repoPath
         self.sessionID = sessionID
+        self.provider = provider
+        self.codexHome = codexHome
     }
 }
 

@@ -34,8 +34,7 @@ final class AgentHooksAssemblyTests: XCTestCase {
         return condition()
     }
 
-    /// Kurulum ayrı bir Task'ta koşar; actor sayaçları beklenen değere gelene
-    /// dek (en fazla 2 sn) yoklanır, sonra son hâl döner.
+    /// Actor sayaçları beklenen değere gelene dek (en fazla 2 sn) yoklanır.
     private func installCounts(
         expecting expected: (install: Int, uninstall: Int)
     ) async -> (install: Int, uninstall: Int) {
@@ -58,6 +57,8 @@ final class AgentHooksAssemblyTests: XCTestCase {
         let counts = await installCounts(expecting: (1, 0))
         XCTAssertEqual(counts.install, 1)
         XCTAssertEqual(counts.uninstall, 0)
+        let hookSyncs = await (registry.codexAccounts as? FakeCodexAccountService)?.managedHookSyncs
+        XCTAssertEqual(hookSyncs, [true])
 
         let event = AgentHookEvent(provider: .claude, terminalID: TerminalID(), kind: .stop)
         registry.fakeAgentHooks.emit(event)
@@ -100,6 +101,8 @@ final class AgentHooksAssemblyTests: XCTestCase {
         XCTAssertEqual(registry.fakeTerminal.hookEndpoints.last, .some(nil))
         let counts = await installCounts(expecting: (1, 1))
         XCTAssertEqual(counts.uninstall, 1, "kapatma yönetilen girdileri kaldırmalı")
+        let hookSyncs = await (registry.codexAccounts as? FakeCodexAccountService)?.managedHookSyncs
+        XCTAssertEqual(hookSyncs, [true, false])
     }
 
     func testTogglingOnStartsServerAgain() async {

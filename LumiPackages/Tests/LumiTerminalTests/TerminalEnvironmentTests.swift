@@ -108,4 +108,11 @@ final class TerminalEnvironmentTests: XCTestCase {
         XCTAssertNil(env["CLAUDE_EFFORT"])
         XCTAssertEqual(env["CLAUDE_CONFIG_DIR"], "/keep/me")   // meşru ayar korunur
     }
+
+    func testLaunchOverridesReplaceInheritedCodexHome() {
+        let env = TerminalEnvironment.childEnvironment(
+            base: ["CODEX_HOME": "/system"], overrides: ["CODEX_HOME": "/managed"]
+        )
+        XCTAssertEqual(env["CODEX_HOME"], "/managed")
+    }
 }

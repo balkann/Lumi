@@ -22,13 +22,15 @@ public actor CodexUsageService: UsageServicing {
     public nonisolated var provider: AgentProvider { .codex }
 
     private let binaryName: String
-    private let codexHome: String
+    private let codexHome: @Sendable () async -> String
     private let locator: any BinaryLocating
 
     public init(
         binaryName: String = "codex",
-        codexHome: String = ProcessInfo.processInfo.environment["CODEX_HOME"]
-            ?? (NSHomeDirectory() as NSString).appendingPathComponent(".codex"),
+        codexHome: @escaping @Sendable () async -> String = {
+            ProcessInfo.processInfo.environment["CODEX_HOME"]
+                ?? (NSHomeDirectory() as NSString).appendingPathComponent(".codex")
+        },
         locator: any BinaryLocating = SystemBinaryLocator()
     ) {
         self.binaryName = binaryName
@@ -37,7 +39,8 @@ public actor CodexUsageService: UsageServicing {
     }
 
     public func fetch() async throws -> UsageSnapshot {
-        let authPath = (codexHome as NSString).appendingPathComponent("auth.json")
+        let home = await codexHome()
+        let authPath = (home as NSString).appendingPathComponent("auth.json")
         guard FileManager.default.fileExists(atPath: authPath) else {
             throw LumiError.usageUnavailable(detail: "Codex not signed in")
         }
@@ -50,7 +53,8 @@ public actor CodexUsageService: UsageServicing {
             responseLine = try await CodexAppServerProbe.requestResponseLine(
                 binary: binary,
                 method: Self.rateLimitsMethod,
-                timeout: Self.rpcTimeout
+                timeout: Self.rpcTimeout,
+                codexHome: home
             )
         } catch let error as CodexAppServerProbe.ProbeError {
             throw LumiError.usageUnavailable(detail: Self.describe(error))

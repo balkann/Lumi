@@ -2,6 +2,7 @@ import AppKit
 import LumiKit
 import LumiState
 import LumiUI
+import os
 
 /// AppKit kabuğu (design/03 §1-2). Refactor 3.6 sonrası yalnız **launch +
 /// quit** akışı: pencere `MainWindowController`'da, kök view `RootViewFactory`'de,
@@ -10,6 +11,8 @@ import LumiUI
 /// `AppComposition`'da.
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    /// Teşhis izi (karar 83): quit akışı ve bildirim tıklaması.
+    private static let logger = LumiLog.logger("lifecycle")
     private let pathsMode: LumiPaths.Mode
     private var composition: AppComposition!
     private var windowController: MainWindowController!
@@ -44,6 +47,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             filename: "mac.log")
         windowController = MainWindowController(config: composition.registry.config)
         unPresenter?.onClick = { [weak self] terminalID in
+            Self.logger.log("notification clicked \(LumiLog.short(terminalID), privacy: .public)")
             self?.shared.terminals.restoreAndFocus(terminalID)
             self?.windowController.window?.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
@@ -102,6 +106,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let uiState = await composition.registry.config.uiState()
         windowController.onWindowShouldClose = { [weak self] in
             guard let self, !isShutdownComplete else { return true }
+            Self.logger.log("window close requested → terminate")
             // Çarpı (X) Cmd+Q ile aynı quit-onay akışına yönlendirilir.
             NSApp.terminate(nil)
             return false
@@ -112,6 +117,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let content = RootViewFactory(composition: composition).makeContentView()
         let window = windowController.install(contentView: content, uiState: uiState)
+        Self.logger.log("window installed")
 
         bridges.observeWindowFocus(window) { [weak self] focused in
             self?.composition.registry.terminal.setWindowFocused(focused)
@@ -245,15 +251,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Quit akışı (Cmd+Q, Dock, logout ve çarpı — HER yol onaydan geçer)
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        let liveCount = shared.terminals.totalCount
+        Self.logger.log("applicationShouldTerminate live=\(liveCount) shutdownComplete=\(self.isShutdownComplete)")
         if isShutdownComplete {
             return .terminateNow
         }
-        let liveCount = shared.terminals.totalCount
         if liveCount == 0 {
             Task { @MainActor in await self.shutdownAndReply() }
             return .terminateLater
         }
         shared.dialogs.onQuitResolved = { [weak self] shouldQuit in
+            Self.logger.log("quit dialog resolved: \(shouldQuit)")
             if shouldQuit {
                 Task { @MainActor in await self?.shutdownAndReply() }
             } else {
@@ -265,11 +273,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func shutdownAndReply() async {
+        Self.logger.log("shutdownAndReply begin")
         windowController.stop()
         bridges.stop()
         await composition.container.shutdown()
         isShutdownComplete = true
+        Self.logger.log("shutdownAndReply: replying terminate")
         NSApp.reply(toApplicationShouldTerminate: true)
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        Self.logger.log("applicationWillTerminate")
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

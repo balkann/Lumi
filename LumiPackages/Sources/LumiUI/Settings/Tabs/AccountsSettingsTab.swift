@@ -20,7 +20,7 @@ struct AccountsSettingsTab: SettingsTabContent {
         VStack(alignment: .leading, spacing: 0) {
             LumiSectionTitle(
                 title: "Accounts",
-                description: "Switch between Claude logins without signing in again."
+                description: "Switch between Claude and Codex logins without signing in again."
             )
             SectionHeader(title: "Claude", icon: "person.crop.circle")
                 .padding(.bottom, Theme.Spacing.md)
@@ -34,6 +34,8 @@ struct AccountsSettingsTab: SettingsTabContent {
             addRow
                 .padding(.bottom, Theme.Spacing.lg)
             accountList
+                .padding(.bottom, Theme.Spacing.xxl)
+            CodexAccountsSettingsSection()
             Spacer(minLength: 0)
         }
         .task { await store.load() }
@@ -138,6 +140,7 @@ struct AccountsSettingsTab: SettingsTabContent {
             return false
         }
     }
+
 }
 
 #if DEBUG

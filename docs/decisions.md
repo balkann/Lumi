@@ -339,7 +339,7 @@ Terminalin `working` / `waiting-*` / `idle` durumu artık Orca'daki gibi **ajan�
 - **Eşleme (`AgentHookStatusReducer`, Orca `normalizeClaudeEvent`/`normalizeCodexEvent` çekirdeği):** `UserPromptSubmit` / `PreToolUse` / `PostToolUse(Failure)` → `working`; `Stop` / `StopFailure` / manuel `PostCompact` → turn bitti (`working` ise `waiting-*`, odak varyantları `StatusStateMachine`'de aynen); `SessionStart` (Claude'da yalnız `startup`/`resume`/`clear` kaynağı; `compact` turn ortasında ateşler, yok sayılır) → `idle`; `SessionEnd` → `idle` + sağlayıcı kimliği düşer + hook otoritesi kalkar. `PermissionRequest` ve `AskUserQuestion`/`request_user_input` `PreToolUse`'u **durumu değiştirmez**, "karar bekliyor" bayrağını kaldırır (`DecisionTracker`, karar 37 sözleşmesi korunur); bayrak aynı aktörün sonraki araç olayında, bekleyen aracın `PostToolUse`'unda ya da turn sınırında iner (paralel araçların bitişi bayrağı kapatmaz). **Alt ajan kadrosu:** `agent_id` taşıyan olaylar lider turn'ünü sahiplenmez; lider `Stop` verdiği hâlde kadroda çalışan alt ajan varsa kart `working` kalır, `SubagentStop`/`TeammateIdle` (`a<name>-<hex>` eşlemesi) ile düşer; Claude `Stop.background_tasks` envanteri varsa kadronun tek otoritesidir (kaçırılmış `SubagentStop` kartı sonsuza dek çalışıyor göstermesin); `is_interrupt` kadroyu boşaltır. Compact devamı (`"This session is being continued…"`) `UserPromptSubmit`'i turn başlatmaz.
 - **Kesme çıkarımı:** hook'lar bağlıyken `working` durumda tek başına Esc (0x1B) ya da Ctrl+C (0x03) gelirse 0.5 s pencere açılır (Orca `AGENT_INTERRUPT_SETTLE_MS`); pencere içinde hook gelmezse ve kadro boşsa turn kesilmiş sayılır. ESC ile başlayan tuş dizileri (ok tuşları) kesme değildir.
 - **Bilinçli farklar:** Codex `SessionStart` Orca'da `working`, Lumi'de `idle` (taze TUI boştadır; hayalet spinner yerine Orca'nın Claude için verdiği gerekçe uygulanır). Orca'nın 30 dk bayatlık kapısı, restore edilen alt ajan kadrosu ve worktree/tab anahtarlama katmanı taşınmadı: Lumi terminalleri uygulamayla birlikte ölür, kalıcı hook durumu yoktur. `SessionEnd` Orca'da kayıtlı değil; Lumi ajan çıkışında karta düz shell kimliğini geri verebilmek için kaydeder (Codex'te karşılığı yok — Codex çıkınca durum bir sonraki komuta dek son değerinde kalır).
-- **Kart header'ı (Orca `TerminalTabLeadingIcon`):** sıra **durum noktası → kimlik ikonu → başlık**. Kimlik `TerminalMeta.provider`'dır: launch komutunun ilk token'ı (`claude`/`codex`), OSC/çıktı çıkarımı (`ProviderInferencer`) ve hook sağlayıcısından türer, `SessionEnd`'de düşer; Claude/Codex için bundle logosu, düz shell için `terminal` SF Symbol'ü. Durum ve kimlik iki ayrı gliftir — tek süslü ikona kaynaştırılmaz.
+- **Kart header'ı (Orca `TerminalTabLeadingIcon`, karar 81 ile güncel):** sıra **ajan etkinlik glifi → kimlik ikonu → başlık**. Etkinlik Projects paneliyle ortak `AgentActivityState` eşlemesidir; kimlik `TerminalMeta.provider`'dır: launch komutunun ilk token'ı (`claude`/`codex`), OSC/çıktı çıkarımı (`ProviderInferencer`) ve hook sağlayıcısından türer, `SessionEnd`'de düşer; Claude/Codex için bundle logosu, düz shell için `terminal` SF Symbol'ü. Durum ve kimlik iki ayrı gliftir — tek süslü ikona kaynaştırılmaz.
 
 ### 46. Plastic SCM Source Control desteği (2026-09-07)
 Unity projelerinin çoğu Plastic SCM (Unity Version Control) çalışma alanıdır ve Git olmadığı için Source Control sekmesi hiç görünmüyordu. Sekme artık `.plastic/` kökü tanınan dizinlerde de açılır; kapsam bilinçli olarak **hafif** tutulur: checkin + tek öğe undo + son 7 günün lane graph'ı vardır; diff, update/switch/merge, shelve, PR hedeflenmez.
@@ -762,11 +762,128 @@ Vurgu iki katmanlıdır: **başlık rengi** (yakından okunur) + **kenarlık** (
 
 **Zemin boyama bilinçli olarak SEÇİLMEDİ.** Her iki yüzeyde de zemin kanalı doludur ve başka bir şey söyler: sidebar'da dolu satır zemini "seçili" (`ExplorerRowView`, `accentPrimary.opacity(0.15)`) ya da "hover" (`bgElevated`) demektir; kartta zemin `bgElevated`, aktiflik ise accent ring + glow'dur ve header'daki `stalled` rozeti zaten aynı `Theme.warning`'i taşır. Ayrıca koyu temada (#12121F/#1A1A2E) dolu amber (#FBBF24) blok okunurluk için metni koyulaştırmayı gerektirir ve aynı anda biten üç ajan listeyi sarı bloklara çevirir — dikkat çekmenin tersi. Kural: zemin kabın durumudur, metin/kenarlık rengi şeyin özelliğidir.
 
-Durum noktası (`StatusDot`) ve ajan glifi (`AgentActivityIcon`) değişmedi: nokta "ne durumda", başlık rengi "sana bakması gerek" sorusunu yanıtlar. Sidebar'da vurgu hover rengini EZER — sarı bir "ilgilenilmedi" bilgisidir, imleç üstünden geçtiği için kaybolmamalı.
+Karar 81 ile terminal kartındaki eski `StatusDot`, Projects paneliyle ortak `AgentActivityIcon`a çevrildi; başlık rengi yine "sana bakması gerek" sorusunu bağımsız yanıtlar. Sidebar'da vurgu hover rengini EZER — sarı bir "ilgilenilmedi" bilgisidir, imleç üstünden geçtiği için kaybolmamalı.
 
-- **Sınırlar.** `TerminalAttention`, `TerminalCardChrome.needsAttention` (kenarlık) + `TerminalCardHeader.needsAttention` (başlık) + `TerminalCardView`/`TerminalGridView`/`TerminalsRouteView` bağlantısı, `AgentRow.Model.needsAttention` (başlık + kenar çubuğu). `Panel` bileşeni değişmedi — kenarlık rengi zaten parametreliydi. Maximize edilen kart her zaman aktif sayıldığı için hiç vurgulanmaz. Minimize şeridi ve maximize switcher'ındaki `TerminalChipStrip` chip'leri kapsam dışıdır (durum noktalarını taşımaya devam ederler). Bildirimler (`NotificationService`), sıralama (`AgentActivityState.sortRank`) ve `TerminalMeta` formatı (karar 9) değişmedi. Testler: `TerminalAttentionTests`.
+- **Sınırlar.** `TerminalAttention`, `TerminalCardChrome.needsAttention` (kenarlık) + `TerminalCardHeader.needsAttention` (başlık) + `TerminalCardView`/`TerminalGridView`/`TerminalsRouteView` bağlantısı, `AgentRow.Model.needsAttention` (başlık + kenar çubuğu). `Panel` bileşeni değişmedi — kenarlık rengi zaten parametreliydi. Maximize edilen kart aktif accent çerçevesini korur; karar 81'den sonra başlığı yine aynı dikkat kuralıyla sararabilir. Minimize şeridi ve maximize switcher'ındaki `TerminalChipStrip` chip'leri kapsam dışıdır (kompakt durum noktalarını taşımaya devam ederler). Bildirimler (`NotificationService`), sıralama (`AgentActivityState.sortRank`) ve `TerminalMeta` formatı (karar 9) değişmedi. Testler: `TerminalAttentionTests`.
 
-### 78. Yol B Faz 1 — stream-json chat lane (2026-09-17)
+### 78. Codex hesapları ayrı CODEX_HOME'larda yaşar (2026-09-18)
+
+Orca'nın güncel Codex hesap akışı incelendi. Claude'daki gibi tek aktif auth yüzeyini yeniden yazmak Codex için seçilmedi: yeni hesaplar `~/.lumi/codex-accounts/<uuid>/home` altında kendi `auth.json` dosyasıyla yaşar. `System default`, Lumi'nin başladığı ortamdaki `CODEX_HOME`'u; bu yoksa `~/.codex`'i kullanır ve Lumi bu dizindeki kimlik bilgisini değiştirmez.
+
+Settings ▸ Accounts ve Codex kullanım popover'ı hesap ekleme, yeniden doğrulama, silme ve seçim yüzlerini sunar. `codex login`, yönetilen home ile yalıtılmış biçimde çalışır; kimlik `auth.json` içindeki ID token'dan okunur. `config.toml`, sistem home'undan yönetilen home'lara kopyalanır; boş ya da eksik kaynak son çalışan kopyayı silmez.
+
+Seçim terminal servisinin sağlayıcı başına launch environment'ına `CODEX_HOME` olarak bağlanır. Yalnız seçimden sonra açılan Codex terminalleri yeni hesabı kullanır; çalışan PTY'lerin ortamı değişmez. Codex app-server kullanım sorgusu aynı seçili home'u çözer ve hesap değişince cache geçersizleştirilerek yenilenir. Aktif hesabı silmek seçimi System default'a düşürür; silme yalnız doğrulanmış UUID altındaki yönetilen dizini kaldırır.
+
+- **Sınırlar.** `CodexAccountServicing`/`CodexAccountService`, `CodexAccountStore`, `CodexAccountsAssembly`, `CodexAccountsSettingsSection`, Codex usage popover'ı, `TerminalSessionControlling.setLaunchEnvironment`, additive `codexAccounts`/`activeCodexAccountId` config anahtarları. Canlı terminalleri otomatik yeniden başlatma ve Orca'nın Windows/WSL yolları kapsam dışıdır; Lumi macOS uygulamasıdır.
+
+### 79. Projects paneli kompakt kontroller ve tekil adlandırma kullanır (2026-09-18)
+
+Kullanıcı geri bildirimi: proje başlığı ile original checkout aynı proje adını art arda gösteriyor ve temel eylemler yalnız sağ tıkta keşfedilebiliyordu.
+
+- **Original checkout proje adını tekrarlamaz ve yönetilen workspace'lerle aynı iki kolonlu kimliği kullanır.** Soldaki sabit kısa ad `main`'dir; branch cache'i hazırsa gerçek Git/Plastic branch yolu sağdaki soluk ikincil metinde gösterilir. Cache henüz hazır değilse yalnız `main` kalır; eşanlamlı `primary` rozeti yoktur. Görsel başlık, dialog ve erişilebilirlik kimliğinden ayrıdır: kapatma/açma eylemleri proje adını kullanır. Yönetilen workspace'ler de ad + branch göstermeye devam eder.
+- **Proje satırı Orca'nın kompakt başlık desenini izler.** Klasör + güçlü başlık solda, aç/kapa oku sağda; ikon/ad/boş başlık yüzeyi tıkla foldout'u değiştirir. Sağdaki `…` / `+` eylemleri hover'da veya klavye odağında görünür ama sabit ölçülü alanları her zaman korunur, dolayısıyla hover satır yüksekliğini veya komşu proje aralığını değiştirmez. Görsel olarak gizliyken de erişilebilirlik/focus ağacında kalırlar. Projects panelinin kendisi foldout değildir; yalnız tek tek projeler daraltılır. Sağ tık menüsü fare alışkanlığı için korunur. Arama alanı sürekli yer kaplamak yerine başlıktaki arama düğmesiyle açılır; boş durum ne yapılacağını söyler.
+- **Sınırlar.** Yeni persistence alanı yoktur. Workspace sırası, ajan sırası, silme/oluşturma akışları ve generic shell değişmez.
+
+### 80. Graceful quit Codex thread'lerini kaynak hesabıyla geri açar (2026-09-18)
+
+Orca'nın app-session persistence akışı incelendi: Codex hook payload'ındaki provider-owned `session_id`, terminal/pane ile eşlenir; graceful quit'te sleeping-agent kaydına yazılır ve cold start'ta `codex resume <session-id>` ile tüketilir. `codex resume --last` kullanılmaz — aynı repodaki birden çok terminali yanlış thread'e bağlayabilir. Lumi'nin karar 23 Claude zinciri aynı provider-aware modele genişletildi.
+
+Codex thread kimliği spawn anında uydurulmaz; yalnız doğrulanmış lider hook `session_id`si kabul edilir (`A–Z/a–z/0–9/._:-`, en fazla 512 karakter ve ilk karakter alfanümerik). `agent_id` taşıyan alt ajan hook'ları ana thread kimliğini değiştiremez. Kapanışta `ResumeSession` artık additive `provider` ve Codex için `codexHome` taşır; eski provider'sız kayıtlar Claude olarak okunur. Açılışta kayıt önce diskten boşaltılır, yalnız açık repo tab'larında yeniden spawn edilir. Resume başarısızsa aynı home'da taze `codex` açılır.
+
+Thread rollout'u hesabın `CODEX_HOME`u altında olduğundan kaynak home terminal metadata'sında sabitlenir. Persist edilen yol yalnız hâlâ geçerli system default'a veya config'teki symlink-guard'lı yönetilen hesap home'una eşitse kabul edilir; aksi hâlde seçili güvenilir home kullanılır. Yönetilen home'lara Codex hook grupları kurulur ve path'e bağlı trust kayıtları o home için yeniden üretilir; `agentHooksEnabled` değişince tüm yapılandırılmış yönetilen home'lar aynı anda kurulur ya da temizlenir. Hook kurulumu bootstrap'ın system fazında tamamlanmadan UI restore fazına geçilmez; Codex hesap assembly'si workspace restore'dan önce çalışır.
+
+- **Sınırlar.** `AgentHookEvent.sessionID`, `TerminalMeta.codexSessionID`/`codexHome`, `CodexSessionCommand`, provider-aware `ResumeSessionCodec`, `WorkspaceBootAssembly`, per-spawn terminal environment override'ı ve managed-home hook materialization. Zorla kapanma/crash sırasında checkpoint alınmaz; mevcut karar 23 gibi yalnız uygulamanın normal shutdown zinciri garanti edilir. Hook kapalıysa veya Codex hiç güvenilir `session_id` göndermediyse o terminal için resume kaydı üretilmez.
+
+### 81. Terminal kartı ve Projects ajan satırı aynı etkinlik glifini kullanır (2026-09-18)
+
+Terminal kartı header'ındaki soyut yeşil/sarı `StatusDot`, Projects panelindeki daha açıklayıcı ajan durum diliyle değiştirildi. Her iki yüzey de artık `AgentActivityState(status:isAwaitingDecision:)` → `AgentActivityIcon` zincirini kullanır: çalışan spinner, karar bekleyen zil, turn'ü bitmiş yeşil tik, hata kırmızı çarpı, boşta soluk nokta. Sağdaki Claude/Codex/shell kimlik ikonu ayrı kalır; durum ile sağlayıcı tek ikona kaynaştırılmaz.
+
+`awaitingDecisionIDs` terminal kartına yalnız sarı vurgu için değil, glif eşlemesi için de taşınır. Grid ve maximize yolları aynı veriyi alır. Başlık rengi Projects paneliyle ortak `TerminalAttention.isNeeded` kuralındadır: görülmemiş bitiş ve seçili olmayan karar isteği sarıdır; görülmüş bekleme yeniden bağırmaz. Maximize kartı accent çerçevesini korur ama kural gerektiriyorsa başlık sarı olabilir.
+
+- **Sınırlar.** `TerminalCardHeader`, `TerminalCardView`, `TerminalGridView`, `MaximizedTerminalView` ve `TerminalsRouteView`. Kompakt minimize/switcher `TerminalChipStrip` noktaları değiştirilmedi; `Theme.statusColor` bu yüzey için kalır. Persistence, hook durum makinesi, bildirim ve ajan sıralaması değişmedi.
+
+### 82. Projects ajan seçimi mevcut maximize bağlamını korur (2026-09-18)
+
+Projects panelindeki ajan satırı artık checkout'ta aktif bir maximize/solo görünümü varsa yalnız terminali odaklamakla kalmaz; seçilen terminali aynı maximize yüzeyinin yeni hedefi yapar. Böylece alt switcher'dan terminal seçmekle Projects panelinden terminal seçmek aynı sonucu verir. Seçilen terminal minimize edilmişse önce restore edilir, ardından maximize hedefi değiştirilir.
+
+Checkout grid modundaysa Projects seçimi grid'i kendiliğinden maximize etmez; önceki restore + focus davranışı korunur. Maximize durumu repo başına tutulduğu için başka bir checkout'taki solo görünüm seçilen checkout'u etkilemez.
+
+- **Sınırlar.** Cross-store koordinasyonu `ShellContext.focusAgent` içindedir; `ProjectsPanel` ve `AgentRow` yalnız intent göndermeye devam eder. `LayoutStore` persistence'ı, terminal chip switcher'ı ve minimize davranışı değişmedi. Testler: `ShellContextTests.testFocusAgentSwitchesExistingMaximizedTerminal`, `testFocusAgentRestoresMinimizedTerminalIntoExistingMaximizedView`, `testFocusAgentDoesNotEnterMaximizeWhenCheckoutIsInGridMode`.
+
+### 83. Terminal listesi teşhis izi: unified log + stderr.log (2026-09-19)
+
+Kullanılan build'de iki kez görülen hayalet-terminal bug'ı (Projects/alt bar bir terminali listelemeye devam ediyor, kapatınca `Terminal not found`, yeni terminal karta dönüşmüyor, sonrasında ⌘Q asılıp force quit gerekiyor) 2026-09-18'de canlı süreçte ölçüldü: `heap` 2 `TerminalSession` gösterirken store 3 meta tutuyordu ve store'un olay tüketicisi son ~1 saattir hiçbir `.statusChanged`/`.exited` olayını uygulamamıştı (hook sunucusu ise dakikada onlarca istek almaya devam ediyordu). Kod okuyarak tüketiciyi durduran tek yol quit zinciri bulundu, o da çalışmamıştı (`ui-state.json` yazılmamış, `killAll` olmamış). Kök neden kanıtlanamadı; en güçlü aday, tüketici Task'ının içinde AppKit'in yutup uygulamayı yaşatmaya devam ettiği bir ObjC exception — ve bu rapor bu macOS'ta yalnız stderr'e (`NSLog`) düşüyor, Finder ile açılan bundle'ın stderr'i ise `/dev/null`.
+
+Karar: kök nedeni bir sonraki tekrarda **ölçerek** bulmak için kalıcı, davranışı değiştirmeyen bir teşhis izi eklendi.
+
+- **Unified log** (`subsystem == "com.lumi.app"`, `LumiLog`): `EventConsumer` her tüketicinin başlangıcını, her çıkışını (neden + işlenen olay sayısı) ve `stop()` çağıranını yazar; terminal tüketicisi her olayı uygulanmadan önce `←`, sonra `✓` satırıyla işaretler (yalnız tür + kısa kimlik, payload yok). `EventBroadcaster` abonenin stream'i bıraktığı anı, `TerminalSessionManager` spawn/kill/killAll/exit ve tanınmayan hook kimliğini, `TerminalSession` PTY çıkışını (io queue + main), `TerminalListStore` başarısız `close`'da store↔servis listelerini ve listede olmayan kimliğe odağı, `AppContainer`/`AppDelegate` bootstrap ve quit adımlarını süreleriyle loglar.
+- **stderr.log:** `AppBootstrap` stderr bir TTY değilse (`open`/Finder) `<configDir>/logs/stderr.log`'a `dup2` eder (append; 5 MB üstünde `stderr.1.log`'a döner). Yutulan exception backtrace'leri artık burada birikir. `swift run` gibi TTY'li başlatmalar etkilenmez.
+- **Sınırlar.** Kendini onaran bir eşitleme (store↔servis reconcile) bilerek EKLENMEDİ: sebep bulunmadan semptomu gizlerdi; kök neden bulununca ayrı kararla düşünülür. Log satırları default seviyede ve yalnız kısa kimlik taşır; kullanıcı verisi (başlık, komut, yol içeriği) yazılmaz. Okuma: `/usr/bin/log show --last 2h --predicate 'subsystem == "com.lumi.app"' --style compact` ve `~/.lumi/logs/stderr.log`. Testler: `EventConsumerDiagnosticsTests`.
+
+### 84. Git sorguları depoya ve veri cinsine göre kapılanır (2026-09-19)
+
+Karar 83'ün stderr yönlendirmesi ilk gün bir gürültü kaynağını ortaya çıkardı: `~/.lumi/logs/stderr.log`'un 702 KB'ı ve 16.715 satırının 8.355'i tek bir mesajdı, `[lumi-git] remoteURL başarısız (sessiz): exit 2: error: No such remote 'origin'`. Kaynağı, remote'u hiç tanımlanmamış bir depoda (`photos-to-mem`) çalışan ajanın her dosya yazımıydı.
+
+İki ayrı kusur birleşiyordu:
+
+- **"Origin yok" arıza sayılıyordu.** `git remote get-url origin`, remote tanımsızsa exit 2 ile cevap verir; bu sorunun geçerli cevabıdır, bir arıza değil. `remoteURL` bunu genel `logQuietFailure` kaydedicisine veriyordu; o da yalnız `not a git repository` metnini beklenen sayıp geri kalan her şeyi yazıyordu. Metin eşleştirmesine yeni bir dize eklemek yerine sorgunun kendisi düzeltildi: git koştuysa sıfırdan farklı çıkış "remote yok" demektir ve sessizdir, log yalnız süreç HİÇ koşamadığında (launch hatası / timeout) kalır. Bu, `branchSummary`'nin upstream yokluğunu sessizce "yayınlanmamış" sayması ile aynı kalıptır.
+- **Yapılandırma, çalışma durumu gibi yoklanıyordu.** Dal, durum ve geçmiş her dosya yazımında gerçekten değişir; `origin` adresi değişmez. `GitStore` artık remote'u repo başına bir kez sorar (olumsuz cevap dahil), dosya izleyicisi tik'i `rescanRemote: false` ile geçer, `evict` işareti düşürür ve manuel yenileme / uyandırma / commit sonrası taze sorar. Aynı fonksiyondaki `gh` yoklaması zaten böyle çalışıyordu. Bedeli: terminalden eklenen bir remote, GitHub eylemlerine yenile butonuna basılana (ya da sekme yeniden açılana) kadar yansımaz.
+
+Ayrıca git olmayan projede git taburunun tamamı (dal + durum + özet + geçmiş + dal başına commit listesi) her dosya değişiminde boşuna koşuyordu; her komut exit 128 ile sessizce düşüyor ama süreç yine de açılıyordu. Explorer'ın yenile butonu `capabilities.isGitRepo` kapısını zaten kullanıyordu, izleyici köprüsü ile aktif repo köprüsü kullanmıyordu; ikisi de artık kullanıyor. Yetenek bilgisi her iki çağrı yerinde de hemen önceki `loadFileTree` içinde tazelendiğinden `git init` bir sonraki dosya değişiminde kendiliğinden yakalanır.
+
+- **Sınırlar.** `GitService.remoteURL`, `GitCommandRunner.logQuietFailure` (git'in satır sonu kırpılır; kırpılmadığı için her kayıt iki satır oluyordu), `GitStore` (`probedRemoteRepos`, `loadAll`/`loadHistory`/`refresh` üzerinde additive `rescanRemote` parametresi, `evict`) ve `RepoFeatureAssembly`'nin iki köprüsü. Görünmeyen panel için veri yüklememe fikri (Source Control sekmesi kapalıyken geçmiş + dal başına commit listesi) ÖLÇÜLMEDİ ve kapsam dışıdır; ölçülen 11 git sürecinin ancak 1'i bu kararla düşer, asıl kaldıraç oradadır. Testler: `GitServiceTests.testRemoteURLIsNilWhenOriginIsNotConfigured`, `testRemoteURLReturnsConfiguredOrigin`, `GitStoreTests`'in dört karar 84 testi, `RepoFeatureAssemblyGitGateTests`.
+
+### 85. Kullanım rengi mutlak yüzdeyi değil tempo çizgisine olan mesafeyi gösterir (2026-09-19)
+
+Kullanıcı isteği: "pace marker'dan geride kaldıkça buz mavisi olsun, pace marker'dan uzaklaştıkça critical seviyesine ulaşsın; marker yakınlarında da normal rengi (yeşil) olsun."
+
+Karar 74 tempo çizgisini getirdi ama renk sistemine dokunmadı: dolgu hâlâ MUTLAK yüzdeye göre (%50 sarı / %80 kırmızı) boyanıyordu. Yani göstergede iki eksen vardı ve ikisi birbirinden habersizdi — çizgi "geride kaldın" derken dolgu sarı olabiliyordu. Üstelik fark yalnız tooltip metnindeydi; topbar'a bar sığmadığı için tempo sinyali oraya HİÇ ulaşmıyordu.
+
+Karar: rengin kaynağı `percentUsed` değil, dolgunun tempo çizgisine olan MESAFESİDİR (`UsagePace.deltaPoints` = harcanan yüzde − pencerenin geçen yüzdesi). Rampa süreklidir:
+
+```
+  -1 ───────────── 0 ───────── +0.5 ───────── +1
+  ice (#38BDF8)  success      warning       error
+  geride         tempoda      önde          kritik
+```
+
+- **Tolerans (±5 puan).** Çizginin yakını düz yeşildir. Tempoda giden bir pencerede yüzde ile saat birkaç puan salınır; bant olmasa renk sürekli titrerdi.
+- **Soğuk taraf 25 puan, sıcak taraf 40 puan.** Asimetri bilinçli: geride kalmak haberdir, öne geçmek uyarıdır — uyarı rengine geçmek için daha çok kanıt istenir. Sarı da rampanın UCU değil, sıcak yarının orta durağıdır; kırmızı yalnız uçta durur ki "kritik" seyrek ve inandırıcı kalsın.
+- **Buz mavisi yeni bir palet token'ıdır** (`Theme.ice`, #38BDF8 — palet ailesiyle uyumlu). Yeşille aynı "iyi" ailesindedir ama başka bir şey söyler: yeşil "tempoda", buz mavisi "tempodan yavaş".
+- **Tükenen limit rampayı ezer.** `percentUsed >= 100` ise `toneStop` tavana oturur: pencere neredeyse bittiği için "tempoda" görünen bir kota bitmiş olabilir, ve bitmiş kota sakin renkte gösterilemez.
+- **Çizginin kendisi nötr kalır** (`Theme.textPrimary`). Renk artık ona olan mesafeyi ölçüyor; çizgi referansın kendisidir, renklenirse ölçtüğü şeyle yarışır (ve sarı dolgunun üstünde sarı çizgi kaybolur).
+- **Mutlak bant (`UsageLevel`) YEDEK olarak kalır.** Pencere süresi bilinmeyen satırda (Claude'un tanınmayan limit türü) tempo hesaplanamaz; orada eski %50/%80 bandı çizilir. Tempo uydurulmaz — karar 74'teki veri kapısının aynısı.
+- **Renk tek kanal değildir.** Aynı `UsagePace`'ten üretilen söz (`verdict`: "28 pt under pace") satır tooltip'ine, topbar tooltip'ine ve VoiceOver etiketine girer. Renk ve metin ayrı hesaplanırsa bir gün ayrı şey söylerler.
+- **Topbar da rampadan beslenir.** Kompakt göstergenin yüzdesi artık tempoyu taşır; iki yüzeyin farklı şey söylemesi kabul edilemez, bu yüzden ikisi de tek kapıdan (`UsageTint.color(for:now:)`) geçer.
+
+Katman ayrımı korunur: aritmetik saf ve view'suzdur (`LumiKit/Support/UsagePace.swift`), rampanın renkleri presenter'dadır (`UsagePresentation`), ara ton bir token değil iki token arasındaki ölçülmüş konumdur (`Theme.blend`, hex sabitleri `Theme.Hex`).
+
+- **Sınırlar.** `UsagePace`, `Theme.ice`/`Theme.Hex`/`Theme.blend`, `UsagePresentation` (`color`, `verdict`, `summary`, `UsageTint`), `UsageIndicatorView` (`tint`, `helpText`, `accessibilityLabel`) ve `UsageWindowRow` (`percentColor`, `paceHelp`). Çizginin konumu, `UsageWindow`/`UsageSnapshot` biçimi, yenileme aralıkları, cache ve `config.json` değişmedi.
+
+### 86. Bloklayıcı süreç beklemesi cooperative pool'da koşmaz (2026-09-19)
+
+Hayalet-terminal bug'ının (karar 83'te iz bırakılan) kök nedeni bulundu ve bu sefer canlı süreçten ölçüldü. Semptom kayıtta şöyle görünür:
+
+```
+13:31:14  [terminal] exit ACD6AF7A code 1 remaining 1     ← manager yayınladı
+          (…[terminals] ← exited YOK — tüketici olayı hiç almadı)
+13:31:18  [terminal] spawn 3E60EE3B repo=Lumi sessions=2  ← ⌘T PTY'yi açtı
+          (…[terminals] ← spawned YOK — kart doğmadı)
+```
+
+`consumer loop ended` de `stream terminated` de yoktur: döngü ne öldü ne iptal edildi, sadece bir daha hiç koşmadı. `sample` bunun nedenini tek satırda verdi — makinenin 8 çekirdeğine karşılık **cooperative pool'un 8 thread'inin sekizi de** `ProbeSession.shutdown()` → `-[NSConcreteTask waitUntilExit]` içinde kilitliydi. Her Codex kullanım probe'u bir thread'i ömür boyu götürmüştü; pool tükenince Swift concurrency'nin tamamı durur. `AsyncStream.Iterator.next()` nonisolated'dır: `for await` döngüsü MainActor'da olsa da bir sonraki elemanı almak için pool'dan thread ister. Terminal olayları bu yüzden ne uygulanır ne düşer. Uygulamanın geri kalanı yaşıyor gibi görünür, çünkü AppKit'in senkron yolu (tuş → `spawn`, çizim) pool'a uğramaz — ⌘Q'nun asılması da aynı açlığın yüzüdür.
+
+Karar: **bloklayıcı süreç beklemesi cooperative pool'da çalışmaz.**
+
+- **`waitUntilExit()` kullanılmaz.** Foundation çıkış bildirimini çağıran thread'in run loop'una bağlar; pool thread'inde bu bildirim gelmeyebilir ve SIGKILL gönderilmiş olsa bile bekleme dönmez. Yerine `isRunning` yoklaması gelir, `reapGrace` (2 sn) üst sınırıyla. Zombi riski bu sınırın karşılığıdır: reap edilemeyen bir çocuk, donmuş bir uygulamadan iyidir.
+- **Sonlandırma çağıranı bloklamaz.** `shutdownDetached()` işi kendi `DispatchQueue`'suna atar (`com.lumi.codex-probe.shutdown`, concurrent, utility); probe'un `defer`'ı ve `onCancel`'ı bunu çağırır. SIGTERM'i yutan bir app-server'da çağıran artık grace süresi boyunca beklemez.
+- **Kapı iki yerde birden tutulur.** Yalnız süresiz beklemeyi kaldırmak yeterli değildi: sınırlı bir bekleme de (2+2 sn) yeterince eşzamanlı probe'la pool'u geçici olarak boşaltabilir. Sınır + pool dışına taşıma birlikte anlamlıdır.
+
+Karar 55'in "probe'da SIGKILL yedeği" ve karar 68'in "timeout kesin üst sınırdır" kararları bu boşluğu kapatmıyordu: ikisi de *çağıranın* ne kadar bekleyeceğini sınırlıyor, sonlandırmanın *thread'i* ne kadar tutacağını değil.
+
+- **Sınırlar.** `CodexAppServerProbe.swift` (`shutdownDetached`, `reapGrace`, `sleepOnePollInterval`, iki çağrı yeri). Probe protokolü, timeout/cache davranışı, yenileme aralıkları ve `EventBroadcaster`/`EventConsumer` değişmedi — tüketici zaten doğruydu, yakıtı kesilmişti. Test: `CodexAppServerProbeTests.testShutdownDoesNotBlockCallerOnStubbornChild` (SIGTERM'i `trap`'leyen app-server taklidi; iptalden sonra çağıran 1 sn'den kısa sürede döner ve süreç yine de ölür).
+
+### 87. Yol B Faz 1 — stream-json chat lane (2026-09-17)
 
 - Terminal-tek-kaynak ilkesi yalnız terminal oturumları (`SessionKind.terminal`) için geçerlidir. Chat oturumları (`SessionKind.chat`) `claude --input-format stream-json --output-format stream-json` pipe child'ı çalıştırır; ayrı `ChatSessionMeta` ile izlenir ve geçmiş Claude'un normal transcript dosyasında kalıcıdır (karar 9 formatı değişmez).
 - **Faz 1 headless veri çekirdeği:** `StreamJsonEvent` (satır çözümleyici) + `ChatJournal`/`ChatJournalState` (reducer + anlık görüntü) + `StreamingProcessSpawning`/`LiveStreamingProcess` (pipe child süreci) + `StreamJsonAgentSession` aktörü (yaşam döngüsü + stdin gönderimi + `AsyncStream<ChatJournalState>` yayını). UI entegrasyonu Faz 2/3'tedir.
@@ -774,7 +891,7 @@ Durum noktası (`StatusDot`) ve ajan glifi (`AgentActivityIcon`) değişmedi: no
 - **DI:** `StreamJsonAgentSession.init` canlı default'lar taşır (`spawner: LiveStreamingProcess()`, `binaryLocator: SystemBinaryLocator()`); testler her zamanki gibi `FakeStreamingProcess`/`FakeBinaryLocator` enjekte eder. `ServiceRegistry`'e yeni slot eklenmez — Faz 2 tüketim noktasında doğrudan default'lu init kullanır.
 - **Mimari yeri:** `docs/design/00-architecture.md §5 "Chat lane (stream-json)"` bağlayıcı referans oldu.
 
-### 79. macOS-başlatılan Claude terminalleri telefonda chat view'de görünür (2026-09-20)
+### 88. macOS-başlatılan Claude terminalleri telefonda chat view'de görünür (2026-09-20)
 
 Faz 2'nin "terminal oturumları mirror-only" kararı Claude provider terminalleri için geri çevrildi. Bash/Codex/shell terminal'lar değişmez.
 
@@ -783,10 +900,10 @@ Faz 2'nin "terminal oturumları mirror-only" kararı Claude provider terminaller
 - **`handleChatSend`:** `chatSessions.list()`'te id yoksa (stream-json oturumu değil) ve terminal ID ise `terminal.write(id:text+"\r")` ile PTY'ye yazar — `send_text` gibi davranır.
 - **Veri kaynağı:** Canlı token-token yerine transcript-tail (`TranscriptChatSource`) — macOS-başlatılan terminal claude'da tek mevcut kaynak. Phone-başlatılan stream-json chat aynen kalır.
 
-### 80. Telefon-başlatılan chat de Mac'te claude terminali olarak açılır (2026-09-20)
+### 89. Telefon-başlatılan chat de Mac'te claude terminali olarak açılır (2026-09-20)
 
-Faz 2'nin "telefon chat = başsız stream-json alt-süreci" kararı (karar 54/78) telefon-başlatılan oturumlar için geri çevrildi: telefondan sıfırdan chat başlatınca Mac'te başsız bir stream-json child açılıyordu ve masaüstü arayüzünde HİÇBİR şey (kart/görünüm) belirmediği için Mac'ten takip edilemiyordu (`ChatSessionServicing`'i tüketen tek yer remote katmanıydı; LumiUI/LumiState onu gözlemiyordu). Kullanıcı tercihi: masaüstünde takip edilebilirlik > telefonda token-token akış.
+Faz 2'nin "telefon chat = başsız stream-json alt-süreci" kararı (karar 54/87) telefon-başlatılan oturumlar için geri çevrildi: telefondan sıfırdan chat başlatınca Mac'te başsız bir stream-json child açılıyordu ve masaüstü arayüzünde HİÇBİR şey (kart/görünüm) belirmediği için Mac'ten takip edilemiyordu (`ChatSessionServicing`'i tüketen tek yer remote katmanıydı; LumiUI/LumiState onu gözlemiyordu). Kullanıcı tercihi: masaüstünde takip edilebilirlik > telefonda token-token akış.
 
-- **`RemoteCommandHandler.startSession` (`kind == "chat"`):** Artık `chatSessions.create/send` DEĞİL, `terminal.spawn(repoPath:command: "claude"/"claude <prompt>")` çağrılır. Böylece oturum masaüstü grid'inde bir kart olarak görünür (terminal store `.spawned` event'ini gözler) ve telefon onu **karar 79** makinesiyle (transcript-tail) izler — Mac-başlatılan claude terminalleriyle tam simetri. `branchMode != current` workspace/worktree oluşturma dalı korunur; spawn o path'te olur. Dönen `sessionId` = spawn edilen terminalin id'sidir (telefon `subscribeChat` için).
-- **Bedel:** Telefon-başlatılan chat de artık stream-json token-token yerine transcript-tail'dir (Mac-başlatılan zaten öyleydi → tutarlılık). Karar 54/78'in stream-json altyapısı (`StreamJsonAgentSession`/`ChatSessionService`) yerinde ama telefon-başlatılan yol için ARTIK ÇAĞRILMIYOR (dormant; `delete_session`'ın `chatSessions.list()` guard'ı savunma amaçlı kalır). İleride tümüyle sökülebilir.
+- **`RemoteCommandHandler.startSession` (`kind == "chat"`):** Artık `chatSessions.create/send` DEĞİL, `terminal.spawn(repoPath:command: "claude"/"claude <prompt>")` çağrılır. Böylece oturum masaüstü grid'inde bir kart olarak görünür (terminal store `.spawned` event'ini gözler) ve telefon onu **karar 88** makinesiyle (transcript-tail) izler — Mac-başlatılan claude terminalleriyle tam simetri. `branchMode != current` workspace/worktree oluşturma dalı korunur; spawn o path'te olur. Dönen `sessionId` = spawn edilen terminalin id'sidir (telefon `subscribeChat` için).
+- **Bedel:** Telefon-başlatılan chat de artık stream-json token-token yerine transcript-tail'dir (Mac-başlatılan zaten öyleydi → tutarlılık). Karar 54/87'in stream-json altyapısı (`StreamJsonAgentSession`/`ChatSessionService`) yerinde ama telefon-başlatılan yol için ARTIK ÇAĞRILMIYOR (dormant; `delete_session`'ın `chatSessions.list()` guard'ı savunma amaçlı kalır). İleride tümüyle sökülebilir.
 - **iOS/relay değişmez:** Telefon zaten dönen `sessionId`'yi `chatSessionIds`'e ekleyip `submitText`'i `chat_send`'e yönlendiriyor ve `subscribeChat` çağırıyor; hepsi terminal-tabanlı chat ile çalışır.

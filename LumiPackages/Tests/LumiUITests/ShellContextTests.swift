@@ -162,6 +162,42 @@ final class ShellContextTests: XCTestCase {
         XCTAssertEqual(shell.terminals.activeTerminalID, meta.id)
     }
 
+    func testFocusAgentSwitchesExistingMaximizedTerminal() async throws {
+        shell.navigation.openTab("/r/alpha")
+        let first = try await fixture.spawnTerminal(named: "first", in: "/r/alpha")
+        let selected = try await fixture.spawnTerminal(named: "selected", in: "/r/alpha")
+        XCTAssertTrue(shell.layout.maximize(first.id, in: "/r/alpha"))
+
+        shell.focusAgent(selected)
+
+        XCTAssertEqual(shell.layout.maximizedTerminal(in: "/r/alpha"), selected.id)
+        XCTAssertEqual(shell.terminals.activeTerminalID, selected.id)
+    }
+
+    func testFocusAgentRestoresMinimizedTerminalIntoExistingMaximizedView() async throws {
+        shell.navigation.openTab("/r/alpha")
+        let first = try await fixture.spawnTerminal(named: "first", in: "/r/alpha")
+        let selected = try await fixture.spawnTerminal(named: "selected", in: "/r/alpha")
+        shell.terminals.minimize(selected.id)
+        XCTAssertTrue(shell.layout.maximize(first.id, in: "/r/alpha"))
+
+        shell.focusAgent(selected)
+
+        XCTAssertFalse(shell.terminals.isMinimized(selected.id))
+        XCTAssertEqual(shell.layout.maximizedTerminal(in: "/r/alpha"), selected.id)
+        XCTAssertEqual(shell.terminals.activeTerminalID, selected.id)
+    }
+
+    func testFocusAgentDoesNotEnterMaximizeWhenCheckoutIsInGridMode() async throws {
+        shell.navigation.openTab("/r/alpha")
+        let selected = try await fixture.spawnTerminal(named: "selected", in: "/r/alpha")
+
+        shell.focusAgent(selected)
+
+        XCTAssertNil(shell.layout.maximizedTerminal(in: "/r/alpha"))
+        XCTAssertEqual(shell.terminals.activeTerminalID, selected.id)
+    }
+
     // MARK: - Close-tab guard'ı (navigation sorar, dialogs sunar)
 
     func testCloseTabWithoutMinimizedTerminalsClosesImmediately() {
@@ -272,6 +308,7 @@ final class ShellContextTests: XCTestCase {
             deepSeek: context.deepSeek,
             deepSeekBalance: context.deepSeekBalance,
             claudeAccounts: context.claudeAccounts,
+            codexAccounts: context.codexAccounts,
             terminalLinks: context.terminalLinks,
             computerAwake: context.computerAwake,
             resourceUsage: context.resourceUsage,

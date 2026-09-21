@@ -2,6 +2,10 @@ import AppKit
 import Foundation
 import LumiKit
 import SwiftTerm
+import os
+
+/// Teşhis izi (karar 83); io queue'dan da yazılabilsin diye dosya düzeyinde.
+private let sessionLogger = LumiLog.logger("terminal")
 
 @MainActor
 protocol TerminalSessionDelegate: AnyObject {
@@ -56,7 +60,10 @@ final class TerminalSession {
         name: String,
         task: String?,
         claudeSessionID: String? = nil,
+        codexSessionID: String? = nil,
+        codexHome: String? = nil,
         provider: AgentProvider? = nil,
+        environment: [String: String] = [:],
         hookEndpoint: AgentHookEndpoint? = nil,
         font: NSFont,
         ptySpawner: any PTYSpawning = SystemPTYSpawner(),
@@ -72,6 +79,8 @@ final class TerminalSession {
             createdAt: Date(),
             task: task,
             claudeSessionID: claudeSessionID,
+            codexSessionID: codexSessionID,
+            codexHome: codexHome,
             provider: provider
         )
 
@@ -83,7 +92,9 @@ final class TerminalSession {
             executable: ShellResolver.defaultShell(),
             args: ["-l"],
             cwd: repoPath,
-            env: TerminalEnvironment.childEnvironment(hookEndpoint: hookEndpoint, terminalID: id),
+            env: TerminalEnvironment.childEnvironment(
+                overrides: environment, hookEndpoint: hookEndpoint, terminalID: id
+            ),
             cols: Self.initialCols,
             rows: Self.initialRows,
             queue: queue
@@ -142,9 +153,11 @@ final class TerminalSession {
     }
 
     private func wirePTY() {
+        let sessionID = id
         pty.onExit = { [weak self, pipeline] code in
             // io queue: önce timer iptal + kalan buffer flush,
             // sonra main'e exit bildirimi — main FIFO teslim sırasını korur
+            sessionLogger.log("pty exit \(LumiLog.short(sessionID), privacy: .public) code \(code) (io queue)")
             pipeline.prepareForExit()
             hopToMain { self?.handleExit(code: code) }
         }
@@ -201,6 +214,7 @@ final class TerminalSession {
     private func handleExit(code: Int32) {
         guard !isTerminated else { return }
         isTerminated = true
+        sessionLogger.log("handleExit \(LumiLog.short(self.id), privacy: .public) code \(code) delegate=\(self.delegate != nil)")
         pendingResize?.cancel()
         launchGate?.cancel()
         launchGate = nil
@@ -241,9 +255,17 @@ final class TerminalSession {
     /// aynı serial io queue'da uygulanır — OSC ve hook birbirini yarıştırmaz.
     func applyHookEvent(_ event: AgentHookEvent) {
         guard !isTerminated else { return }
-        ioQueue.async { [pipeline] in
+        ioQueue.async { [weak self, pipeline] in
             pipeline.processHookEvent(event)
+            guard event.provider == .codex, event.isLead,
+                  let sessionID = event.sessionID else { return }
+            hopToMain { self?.applyCodexSessionID(sessionID) }
         }
+    }
+
+    private func applyCodexSessionID(_ sessionID: String) {
+        guard !isTerminated, meta.codexSessionID != sessionID else { return }
+        meta.codexSessionID = sessionID
     }
 
     // MARK: - Remote mirror
@@ -370,6 +392,7 @@ final class TerminalSession {
     var processID: Int32? { isTerminated ? nil : pty.processID }
 
     func terminate() {
+        sessionLogger.log("terminate \(LumiLog.short(self.id), privacy: .public) pid \(self.pty.processID.map(String.init) ?? "nil", privacy: .public)")
         pty.terminate()
     }
 

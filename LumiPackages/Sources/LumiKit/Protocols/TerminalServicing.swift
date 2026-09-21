@@ -12,6 +12,15 @@ public protocol TerminalSessionControlling: AnyObject, Sendable {
     /// Yeni login-shell PTY oturumu açar; `command` verilirse shell'e yazılır (PTY argv'si değil).
     @discardableResult
     func spawn(repoPath: String, task: String?, command: String?) throws -> TerminalMeta
+    /// Opens a session with per-spawn environment overrides. Used by Codex
+    /// cold restore to pin the thread to its original CODEX_HOME.
+    @discardableResult
+    func spawn(
+        repoPath: String,
+        task: String?,
+        command: String?,
+        environment: [String: String]
+    ) throws -> TerminalMeta
 
     func write(id: TerminalID, text: String) throws
     func kill(id: TerminalID) throws
@@ -43,6 +52,8 @@ public protocol TerminalSessionControlling: AnyObject, Sendable {
     /// Karar 45: hook sunucusunun uç noktası. Sonraki spawn'ların PTY env'ine
     /// (`LUMI_AGENT_HOOK_*`) yazılır; `nil` = hook'lar kapalı, env eklenmez.
     func setAgentHookEndpoint(_ endpoint: AgentHookEndpoint?)
+    /// Environment applied only to future sessions of a provider.
+    func setLaunchEnvironment(_ environment: [String: String], for provider: AgentProvider)
     /// Karar 45: sunucudan gelen hook olayını ilgili oturumun durum
     /// makinesine iletir. Tanınmayan terminal kimliği sessizce düşer (kapanmış
     /// terminalin geç gelen hook'u).

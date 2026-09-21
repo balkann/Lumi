@@ -58,6 +58,9 @@ public extension ShellContext {
             claudeAccounts: ClaudeAccountStore(
                 service: PreviewClaudeAccountService(), toasts: shared.toasts
             ),
+            codexAccounts: CodexAccountStore(
+                service: PreviewCodexAccountService(), toasts: shared.toasts
+            ),
             terminalLinks: TerminalLinkActionStore(
                 terminals: shared.terminals, repos: repos,
                 workspaces: ProjectWorkspaceStore(
@@ -150,6 +153,16 @@ private final class PreviewTerminalService: TerminalServicing {
 
     @discardableResult
     func spawn(repoPath: String, task: String?, command: String?) throws -> TerminalMeta {
+        try spawn(repoPath: repoPath, task: task, command: command, environment: [:])
+    }
+
+    @discardableResult
+    func spawn(
+        repoPath: String,
+        task: String?,
+        command: String?,
+        environment: [String: String]
+    ) throws -> TerminalMeta {
         let meta = TerminalMeta(
             id: TerminalID(),
             name: "Terminal \(terminals.count + 1)",
@@ -165,6 +178,7 @@ private final class PreviewTerminalService: TerminalServicing {
     func kill(id: TerminalID) throws {}
     func processID(for id: TerminalID) -> Int32? { nil }
     func setAgentHookEndpoint(_ endpoint: AgentHookEndpoint?) {}
+    func setLaunchEnvironment(_ environment: [String: String], for provider: AgentProvider) {}
     func applyAgentHookEvent(_ event: AgentHookEvent) {}
     func killAll() {}
     func resize(id: TerminalID, cols: Int, rows: Int) {}
@@ -219,6 +233,31 @@ private struct PreviewClaudeAccountService: ClaudeAccountServicing {
     func removeAccount(accountID: String) async throws -> ClaudeAccountsSnapshot { Self.snapshot }
     func select(_ selection: ClaudeAccountSelection) async throws -> ClaudeAccountsSnapshot {
         ClaudeAccountsSnapshot(accounts: Self.snapshot.accounts, selection: selection)
+    }
+}
+
+private struct PreviewCodexAccountService: CodexAccountServicing {
+    private static let snapshot = CodexAccountsSnapshot(
+        accounts: [CodexAccount(
+            id: UUID().uuidString, email: "codex@example.com", workspaceName: "Personal",
+            createdAt: .distantPast, updatedAt: .distantPast, lastAuthenticatedAt: .distantPast
+        )],
+        selection: .systemDefault,
+        systemDefaultEmail: "default@example.com"
+    )
+    func accounts() async -> CodexAccountsSnapshot { Self.snapshot }
+    func syncActiveSelection() async {}
+    func syncManagedHooks(enabled: Bool) async {}
+    func addAccount() async throws -> CodexAccountsSnapshot { Self.snapshot }
+    func cancelPendingLogin() async {}
+    func reauthenticate(accountID: String) async throws -> CodexAccountsSnapshot { Self.snapshot }
+    func removeAccount(accountID: String) async throws -> CodexAccountsSnapshot { Self.snapshot }
+    func select(_ selection: CodexAccountSelection) async throws -> CodexAccountsSnapshot {
+        CodexAccountsSnapshot(accounts: Self.snapshot.accounts, selection: selection)
+    }
+    func selectedHome() async -> String { "/Users/preview/.codex" }
+    func resolvedResumeHome(_ persistedHome: String?) async -> String? {
+        persistedHome ?? "/Users/preview/.codex"
     }
 }
 

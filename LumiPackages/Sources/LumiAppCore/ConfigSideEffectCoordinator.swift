@@ -15,7 +15,7 @@ import LumiState
 final class ConfigSideEffectCoordinator {
     private let config: any ConfigServicing
     private var observers: [any ConfigChangeObserving] = []
-    private let consumer = EventConsumer()
+    private let consumer = EventConsumer(label: "config")
 
     init(config: any ConfigServicing) {
         self.config = config

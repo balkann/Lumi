@@ -40,8 +40,27 @@ final class AgentHookInstallerTests: XCTestCase {
     func testSkipsProvidersWhoseHomeIsMissing() async {
         let results = await installer.install()
         XCTAssertEqual(outcome(results, .claude), .skipped(reason: "Claude Code not installed"))
-        XCTAssertEqual(outcome(results, .codex), .skipped(reason: "Codex not installed"))
+        XCTAssertEqual(outcome(results, .codex), .installed)
         XCTAssertFalse(FileManager.default.fileExists(atPath: home.appendingPathComponent(".claude").path), "başkasının dizini yaratılmaz")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: home.appendingPathComponent(".codex").path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: installer.scriptPath(for: .codex)))
+    }
+
+    func testCustomCodexHomeReceivesHooksWithoutCreatingDotCodex() async throws {
+        let customHome = home.appendingPathComponent("custom-codex")
+        try FileManager.default.createDirectory(at: customHome, withIntermediateDirectories: true)
+        installer = AgentHookInstaller(
+            homeDirectory: home,
+            scriptDirectory: home.appendingPathComponent(".lumi/hooks", isDirectory: true),
+            codexDirectory: customHome
+        )
+
+        let results = await installer.install()
+
+        XCTAssertEqual(outcome(results, .codex), .installed)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: customHome.appendingPathComponent("hooks.json").path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: installer.scriptPath(for: .codex)))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: home.appendingPathComponent(".codex").path))
     }
 
     func testInstallWritesScriptsAndSettingsThenBecomesNoOp() async throws {

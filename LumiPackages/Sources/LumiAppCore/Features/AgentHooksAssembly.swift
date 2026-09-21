@@ -1,6 +1,7 @@
 import Foundation
 import LumiKit
 import LumiState
+import os
 
 /// Ajan hook köprüsü (karar 45): loopback sunucuyu açar, uç noktayı terminal
 /// servisine verir (sonraki spawn'ların env'i), Claude/Codex ayar dosyalarına
@@ -11,12 +12,13 @@ import LumiState
 /// yollayamaz ve kart sezgisel yola düşer.
 @MainActor
 final class AgentHooksAssembly: FeatureAssembly {
+    /// Teşhis izi (karar 83).
+    private static let logger = LumiLog.logger("agentHooks")
     let bootstrapPhase = BootstrapPhase.system
 
     private var services: (any ServiceRegistry)!
     private var shared: SharedStores!
     private var ingest: Task<Void, Never>?
-    private var installTask: Task<Void, Never>?
     private(set) var isEnabled = false
 
     func build(services: any ServiceRegistry, shared: SharedStores) {
@@ -65,16 +67,14 @@ final class AgentHooksAssembly: FeatureAssembly {
         }
         isEnabled = true
         startIngest()
-        let installer = services.agentHookInstaller
-        installTask = Task { @MainActor [weak self] in
-            let results = await installer.install()
-            self?.report(results)
-        }
+        // Later UI-phase account sync may mirror Codex hooks into isolated
+        // homes, so installation must finish before bootstrap advances.
+        report(await services.agentHookInstaller.install())
+        await services.codexAccounts.syncManagedHooks(enabled: true)
     }
 
     private func disable(uninstall: Bool) async {
-        installTask?.cancel()
-        installTask = nil
+        Self.logger.log("disable(uninstall: \(uninstall)) enabled=\(self.isEnabled)")
         ingest?.cancel()
         ingest = nil
         guard isEnabled else { return }
@@ -84,17 +84,22 @@ final class AgentHooksAssembly: FeatureAssembly {
         if uninstall {
             let results = await services.agentHookInstaller.uninstall()
             report(results)
+            await services.codexAccounts.syncManagedHooks(enabled: false)
         }
     }
 
     private func startIngest() {
         guard ingest == nil else { return }
         let stream = services.agentHooks.events()
+        Self.logger.log("ingest start")
         ingest = Task { @MainActor [weak self] in
+            var handled = 0
             for await event in stream {
                 guard let self else { return }
                 self.services.terminal.applyAgentHookEvent(event)
+                handled += 1
             }
+            Self.logger.log("ingest loop ended (cancelled: \(Task.isCancelled), handled \(handled))")
         }
     }
 

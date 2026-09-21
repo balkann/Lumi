@@ -22,7 +22,9 @@ public final class FakeTerminalService: TerminalServicing {
     // MARK: Çağrı kaydı
     public private(set) var spawnedMetas: [TerminalMeta] = []
     /// Spawn argümanları — meta komutu taşımadığı için ayrı kaydedilir.
-    public private(set) var spawnCalls: [(repoPath: String, task: String?, command: String?)] = []
+    public private(set) var spawnCalls: [(
+        repoPath: String, task: String?, command: String?, environment: [String: String]
+    )] = []
     public private(set) var spawnAttempts = 0
     public private(set) var killedIDs: [TerminalID] = []
     public private(set) var killAllCount = 0
@@ -70,6 +72,16 @@ public final class FakeTerminalService: TerminalServicing {
 
     @discardableResult
     public func spawn(repoPath: String, task: String?, command: String?) throws -> TerminalMeta {
+        try spawn(repoPath: repoPath, task: task, command: command, environment: [:])
+    }
+
+    @discardableResult
+    public func spawn(
+        repoPath: String,
+        task: String?,
+        command: String?,
+        environment: [String: String]
+    ) throws -> TerminalMeta {
         spawnAttempts += 1
         if failSpawns { throw LumiError.spawnFailed(reason: "fake") }
         let meta = TerminalMeta(
@@ -81,7 +93,7 @@ public final class FakeTerminalService: TerminalServicing {
             claudeSessionID: UUID().uuidString
         )
         spawnedMetas.append(meta)
-        spawnCalls.append((repoPath, task, command))
+        spawnCalls.append((repoPath, task, command, environment))
         broadcaster.send(.spawned(meta))
         return meta
     }
@@ -107,6 +119,12 @@ public final class FakeTerminalService: TerminalServicing {
 
     public func setAgentHookEndpoint(_ endpoint: AgentHookEndpoint?) {
         hookEndpoints.append(endpoint)
+    }
+
+    public private(set) var launchEnvironments: [AgentProvider: [String: String]] = [:]
+
+    public func setLaunchEnvironment(_ environment: [String: String], for provider: AgentProvider) {
+        launchEnvironments[provider] = environment
     }
 
     public func applyAgentHookEvent(_ event: AgentHookEvent) {

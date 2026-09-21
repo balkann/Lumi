@@ -10,6 +10,9 @@ import XCTest
 final class CodexAppServerProbeTests: XCTestCase {
     private var scriptURL: URL!
     private var pidFile: URL!
+    /// SIGTERM'i yutan app-server taklidi (karar 86 regresyonu).
+    private var stubbornScriptURL: URL!
+    private var stubbornPidFile: URL!
 
     override func setUpWithError() throws {
         try super.setUpWithError()
@@ -25,6 +28,18 @@ final class CodexAppServerProbeTests: XCTestCase {
         """.write(to: scriptURL, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes(
             [.posixPermissions: 0o755], ofItemAtPath: scriptURL.path
+        )
+
+        stubbornScriptURL = base.appendingPathComponent("stubborn-app-server.sh")
+        stubbornPidFile = base.appendingPathComponent("stubborn-pid")
+        try """
+        #!/bin/sh
+        trap '' TERM
+        echo $$ > \(stubbornPidFile.path)
+        while :; do sleep 0.2; done
+        """.write(to: stubbornScriptURL, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o755], ofItemAtPath: stubbornScriptURL.path
         )
     }
 
@@ -77,7 +92,32 @@ final class CodexAppServerProbeTests: XCTestCase {
         XCTAssertTrue(exited, "timeout'ta app-server süreci öldürülmedi (pid \(pid))")
     }
 
-    /// `shutdown()` başlatılamamış süreçte `waitUntilExit()` çağırmamalı.
+    /// Karar 86: sonlandırma bloklayıcıdır ve çağıranın thread'ini TUTMAMALI.
+    /// Probe'lar Swift concurrency'nin cooperative pool'unda koşar; orada
+    /// bloke olan her sonlandırma pool'dan bir thread düşürür ve çekirdek
+    /// sayısı kadar sızıntı uygulamanın tüm async dünyasını durdurur.
+    func testShutdownDoesNotBlockCallerOnStubbornChild() async throws {
+        let script = stubbornScriptURL.path
+        let task = Task {
+            try await CodexAppServerProbe.requestResponseLine(
+                binary: script, method: "account/rateLimits/read", timeout: 30
+            )
+        }
+        let pid = try await waitForPid(in: stubbornPidFile)
+
+        task.cancel()
+        let start = Date()
+        _ = try? await task.value
+        XCTAssertLessThan(
+            Date().timeIntervalSince(start), 1,
+            "SIGTERM'i yutan süreçte çağıran, sonlandırma beklemesi boyunca bloke oldu"
+        )
+
+        let exited = await waitForExit(pid, timeout: 8)
+        XCTAssertTrue(exited, "SIGTERM'i yutan süreç SIGKILL ile öldürülmedi (pid \(pid))")
+    }
+
+    /// `shutdown()` başlatılamamış süreçte `terminate()` çağırmamalı.
     func testLaunchFailureReportsLaunchFailed() async throws {
         do {
             _ = try await CodexAppServerProbe.requestResponseLine(
@@ -91,10 +131,14 @@ final class CodexAppServerProbeTests: XCTestCase {
 
     // MARK: - Yardımcılar
 
-    private func waitForPid(timeout: TimeInterval = 5) async throws -> pid_t {
+    private func waitForPid(
+        in file: URL? = nil,
+        timeout: TimeInterval = 5
+    ) async throws -> pid_t {
+        let file = file ?? pidFile!
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
-            if let raw = try? String(contentsOf: pidFile, encoding: .utf8),
+            if let raw = try? String(contentsOf: file, encoding: .utf8),
                let pid = pid_t(raw.trimmingCharacters(in: .whitespacesAndNewlines)) {
                 return pid
             }

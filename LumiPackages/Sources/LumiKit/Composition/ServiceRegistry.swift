@@ -30,6 +30,8 @@ public protocol ServiceRegistry: AnyObject {
     var deepSeekBalance: any DeepSeekBalanceServicing { get }
     /// Claude hesap yönetimi (karar 56).
     var claudeAccounts: any ClaudeAccountServicing { get }
+    /// Codex accounts stored as isolated CODEX_HOME directories.
+    var codexAccounts: any CodexAccountServicing { get }
 
     /// Oturum kontrolü + görünüm ayarı (ISP: `TerminalServicing` bileşimi).
     /// Somut `TerminalSessionManager` bu yüzeyin ARDINDA kalır.

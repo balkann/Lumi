@@ -28,6 +28,7 @@ public extension OverlayID {
     static let deleteAgentSessionDialog = OverlayID("deleteAgentSessionDialog")
     /// Karar 56: Claude hesabı silme onayı (geri alınamaz).
     static let removeClaudeAccountDialog = OverlayID("removeClaudeAccountDialog")
+    static let removeCodexAccountDialog = OverlayID("removeCodexAccountDialog")
     /// Karar 57: terminalde tıklanan link/path için eylem popover'ı.
     static let terminalLinkActions = OverlayID("terminalLinkActions")
 }

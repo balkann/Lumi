@@ -149,6 +149,11 @@ final class FakeTerminalServicing: TerminalServicing {
         return meta
     }
 
+    func spawn(repoPath: String, task: String?, command: String?,
+               environment: [String: String]) throws -> TerminalMeta {
+        try spawn(repoPath: repoPath, task: task, command: command)
+    }
+
     func write(id: TerminalID, text: String) throws {
         writes.append((id, text))
         for c in inputContinuations { c.yield(()) }
@@ -167,6 +172,7 @@ final class FakeTerminalServicing: TerminalServicing {
     func setSurfaceState(_ state: TerminalSurfaceState, for id: TerminalID) {}
     func setSurfaceState(_ state: TerminalSurfaceState, in sessionID: String?) {}
     func setAgentHookEndpoint(_ endpoint: AgentHookEndpoint?) {}
+    func setLaunchEnvironment(_ environment: [String: String], for provider: AgentProvider) {}
     func applyAgentHookEvent(_ event: AgentHookEvent) {}
     func shutdown() {}
     func applyFont(_ font: NSFont) {}

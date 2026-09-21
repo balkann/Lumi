@@ -12,19 +12,22 @@ import SwiftUI
 /// VoiceOver için erişilemezdi.
 public struct UsageIndicatorView: View {
     private let store: UsageStore
-    /// Claude hesap değiştirici (karar 56). Yalnız Claude göstergesine
-    /// verilir; nil ise popover eski hâliyle çizilir.
+    /// Sağlayıcının hesap değiştiricisi. İlgili store nil ise popover
+    /// hesap bölümü olmadan çizilir.
     private let accounts: ClaudeAccountStore?
+    private let codexAccounts: CodexAccountStore?
     private let openAccountSettings: (() -> Void)?
     @State private var isPresented = false
 
     public init(
         store: UsageStore,
         accounts: ClaudeAccountStore? = nil,
+        codexAccounts: CodexAccountStore? = nil,
         openAccountSettings: (() -> Void)? = nil
     ) {
         self.store = store
         self.accounts = accounts
+        self.codexAccounts = codexAccounts
         self.openAccountSettings = openAccountSettings
     }
 
@@ -37,6 +40,7 @@ public struct UsageIndicatorView: View {
                 UsagePopover(
                     store: store,
                     accounts: accounts,
+                    codexAccounts: codexAccounts,
                     openAccountSettings: openAccountSettings.map { open in
                         { isPresented = false; open() }
                     }
@@ -74,8 +78,18 @@ public struct UsageIndicatorView: View {
     /// planlarında bu haftalık limittir, "%N" tek başına yanıltıcı olurdu.
     private var helpText: String {
         let base = "\(store.provider.displayName) usage"
-        guard let title = store.indicatorLimit?.displayTitle else { return base }
-        return "\(base) — \(title)"
+        guard let limit = store.indicatorLimit else { return base }
+        let named = "\(base) — \(limit.displayTitle)"
+        // Renk tempoyu söylüyorsa sözü de burada olmalı: mavi bir yüzdenin
+        // neden mavi olduğu tooltip'ten okunabilmeli.
+        guard let pace = pace else { return named }
+        return "\(named) · \(pace.verdict)"
+    }
+
+    /// Gösterge penceresinin temposu; süre bilinmiyorsa nil.
+    private var pace: UsagePace? {
+        guard let window = store.indicatorLimit?.window else { return nil }
+        return UsagePace(percentUsed: window.percentUsed, elapsedFraction: window.elapsedFraction())
     }
 
     private var accessibilityLabel: String {
@@ -83,12 +97,17 @@ public struct UsageIndicatorView: View {
             return "\(store.provider.displayName) usage, unavailable"
         }
         let window = store.indicatorLimit?.displayTitle ?? "usage"
-        return "\(store.provider.displayName) \(window), \(percent) percent"
+        let base = "\(store.provider.displayName) \(window), \(percent) percent"
+        guard let pace = pace else { return base }
+        return "\(base), \(pace.verdict)"
     }
 
+    /// Rengin kaynağı tempodur (karar 85): topbar'a bar sığmadığı için "saatten
+    /// hızlı mı tüketiyorum" sorusunun tek taşıyıcısı bu renktir.
     private var tint: Color {
-        guard let percent = store.indicatorPercent else { return Theme.textSecondary }
-        return UsageLevel(percent: percent).color
+        guard let window = store.indicatorLimit?.window,
+              let color = UsageTint.color(for: window) else { return Theme.textSecondary }
+        return color
     }
 }
 
@@ -96,6 +115,7 @@ public struct UsageIndicatorView: View {
 private struct UsagePopover: View {
     let store: UsageStore
     var accounts: ClaudeAccountStore?
+    var codexAccounts: CodexAccountStore?
     var openAccountSettings: (() -> Void)?
 
     /// Popover'ın sabit genişliği ve iç kenar payı; ikisi de ölçek dışı ara
@@ -204,6 +224,13 @@ private struct UsagePopover: View {
                     .padding(.horizontal, Metrics.inset)
                     .padding(.bottom, Metrics.rowInset)
             }
+        } else if let codexAccounts {
+            VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+                Rectangle().fill(Theme.border).frame(height: Theme.Stroke.hairline)
+                CodexAccountSwitcher(store: codexAccounts, openSettings: openAccountSettings)
+                    .padding(.horizontal, Metrics.inset)
+                    .padding(.bottom, Metrics.rowInset)
+            }
         }
     }
 
@@ -271,6 +298,11 @@ struct UsageWindowRow: View {
                     // Dolgunun ÜSTÜNDE durur: çizginin solunda kalan dolgu
                     // "planın önündeyiz", sağına taşan dolgu "limiti saatten
                     // hızlı tüketiyoruz" demektir (karar 74).
+                    //
+                    // Çizgi NÖTR kalır (karar 85): dolgunun rengi artık ona olan
+                    // mesafeyi ölçüyor, yani çizgi referansın kendisidir —
+                    // renklenirse ölçtüğü şeyle yarışır ve sarı dolgunun
+                    // üstünde sarı çizgi kaybolur.
                     RoundedRectangle(cornerRadius: Theme.Radius.sm)
                         .fill(Theme.textPrimary)
                         .frame(width: Self.paceMarkerWidth)
@@ -304,25 +336,25 @@ struct UsageWindowRow: View {
     /// Çizginin ne anlama geldiğini söyleyen tooltip; yüzde ile tempo farkı
     /// puan cinsindendir (ikisi de 0–100 ölçeğinde).
     var paceHelp: String? {
-        guard let pace = paceFraction else { return nil }
-        let elapsed = Int((pace * 100).rounded())
-        guard let percent = window.percentUsed else { return "Window \(elapsed)% elapsed" }
-        let delta = percent - elapsed
-        let verdict: String
-        switch delta {
-        case 0: verdict = "on pace"
-        case ..<0: verdict = "\(-delta) pt under pace"
-        default: verdict = "\(delta) pt over pace"
-        }
-        return "Window \(elapsed)% elapsed · \(verdict)"
+        guard let elapsed = paceFraction else { return nil }
+        // Tooltip ile RENK aynı `UsagePace`'ten gelir (karar 85): ikisi
+        // ayrı hesaplanırsa bir gün ayrı şey söylerler.
+        if let pace = usagePace { return pace.summary }
+        return "Window \(Int((elapsed * 100).rounded()))% elapsed"
+    }
+
+    /// Satırın temposu — rengin ve tooltip'in ortak kaynağı.
+    var usagePace: UsagePace? {
+        UsagePace(percentUsed: window.percentUsed, elapsedFraction: window.elapsedFraction(now: now))
     }
 
     private var percentText: String {
         window.percentUsed.map { "\($0)%" } ?? "—"
     }
 
-    private var percentColor: Color {
-        window.percentUsed.map { UsageLevel(percent: $0).color } ?? Theme.textMuted
+    /// internal: rampanın satırdaki karşılığı birim testten görünür olsun diye.
+    var percentColor: Color {
+        UsageTint.color(for: window, now: now) ?? Theme.textMuted
     }
 
     private var resetText: String {

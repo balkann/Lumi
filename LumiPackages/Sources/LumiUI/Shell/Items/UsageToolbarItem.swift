@@ -24,7 +24,8 @@ public struct UsageToolbarItem: View {
             UsageIndicatorView(
                 store: store,
                 accounts: provider == .claude ? shell.claudeAccounts : nil,
-                openAccountSettings: provider == .claude
+                codexAccounts: provider == .codex ? shell.codexAccounts : nil,
+                openAccountSettings: provider == .claude || provider == .codex
                     ? { shell.dialogs.openSettings(tab: SettingsTab.accounts.rawValue) }
                     : nil
             )

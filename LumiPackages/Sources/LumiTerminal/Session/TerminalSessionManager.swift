@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 import LumiKit
 import SwiftTerm
+import os
 
 /// Terminal alt sisteminin servis yüzü: `TerminalServicing` implementasyonu
 /// (design/01 §7). Sıralı koleksiyon tutar (karar 11); spawn limiti yoktur
@@ -9,12 +10,14 @@ import SwiftTerm
 @MainActor
 public final class TerminalSessionManager: TerminalServicing {
     public let viewRegistry = TerminalViewRegistry()
+    /// Teşhis izi (karar 83).
+    private static let logger = LumiLog.logger("terminal")
 
     /// Sıralı oturum kaydı (karar 11). `private(set)`: dışarıdan yalnız okunur —
     /// testler canlı oturumlara uygulanan görünüm ayarlarını buradan doğrular.
     private(set) var sessions: [TerminalSession] = []
     private var spawnCounter = 0
-    private let broadcaster = EventBroadcaster<TerminalEvent>()
+    private let broadcaster = EventBroadcaster<TerminalEvent>(label: "terminal")
     /// Font (aile + boyut). Yeni spawn'lara uygulanır VE canlı olarak tüm açık
     /// terminallere yansır (SwiftTerm `terminalView.font` setter zinciri resize +
     /// SIGWINCH + redraw üretir — cursorStyle ile aynı canlı-uygulama deseni).
@@ -31,6 +34,7 @@ public final class TerminalSessionManager: TerminalServicing {
     /// Karar 45: hook sunucusunun uç noktası; sonraki spawn'ların PTY env'ine
     /// yazılır. `nil` = hook'lar kapalı.
     private var hookEndpoint: AgentHookEndpoint?
+    private var launchEnvironments: [AgentProvider: [String: String]] = [:]
     /// Terminal alt sisteminin tek uygulama-seviyesi NSEvent monitörü (refactor 4.7):
     /// klavye eşlemesi, kart odağı, tekerlek/hover. Enjekte edilir ki testler gerçek
     /// bir global monitör kurmadan (ya da kurulumu doğrulayarak) koşabilsin.
@@ -87,16 +91,34 @@ public final class TerminalSessionManager: TerminalServicing {
 
     @discardableResult
     public func spawn(repoPath: String, task: String?, command: String?) throws -> TerminalMeta {
+        try spawn(repoPath: repoPath, task: task, command: command, environment: [:])
+    }
+
+    @discardableResult
+    public func spawn(
+        repoPath: String,
+        task: String?,
+        command: String?,
+        environment: [String: String]
+    ) throws -> TerminalMeta {
         spawnCounter += 1
         // Karar 23: claude komutuna --session-id enjeksiyonu (veya mevcut
         // flag'ten çıkarım) — ID meta'da taşınır, quit'te resume için persist edilir.
         let prepared = ClaudeSessionCommand.prepare(command: command)
+        let provider = AgentProvider.detect(launchCommand: prepared.command)
+        var effectiveEnvironment = provider.flatMap { launchEnvironments[$0] } ?? [:]
+        effectiveEnvironment.merge(environment) { _, override in override }
+        let codexSessionID = provider == .codex
+            ? CodexSessionCommand.resumedSessionID(from: prepared.command) : nil
         let session = try TerminalSession(
             repoPath: repoPath,
             name: "Terminal \(spawnCounter)",
             task: task,
             claudeSessionID: prepared.sessionID,
-            provider: AgentProvider.detect(launchCommand: prepared.command),
+            codexSessionID: codexSessionID,
+            codexHome: provider == .codex ? effectiveEnvironment["CODEX_HOME"] : nil,
+            provider: provider,
+            environment: effectiveEnvironment,
             hookEndpoint: hookEndpoint,
             font: font
         )
@@ -112,6 +134,9 @@ public final class TerminalSessionManager: TerminalServicing {
             self?.viewRegistry.invalidateLayout(for: sessionID)
         }
         sessions.append(session)
+        Self.logger.log(
+            "spawn \(LumiLog.short(session.id), privacy: .public) repo=\((repoPath as NSString).lastPathComponent, privacy: .public) command=\(prepared.command != nil) sessions=\(self.sessions.count)"
+        )
         viewRegistry.register(
             view: session.terminalView,
             for: session.id,
@@ -135,12 +160,16 @@ public final class TerminalSessionManager: TerminalServicing {
 
     public func kill(id: TerminalID) throws {
         guard let session = session(for: id) else {
+            let live = sessions.map { LumiLog.short($0.id) }.joined(separator: ",")
+            Self.logger.log("kill \(LumiLog.short(id), privacy: .public): not found; live=[\(live, privacy: .public)]")
             throw LumiError.terminalNotFound(id)
         }
+        Self.logger.log("kill \(LumiLog.short(id), privacy: .public)")
         session.terminate()
     }
 
     public func killAll() {
+        Self.logger.log("killAll \(self.sessions.count)")
         sessions.forEach { $0.terminate() }
     }
 
@@ -149,12 +178,21 @@ public final class TerminalSessionManager: TerminalServicing {
     }
 
     public func setAgentHookEndpoint(_ endpoint: AgentHookEndpoint?) {
+        Self.logger.log("agent hook endpoint \(endpoint == nil ? "cleared" : "set", privacy: .public)")
         hookEndpoint = endpoint
+    }
+
+    public func setLaunchEnvironment(_ environment: [String: String], for provider: AgentProvider) {
+        launchEnvironments[provider] = environment
     }
 
     /// Kapanmış terminalin geç gelen hook'u sessizce düşer.
     public func applyAgentHookEvent(_ event: AgentHookEvent) {
-        session(for: event.terminalID)?.applyHookEvent(event)
+        guard let session = session(for: event.terminalID) else {
+            Self.logger.log("hook for unknown terminal \(LumiLog.short(event.terminalID), privacy: .public)")
+            return
+        }
+        session.applyHookEvent(event)
     }
 
     public func resize(id: TerminalID, cols: Int, rows: Int) {
@@ -209,6 +247,7 @@ public final class TerminalSessionManager: TerminalServicing {
     /// Kapanış simetrisi: tek global event monitörünü bırakır. Idempotent'tir.
     /// (Faz 3'te `StoreLifecycle` ile composition root'a bağlanacak.)
     public func shutdown() {
+        Self.logger.log("shutdown: event monitor stopped (sessions \(self.sessions.count))")
         eventMonitor.stop()
     }
 
@@ -281,6 +320,9 @@ extension TerminalSessionManager: TerminalSessionDelegate {
         // Exit-cleanup sırası: önce kayıttan düş — stale push imkânsızlaşır —
         // sonra exit yayınla
         sessions.removeAll { $0.id == session.id }
+        Self.logger.log(
+            "exit \(LumiLog.short(session.id), privacy: .public) code \(code) remaining \(self.sessions.count)"
+        )
         if focusedID == session.id { focusedID = nil }
         viewRegistry.unregister(session.id)
         broadcaster.send(.exited(session.id, code: code))

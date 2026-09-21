@@ -1,6 +1,7 @@
 import Foundation
 import LumiKit
 import Observation
+import os
 
 /// Terminal listesinin UI-yüzlü metadata store'u (design/03 §4).
 /// Ham çıktı burada ASLA tutulmaz — yalnız TerminalMeta.
@@ -11,6 +12,9 @@ import Observation
 @Observable
 @MainActor
 public final class TerminalListStore: StoreLifecycle {
+    /// Teşhis izi (karar 83).
+    private static let logger = LumiLog.logger("terminals")
+
     public private(set) var terminals: [TerminalMeta] = []
     public private(set) var activeTerminalID: TerminalID?
     public private(set) var minimizedIDs: Set<TerminalID> = []
@@ -43,7 +47,7 @@ public final class TerminalListStore: StoreLifecycle {
     @ObservationIgnored private var userClosedIDs: Set<TerminalID> = []
     @ObservationIgnored private let service: any TerminalSessionControlling
     @ObservationIgnored private let toasts: ToastStore
-    @ObservationIgnored private let consumer = EventConsumer()
+    @ObservationIgnored private let consumer = EventConsumer(label: "terminals")
 
     public init(service: any TerminalSessionControlling, toasts: ToastStore) {
         self.service = service
@@ -61,7 +65,7 @@ public final class TerminalListStore: StoreLifecycle {
     public var isConsuming: Bool { consumer.isRunning }
 
     public func start() {
-        consumer.start(service.events()) { [weak self] event in
+        consumer.start(service.events(), describe: Self.describe) { [weak self] event in
             self?.apply(event)
         }
     }
@@ -104,9 +108,16 @@ public final class TerminalListStore: StoreLifecycle {
 
     // MARK: - Intent'ler
 
-    public func spawn(in repoPath: String, command: String? = nil, task: String? = nil) {
+    public func spawn(
+        in repoPath: String,
+        command: String? = nil,
+        task: String? = nil,
+        environment: [String: String] = [:]
+    ) {
         toasts.reporting {
-            _ = try self.service.spawn(repoPath: repoPath, task: task, command: command)
+            _ = try self.service.spawn(
+                repoPath: repoPath, task: task, command: command, environment: environment
+            )
         }
     }
 
@@ -117,6 +128,10 @@ public final class TerminalListStore: StoreLifecycle {
         }
         if !didKill {
             userClosedIDs.remove(id)
+            // Karar 83: store ile servis ayrışmışsa (hayalet kart) burada görünür.
+            Self.logger.log(
+                "close failed for \(LumiLog.short(id), privacy: .public): store=[\(Self.ids(self.terminals), privacy: .public)] service=[\(Self.ids(self.service.terminals), privacy: .public)] active=\(LumiLog.short(self.activeTerminalID), privacy: .public)"
+            )
         }
     }
 
@@ -135,6 +150,10 @@ public final class TerminalListStore: StoreLifecycle {
             return
         }
         guard !minimizedIDs.contains(id) else { return }
+        if meta(for: id) == nil {
+            // Karar 83: listede olmayan kimliğe odak (bayat bildirim/aktif id şüphesi).
+            Self.logger.log("focus on id not in store: \(LumiLog.short(id), privacy: .public)")
+        }
         activeTerminalID = id
         if let repoPath = meta(for: id)?.repoPath {
             lastActiveByRepo[repoPath] = id
@@ -267,6 +286,40 @@ public final class TerminalListStore: StoreLifecycle {
         focus(visible[next].id)
     }
 
+    // MARK: - Teşhis izi (karar 83)
+
+    nonisolated static func ids(_ metas: [TerminalMeta]) -> String {
+        metas.map { LumiLog.short($0.id) }.joined(separator: ",")
+    }
+
+    /// Log satırı için olayın kısa tarifi: tür + kısa kimlik, payload YOK.
+    nonisolated static func describe(_ event: TerminalEvent) -> String {
+        switch event {
+        case .spawned(let meta):
+            return "spawned \(LumiLog.short(meta.id)) in \((meta.repoPath as NSString).lastPathComponent)"
+        case .exited(let id, let code):
+            return "exited \(LumiLog.short(id)) code \(code)"
+        case .statusChanged(let id, let status):
+            return "status \(LumiLog.short(id)) \(status.rawValue)"
+        case .titleChanged(let id, _):
+            return "title \(LumiLog.short(id))"
+        case .providerChanged(let id, let provider):
+            return "provider \(LumiLog.short(id)) \(provider.map { $0.rawValue } ?? "nil")"
+        case .awaitingDecisionChanged(let id, let awaiting):
+            return "awaitingDecision \(LumiLog.short(id)) \(awaiting)"
+        case .bell(let id):
+            return "bell \(LumiLog.short(id))"
+        case .writeFailed(let id, let errno):
+            return "writeFailed \(LumiLog.short(id)) errno \(errno)"
+        case .stalled(let id, let stalled):
+            return "stalled \(LumiLog.short(id)) \(stalled)"
+        case .viewFocused(let id):
+            return "viewFocused \(LumiLog.short(id))"
+        case .linkActivated(let activation):
+            return "linkActivated \(LumiLog.short(activation.terminalID))"
+        }
+    }
+
     // MARK: - Event uygulama (testler doğrudan sürebilsin diye internal)
 
     /// Karar 57: terminalde link tıklandı. Composition root bunu
@@ -377,7 +430,10 @@ public final class TerminalListStore: StoreLifecycle {
     /// Kapanışta komşu odaklama (Electron paritesi): silmeden ÖNCE hesaplanır;
     /// adaylar aynı repo'nun görünür terminalleridir — odak başka repo'ya atlamaz.
     private func remove(_ id: TerminalID) {
-        guard let index = terminals.firstIndex(where: { $0.id == id }) else { return }
+        guard let index = terminals.firstIndex(where: { $0.id == id }) else {
+            Self.logger.log("remove: \(LumiLog.short(id), privacy: .public) not in store (count \(self.terminals.count))")
+            return
+        }
         let repoPath = terminals[index].repoPath
 
         if activeTerminalID == id {

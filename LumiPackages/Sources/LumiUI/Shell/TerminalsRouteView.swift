@@ -40,10 +40,17 @@ public struct TerminalsRouteView: View {
                 emptyState(repoPath)
             } else if let maximizedID,
                       let maxMeta = visible.first(where: { $0.id == maximizedID }) {
+                let isAwaitingDecision = shell.terminals.awaitingDecisionIDs.contains(maximizedID)
                 MaximizedTerminalView(
                     maximized: maxMeta,
                     others: visible.filter { $0.id != maximizedID },
                     isStalled: shell.terminals.isStalled(maximizedID),
+                    isAwaitingDecision: isAwaitingDecision,
+                    needsAttention: TerminalAttention.isNeeded(
+                        status: maxMeta.status,
+                        isAwaitingDecision: isAwaitingDecision,
+                        isSelected: shell.terminals.activeTerminalID == maximizedID
+                    ),
                     viewProvider: shell.viewProvider,
                     promptQueue: shell.promptQueue,
                     onSwitch: { shell.layout.maximize($0, in: repoPath) },

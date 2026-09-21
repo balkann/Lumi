@@ -21,6 +21,8 @@ public struct LumiPaths: Sendable {
     /// `<id>/auth/` altında yalnız `oauth-account.json` durur; token'lar
     /// Keychain'dedir.
     public var claudeAccountsDir: URL { configDir.appendingPathComponent("claude-accounts") }
+    /// Isolated Codex homes: `<id>/home/auth.json`.
+    public var codexAccountsDir: URL { configDir.appendingPathComponent("codex-accounts") }
 
     public init(
         mode: Mode,

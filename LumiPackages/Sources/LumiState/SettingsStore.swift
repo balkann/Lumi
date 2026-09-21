@@ -12,7 +12,7 @@ public final class SettingsStore: StoreLifecycle {
 
     @ObservationIgnored private let config: any ConfigServicing
     @ObservationIgnored private let toasts: ToastStore
-    @ObservationIgnored private let consumer = EventConsumer()
+    @ObservationIgnored private let consumer = EventConsumer(label: "settings")
     /// Monoton yazım sürümü: geç dönen disk okuması daha yeni bir apply'ı ezmesin.
     @ObservationIgnored private var applyVersion = 0
 
