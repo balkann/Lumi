@@ -98,6 +98,42 @@ import LumiTestSupport
         svc.stop()
     }
 
+    /// Karar 80 regresyonu: taze telefon chat'i `--session-id` ile spawn edilir, yani
+    /// oturumun transcript id'si BİLİNİR (`meta.claudeSessionID`). awaitTranscript bu
+    /// bilinen id'yi kullanmalı; locator'ın max-by-modified sonucunu DEĞİL (o, repodaki
+    /// ESKİ bir oturumu seçip telefonda bayat geçmiş gösteriyordu). Locator yalnız
+    /// harici (id'siz) oturumlar için kalır.
+    @Test func subscribeChatPrefersKnownClaudeSessionIDOverLocator() async throws {
+        let conn = FakeRelayConnection()
+        let term = FakeTerminalServicing()
+
+        var claudeMeta = TerminalMeta(
+            id: TerminalID(), name: "claude", repoPath: "/tmp/r",
+            createdAt: Date(), claudeSessionID: "known-fresh-123")
+        claudeMeta.provider = .claude
+        term.metas.append(claudeMeta)
+        let sid = claudeMeta.id.description
+
+        let msg = ChatMessage(id: "m1", role: .assistant,
+                              blocks: [.text("taze", presentation: nil)], timestampMs: nil, turnId: nil)
+        let chatSrc = FakeChatTranscriptSource(events: [.append([msg])])
+        // Locator ESKİ oturumu döndürür — kullanılmamalı.
+        let locator = FakeTranscriptLocating(returning: "stale-old-999")
+
+        let svc = RemoteService(
+            paths: .testDefaults(), terminal: term, repos: FakeRepoService(),
+            connection: conn, chatSource: chatSrc,
+            hookEvents: { AsyncStream { _ in } }, transcriptLocator: locator)
+        await svc.start()
+        await conn.injectInbound(type: "subscribe", payload: ["sessionId": sid, "mode": "chat"])
+        try await conn.waitForCount(type: "chat_append", atLeast: 1)
+
+        // Bilinen id ile stream edilmeli, locator'ın eski id'siyle DEĞİL.
+        #expect(chatSrc.requested.first?.sessionID == "known-fresh-123")
+        #expect(chatSrc.requested.allSatisfy { $0.sessionID != "stale-old-999" })
+        svc.stop()
+    }
+
     // MARK: - T3a: handleChatSend — terminal PTY'ye yazar (stream-json oturumu yoksa)
 
     /// chat_send gelen id bir stream-json chat oturumuna ait değilse ve terminal ID ise

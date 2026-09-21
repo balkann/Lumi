@@ -465,6 +465,23 @@ public final class RemoteService: RemoteServicing {
     /// Dış/taze oturum: transcript belirene kadar sınırlı poll (10 × 500ms).
     /// Bulanursa chatSource.stream üzerinden emitChat akışına geçer.
     private func awaitTranscript(id: TerminalID, raw: String, meta: TerminalMeta) async {
+        // Lumi-spawned claude oturumu: transcript id BİLİNİR (`--session-id` ile spawn
+        // anında enjekte edilir → `meta.claudeSessionID`). O transcript'i doğrudan tail
+        // et. Karar 80 regresyonu: locator'ın max-by-modified sezgisi taze telefon
+        // chat'inde repodaki ESKİ bir oturumu seçip bayat geçmiş gösteriyordu. Dosya
+        // henüz yoksa `chatSource.stream` boş snapshot yayıp bekler (telefon boş chat
+        // görür, eski değil) ve claude dosyayı yazınca append eder.
+        if let known = meta.claudeSessionID {
+            rlog("chat subscribe: bilinen claudeSessionID kullanılıyor sid=\(known.prefix(8)) repo=\(meta.repoPath)")
+            let stream = chatSource.stream(sessionID: known, repoPath: meta.repoPath)
+            for await event in stream {
+                guard !Task.isCancelled else { break }
+                await emitChat(sessionId: raw, event: event)
+            }
+            return
+        }
+        // Harici oturum (Rider/manuel — claudeSessionID taşımaz): locator ile en yeni
+        // transcript'e bağlan (max-by-modified tek mevcut ipucu).
         for _ in 0..<10 {
             if Task.isCancelled { return }
             if let resolved = transcriptLocator.locate(repoPath: meta.repoPath) {
