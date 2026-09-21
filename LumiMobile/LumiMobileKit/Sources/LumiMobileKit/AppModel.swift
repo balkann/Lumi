@@ -485,26 +485,6 @@ public final class AppModel {
             streaming: gatedStreaming[sessionId])
     }
 
-    /// Heuristic question card: no AskUserQuestion tool in chat → the AI presents options as a
-    /// plain text list. Parses the last assistant message (if the turn has ended) and returns
-    /// tappable options (orca heuristic path); nil while a response is in progress.
-    public func heuristicQuestion(_ sessionId: String) -> ChatHeuristicQuestion? {
-        if turnStatus[sessionId]?.working == true { return nil }
-        guard let last = chatMessages(sessionId).last(where: { $0.role == .assistant }) else { return nil }
-        let text = last.blocks.compactMap { block -> String? in
-            if case .text(let t, _) = block { return t } else { return nil }
-        }.joined(separator: "\n")
-        return parseAgentQuestion(text)
-    }
-
-    /// Heuristic question answer: selected indexes → text → regular chat message (submitText).
-    public func answerHeuristicQuestion(_ sessionId: String, _ question: ChatHeuristicQuestion,
-                                        selectedIndexes: [Int]) {
-        let answer = formatChatQuestionAnswer(question, selectedIndexes: selectedIndexes)
-        guard !answer.isEmpty else { return }
-        submitText(sessionId, answer)
-    }
-
     /// Appends an optimistic user echo (orca pending-echo append).
     private func appendChatPending(_ sessionId: String, text: String) {
         let messages = chatBySession[sessionId] ?? []

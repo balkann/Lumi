@@ -114,13 +114,6 @@ struct MobileChatView: View {
                     // Fresh @State for each pending prompt (prevent selection/free-text/sending leaking);
                     // avoids stale selection or a stuck button across consecutive different prompts.
                     .id(pending.itemId)
-                } else if let hq = model.heuristicQuestion(sessionId) {
-                    // No hook prompt: turn the AI's in-text options into a tappable card.
-                    MobileHeuristicQuestionCard(question: hq) { indexes in
-                        model.answerHeuristicQuestion(sessionId, hq, selectedIndexes: indexes)
-                    }
-                    // Different question → fresh selection state.
-                    .id(hq.options.joined(separator: "|"))
                 }
                 composer
             }
