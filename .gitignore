@@ -36,3 +36,4 @@ LumiMobile/App/Info.plist
 
 # Kişisel build ayarları — commit edilmez
 Scripts/make-app.local.sh
+Scripts/make-mobile.local.sh
