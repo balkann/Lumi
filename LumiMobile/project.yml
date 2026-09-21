@@ -38,6 +38,8 @@ targets:
         SWIFT_STRICT_CONCURRENCY: complete
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         CODE_SIGN_ENTITLEMENTS: App/LumiMobile.entitlements
+        # Sadece iPhone — iPad çoklu görev orientation kuralı uygulanmaz.
+        TARGETED_DEVICE_FAMILY: "1"
         # Dağıtım kimliği (TestFlight / com.uncosoft.lumi).
         PRODUCT_BUNDLE_IDENTIFIER: com.uncosoft.lumi
     info:
@@ -45,6 +47,8 @@ targets:
       properties:
         CFBundleDisplayName: Lumi
         CFBundleName: Lumi
+        # Yalnız standart şifreleme (HTTPS/WSS) → muaf; TestFlight "Missing Compliance" sormaz.
+        ITSAppUsesNonExemptEncryption: false
         NSCameraUsageDescription: Eşleştirme QR kodunu okumak için kamera gerekir.
         UILaunchScreen: {}
         CFBundleURLTypes:
