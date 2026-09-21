@@ -457,8 +457,16 @@ public final class RemoteService: RemoteServicing {
         if isStreamJsonChat {
             await chatSessions.send(id: sessionId, text: text)
         } else if let id = terminalID(from: sessionId) {
-            // macOS-başlatılan Claude terminali chat olarak görülüyor → PTY'ye yaz (send_text gibi).
-            try? terminal.write(id: id, text: text + "\r")
+            // macOS-başlatılan Claude terminali chat olarak görülüyor → PTY'ye yaz.
+            // Birleşik `text\r` TEK yazımda gitmemeli: Claude TUI'si paste ingest bitmeden
+            // CR'ı Enter olarak yutuyor, submit tetiklenmiyor — metin composer'a yapışıyor,
+            // submit bir sonraki mesaja sarkıyor. Telefon terminal yolu paritesi: önce metin,
+            // settle, sonra AYRI CR (orca runtime-terminal-writer / AppModel.submitText).
+            if !text.isEmpty {
+                try? terminal.write(id: id, text: text)
+                try? await keystrokeScheduler.sleep(.milliseconds(500))
+            }
+            try? terminal.write(id: id, text: "\r")
         }
     }
 

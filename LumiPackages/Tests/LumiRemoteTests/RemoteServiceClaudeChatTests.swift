@@ -137,8 +137,11 @@ import LumiTestSupport
     // MARK: - T3a: handleChatSend — terminal PTY'ye yazar (stream-json oturumu yoksa)
 
     /// chat_send gelen id bir stream-json chat oturumuna ait değilse ve terminal ID ise
-    /// terminal PTY'sine text+"\r" yazılmalıdır.
-    @Test func chatSendToTerminalIdWritesToPTY() async throws {
+    /// terminal PTY'sine önce metin, settle sonrası AYRI bir CR yazılmalıdır — birleşik
+    /// `text\r` Claude TUI'sinde paste ingest bitmeden Enter olarak yutuluyor ve submit
+    /// tetiklenmiyordu (telefon terminal yolu paritesi: text → settle → CR). Regresyon:
+    /// birleşik yazımda mesaj composer'a yapışıyor, submit bir sonraki mesaja sarkıyordu.
+    @Test func chatSendToTerminalIdWritesTextThenSeparateCR() async throws {
         let conn = FakeRelayConnection()
         let term = FakeTerminalServicing()
 
@@ -156,6 +159,7 @@ import LumiTestSupport
             connection: conn,
             chatSource: FakeChatTranscriptSource(events: []),
             hookEvents: { AsyncStream { _ in } },
+            keystrokeScheduler: InstantScheduler(),   // settle'ı anında geç
             chatSessions: chatSvc
         )
         await svc.start()
@@ -163,13 +167,19 @@ import LumiTestSupport
         await conn.injectInbound(type: "chat_send",
                                   payload: ["sessionId": sid, "text": "merhaba"])
 
-        // PTY'ye yazılana kadar bekle
-        try await term.waitForWrite()
-
         let tid = claudeMeta.id
-        let writtenTexts = term.writes.filter { $0.0 == tid }.map { $0.1 }
-        #expect(writtenTexts.contains("merhaba\r"),
-                "PTY'ye 'merhaba\\r' yazılmalı, writtenTexts: \(writtenTexts)")
+        // İki ayrı yazım gelene kadar bekle (metin + CR).
+        var writtenTexts: [String] = []
+        for _ in 0..<200 {
+            writtenTexts = term.writes.filter { $0.0 == tid }.map { $0.1 }
+            if writtenTexts.count >= 2 { break }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+
+        #expect(writtenTexts == ["merhaba", "\r"],
+                "Metin ve CR ayrı yazılmalı (text → settle → CR), writtenTexts: \(writtenTexts)")
+        #expect(!writtenTexts.contains("merhaba\r"),
+                "Birleşik 'merhaba\\r' yazılmamalı — TUI submit'i yutuyor.")
         svc.stop()
     }
 
