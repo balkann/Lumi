@@ -6,6 +6,38 @@ func shellQuoted(_ s: String) -> String {
     "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'"
 }
 
+/// Telefona dönen `command_result` gövdesi.
+///
+/// Sonuç doğrudan `[String: Any]` olarak dönmez: sözlük `Sendable` değildir ve
+/// main actor'da üretilen bir değer `RelayConnection` actor'üne gönderilemez
+/// (Swift 6 `sending` kuralı — release derlemesinde hata). Bu yüzden komut
+/// sonucu `Sendable` bir değerdir; sözlüğe çeviri gönderim noktasında yapılır.
+struct CommandResult: Sendable {
+    let commandId: String?
+    let ok: Bool
+    var error: String?
+    var sessionId: String?
+    var branches: [String]?
+
+    static func ok(_ commandId: String?, sessionId: String? = nil,
+                   branches: [String]? = nil) -> CommandResult {
+        CommandResult(commandId: commandId, ok: true, sessionId: sessionId, branches: branches)
+    }
+
+    static func failure(_ commandId: String?, _ error: String) -> CommandResult {
+        CommandResult(commandId: commandId, ok: false, error: error)
+    }
+
+    /// Tel üzerindeki JSON gövdesi: {commandId, ok, error?, sessionId?, branches?}.
+    var payload: [String: Any] {
+        var payload: [String: Any] = ["commandId": commandId ?? NSNull(), "ok": ok]
+        if let error { payload["error"] = error }
+        if let sessionId { payload["sessionId"] = sessionId }
+        if let branches { payload["branches"] = branches }
+        return payload
+    }
+}
+
 /// Telefondan gelen komutları uygular (spec §4.2 RemoteCommandHandler).
 /// Cevap her zaman command_result payload'ıdır: {commandId, ok, error?}.
 @MainActor
@@ -27,8 +59,8 @@ final class RemoteCommandHandler {
         self.workspaces = workspaces
     }
 
-    func handle(_ payload: [String: Any]) async -> sending [String: Any] {
-        let commandId: Any = (payload["commandId"] as? String) ?? NSNull()
+    func handle(_ payload: [String: Any]) async -> CommandResult {
+        let commandId = payload["commandId"] as? String
         switch payload["action"] as? String {
         case "send_text":
             return result(commandId, run: {
@@ -38,7 +70,7 @@ final class RemoteCommandHandler {
             })
         case "press_key":
             guard let sequence = keySequence(for: payload["key"] as? String ?? "") else {
-                return ["commandId": commandId, "ok": false, "error": "unknown_key"]
+                return .failure(commandId, "unknown_key")
             }
             return result(commandId, run: {
                 let id = try self.session(from: payload)
@@ -51,7 +83,7 @@ final class RemoteCommandHandler {
             let rawId = payload["sessionId"] as? String ?? ""
             if await chatSessions.list().contains(where: { $0.id == rawId }) {
                 await chatSessions.close(id: rawId)
-                return ["commandId": commandId, "ok": true]
+                return .ok(commandId)
             }
             return result(commandId, run: {
                 let id = try self.session(from: payload)
@@ -62,7 +94,7 @@ final class RemoteCommandHandler {
         case "set_model":
             let model = payload["model"] as? String ?? ""
             guard Self.allowedModels.contains(model) else {
-                return ["commandId": commandId, "ok": false, "error": "unknown_model"]
+                return .failure(commandId, "unknown_model")
             }
             return result(commandId, run: {
                 let id = try self.session(from: payload)
@@ -71,11 +103,11 @@ final class RemoteCommandHandler {
         case "list_branches":
             return await listBranches(payload, commandId: commandId)
         default:
-            return ["commandId": commandId, "ok": false, "error": "unknown_action"]
+            return .failure(commandId, "unknown_action")
         }
     }
 
-    private func startSession(_ payload: [String: Any], commandId: Any) async -> sending [String: Any] {
+    private func startSession(_ payload: [String: Any], commandId: String?) async -> CommandResult {
         let repoPath = payload["repoPath"] as? String ?? ""
         let prompt = payload["prompt"] as? String ?? ""
         let kind = payload["kind"] as? String
@@ -90,7 +122,7 @@ final class RemoteCommandHandler {
             let mode = payload["branchMode"] as? String
             if let mode, mode != "current" {
                 guard let repo = await repoFor(repoPath) else {
-                    return ["commandId": commandId, "ok": false, "error": "unknown_repo"]
+                    return .failure(commandId, "unknown_repo")
                 }
                 let branchMode = WorkspaceBranchMode(rawValue: mode) ?? .new
                 let branchName = payload["branchName"] as? String
@@ -104,7 +136,7 @@ final class RemoteCommandHandler {
                     let created = try await workspaces.create(request)
                     chatRepoPath = created.workspace.path
                 } catch {
-                    return ["commandId": commandId, "ok": false, "error": "\(error)"]
+                    return .failure(commandId, "\(error)")
                 }
             }
             // İlk-açılış güven menüsünde takılmasın diye spawn'dan ÖNCE güvenli işaretle.
@@ -113,9 +145,9 @@ final class RemoteCommandHandler {
             do {
                 // sessionId = spawn edilen terminalin id'si → telefon subscribeChat için.
                 let meta = try terminal.spawn(repoPath: chatRepoPath, task: nil, command: command)
-                return ["commandId": commandId, "ok": true, "sessionId": meta.id.description]
+                return .ok(commandId, sessionId: meta.id.description)
             } catch {
-                return ["commandId": commandId, "ok": false, "error": "\(error)"]
+                return .failure(commandId, "\(error)")
             }
         }
 
@@ -127,9 +159,9 @@ final class RemoteCommandHandler {
             trust.markTrusted(repoPath: repoPath)
             let command = prompt.isEmpty ? "claude" : "claude " + shellQuoted(prompt)
             _ = try terminal.spawn(repoPath: repoPath, task: nil, command: command)
-            return ["commandId": commandId, "ok": true]
+            return .ok(commandId)
         } catch {
-            return ["commandId": commandId, "ok": false, "error": "\(error)"]
+            return .failure(commandId, "\(error)")
         }
     }
 
@@ -137,16 +169,16 @@ final class RemoteCommandHandler {
         await repos.repos().first { $0.path == path }
     }
 
-    private func listBranches(_ payload: [String: Any], commandId: Any) async -> sending [String: Any] {
+    private func listBranches(_ payload: [String: Any], commandId: String?) async -> CommandResult {
         let repoPath = payload["repoPath"] as? String ?? ""
         guard let repo = await repoFor(repoPath) else {
-            return ["commandId": commandId, "ok": false, "error": "unknown_repo"]
+            return .failure(commandId, "unknown_repo")
         }
         do {
             let branches = try await workspaces.branches(project: repo, limit: 100)
-            return ["commandId": commandId, "ok": true, "branches": branches.map(\.name)]
+            return .ok(commandId, branches: branches.map(\.name))
         } catch {
-            return ["commandId": commandId, "ok": false, "error": "\(error)"]
+            return .failure(commandId, "\(error)")
         }
     }
 
@@ -158,14 +190,14 @@ final class RemoteCommandHandler {
         return TerminalID(raw: uuid)
     }
 
-    private func result(_ commandId: Any, run: () throws -> Void) -> sending [String: Any] {
+    private func result(_ commandId: String?, run: () throws -> Void) -> CommandResult {
         do {
             try run()
-            return ["commandId": commandId, "ok": true]
+            return .ok(commandId)
         } catch CommandError.sessionNotFound {
-            return ["commandId": commandId, "ok": false, "error": "session_not_found"]
+            return .failure(commandId, "session_not_found")
         } catch {
-            return ["commandId": commandId, "ok": false, "error": "\(error)"]
+            return .failure(commandId, "\(error)")
         }
     }
 
