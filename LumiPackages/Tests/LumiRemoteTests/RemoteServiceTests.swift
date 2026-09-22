@@ -421,8 +421,8 @@ final class FakeTerminalServicing: TerminalServicing {
             config: FakeConfigService()
         ).handle(["action": "list_branches", "repoPath": "/tmp/r", "commandId": "c1"])
 
-        #expect(result["ok"] as? Bool == true)
-        #expect(result["branches"] as? [String] == ["main", "dev"])
+        #expect(result.ok)
+        #expect(result.branches == ["main", "dev"])
         #expect(await ws.branchCalls.map(\.0) == ["/tmp/r"])
         #expect(await ws.branchCalls.map(\.1) == [100])
     }
@@ -436,8 +436,8 @@ final class FakeTerminalServicing: TerminalServicing {
             chatSessions: NoopChatSessionService(), repos: repoSvc, workspaces: ws,
             config: FakeConfigService()
         ).handle(["action": "list_branches", "repoPath": "/nope", "commandId": "c1"])
-        #expect(result["ok"] as? Bool == false)
-        #expect(result["error"] as? String == "unknown_repo")
+        #expect(!result.ok)
+        #expect(result.error == "unknown_repo")
     }
 
     // MARK: - start_session workspace/worktree dalı (Task 2)
@@ -461,7 +461,7 @@ final class FakeTerminalServicing: TerminalServicing {
             "action": "start_session", "kind": "chat", "repoPath": "/tmp/r",
             "prompt": "selam", "branchMode": "new", "branchName": "feature-x", "commandId": "c1"])
 
-        #expect(result["ok"] as? Bool == true)
+        #expect(result.ok)
         let calls = await ws.createCalls
         #expect(calls.count == 1)
         #expect(calls.first?.request.branchMode == .new)
@@ -483,7 +483,7 @@ final class FakeTerminalServicing: TerminalServicing {
         let result = await handler.handle([
             "action": "start_session", "kind": "chat", "repoPath": "/tmp/r",
             "prompt": "", "branchMode": "current", "commandId": "c1"])
-        #expect(result["ok"] as? Bool == true)
+        #expect(result.ok)
         #expect(await ws.createCalls.isEmpty)
         // Karar 80: current mod → mevcut repo path'inde claude terminali.
         #expect(term.metas.count == 1)
@@ -503,7 +503,7 @@ final class FakeTerminalServicing: TerminalServicing {
         let result = await handler.handle([
             "action": "start_session", "kind": "chat", "repoPath": "/tmp/r",
             "prompt": "", "branchMode": "existing", "branchName": "dev", "commandId": "c1"])
-        #expect(result["ok"] as? Bool == false)
+        #expect(!result.ok)
         // Karar 80: workspace create başarısız → terminal AÇILMAZ (chat da yok).
         #expect(term.metas.isEmpty)
     }

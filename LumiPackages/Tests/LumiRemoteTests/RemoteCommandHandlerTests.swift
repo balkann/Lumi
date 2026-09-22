@@ -20,7 +20,7 @@ struct RemoteCommandHandlerTests {
             "prompt": "merhaba",
             "commandId": "cmd-1"
         ])
-        #expect(result["ok"] as? Bool == true)
+        #expect(result.ok)
         #expect(term.spawnedMetas.last != nil)
     }
 
@@ -55,13 +55,13 @@ struct RemoteCommandHandlerTests {
             "repoPath": "/repo",
             "commandId": "cmd-chat-1"
         ])
-        #expect(result["ok"] as? Bool == true)
+        #expect(result.ok)
         // Claude terminali spawn edildi (masaüstü grid'de görünsün)
         #expect(term.spawnedMetas.count == 1)
         #expect(term.spawnCalls.last?.repoPath == "/repo")
         #expect(term.spawnCalls.last?.command == "claude")
         // sessionId = spawn edilen terminalin id'si
-        #expect(result["sessionId"] as? String == term.spawnedMetas.last?.id.description)
+        #expect(result.sessionId == term.spawnedMetas.last?.id.description)
         // Başsız stream-json chat oturumu OLUŞTURULMADI
         #expect(chatSvc.created.isEmpty)
     }
@@ -115,7 +115,7 @@ struct RemoteCommandHandlerTests {
         let result = await handler.handle([
             "action": "delete_session", "sessionId": "cs-del-1", "commandId": "c2"
         ])
-        #expect(result["ok"] as? Bool == true)
+        #expect(result.ok)
         #expect(chatSvc.closed == ["cs-del-1"])
     }
 
@@ -130,8 +130,8 @@ struct RemoteCommandHandlerTests {
             "sessionId": "11111111-1111-1111-1111-111111111111",
             "commandId": "c3"
         ])
-        #expect(result["ok"] as? Bool == false)
-        #expect(result["error"] as? String == "session_not_found")
+        #expect(!result.ok)
+        #expect(result.error == "session_not_found")
         #expect(chatSvc.closed.isEmpty)
     }
 
@@ -150,8 +150,8 @@ struct RemoteCommandHandlerTests {
             "text": "test",
             "commandId": "cmd-chat-send"
         ])
-        #expect(result["ok"] as? Bool == false)
-        #expect(result["error"] as? String == "unknown_action")
+        #expect(!result.ok)
+        #expect(result.error == "unknown_action")
     }
 
     // MARK: - add_project

@@ -12,6 +12,6 @@ final class RemoteModelsTests: XCTestCase {
     func testRemoteFilePath() {
         let paths = LumiPaths(mode: .development)
         XCTAssertEqual(paths.remoteFile.lastPathComponent, "remote.json")
-        XCTAssertEqual(paths.remoteFile.deletingLastPathComponent(), paths.configDir)
+        XCTAssertEqual(paths.remoteFile.deletingLastPathComponent().path, paths.configDir.path)
     }
 }

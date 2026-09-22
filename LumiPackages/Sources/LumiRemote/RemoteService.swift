@@ -218,11 +218,9 @@ public final class RemoteService: RemoteServicing {
                 await handleChatSend(payload)
             case "command":
                 let result = await commandHandler.handle(payload)
-                let ok = result["ok"] as? Bool == true
-                // `result` `sending`; send'den SONRA kullanılamaz → sessionId'yi önce yakala.
-                let createdChatSession = result["sessionId"] != nil
-                cacheModelIfSet(payload, ok: ok)
-                await connection.send(type: "command_result", payload: result)
+                let createdChatSession = result.sessionId != nil
+                cacheModelIfSet(payload, ok: result.ok)
+                await connection.send(type: "command_result", payload: result.payload)
                 // Chat oturumu yaratıldı → güncel listeyi yayınla ki telefon oturumu
                 // kind:"chat" ile görsün (final review #1).
                 if createdChatSession { await sendSessions() }
@@ -670,7 +668,7 @@ public final class RemoteService: RemoteServicing {
                 if Task.isCancelled { return }   // her gruptan önce (ilk grup dahil) iptal kontrolü
                 if i > 0 { try? await scheduler.sleep(.milliseconds(1000)) }
                 if Task.isCancelled { return }
-                await self?.writeGroup(group, to: id)
+                self?.writeGroup(group, to: id)
             }
             // Bitmiş task'ı dict'ten temizlemeyiz: yeni cevap replace, .exited/shutdown cancel eder.
             // (Kendini temizlemek daha yeni bir task'ın handle'ını silme riskini doğurur — review T5.)
