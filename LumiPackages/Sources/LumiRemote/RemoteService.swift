@@ -24,6 +24,7 @@ public final class RemoteService: RemoteServicing {
     public private(set) var currentConfig: RemoteConfig = .defaults
 
     private let configService: RemoteConfigService
+    private let appConfig: any ConfigServicing
     private let terminal: any TerminalServicing
     private let repos: any RepoServicing
     private let connection: any RelayConnecting
@@ -84,15 +85,17 @@ public final class RemoteService: RemoteServicing {
         keystrokeScheduler: any KeystrokeScheduling = LiveKeystrokeScheduler(),
         transcriptLocator: any TranscriptLocating = NoopTranscriptLocating(),
         chatSessions: any ChatSessionServicing = NoopChatSessionService(),
-        workspaces: any WorkspaceServicing = NoopWorkspaceServicing()
+        workspaces: any WorkspaceServicing = NoopWorkspaceServicing(),
+        config: any ConfigServicing
     ) {
         self.configService = RemoteConfigService(paths: paths)
+        self.appConfig = config
         self.terminal = terminal
         self.repos = repos
         self.connection = connection ?? RelayConnection()
         self.commandHandler = RemoteCommandHandler(
             terminal: terminal, trust: trust, chatSessions: chatSessions,
-            repos: repos, workspaces: workspaces)
+            repos: repos, workspaces: workspaces, config: config)
         self.chatSource = chatSource
         self.hookEvents = hookEvents
         self.turnClock = turnClock
