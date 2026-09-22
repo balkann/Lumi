@@ -26,6 +26,8 @@ final class ProjectTreeTests: XCTestCase {
     func testAttention() {
         XCTAssertTrue(terminalNeedsAttention(status: "waiting-unseen", isSelected: false))
         XCTAssertFalse(terminalNeedsAttention(status: "waiting-unseen", isSelected: true))
+        XCTAssertTrue(terminalNeedsAttention(status: "waiting-focused", isSelected: false))
+        XCTAssertFalse(terminalNeedsAttention(status: "waiting-focused", isSelected: true))
         XCTAssertFalse(terminalNeedsAttention(status: "waiting-seen", isSelected: false))
         XCTAssertFalse(terminalNeedsAttention(status: "idle", isSelected: false))
     }
@@ -35,6 +37,7 @@ final class ProjectTreeTests: XCTestCase {
         XCTAssertEqual(PhoneRelativeTime.shortLabel(now, now: now), "now")
         XCTAssertEqual(PhoneRelativeTime.shortLabel(now - 5 * 60_000, now: now), "5m")
         XCTAssertEqual(PhoneRelativeTime.shortLabel(now - 3 * 3_600_000, now: now), "3h")
+        XCTAssertEqual(PhoneRelativeTime.shortLabel(now - 2 * 24 * 3_600_000, now: now), "2d")
         XCTAssertEqual(PhoneRelativeTime.shortLabel(nil, now: now), "")
     }
 }
