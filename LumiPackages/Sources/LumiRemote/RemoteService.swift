@@ -283,6 +283,9 @@ public final class RemoteService: RemoteServicing {
         // (final review #1: kind prod'da yalnız buradan set edilir).
         for chat in await chatSessions.list() {
             let repoName = repoNames[chat.repoPath] ?? (chat.repoPath as NSString).lastPathComponent
+            // v1 kasıtlı: chat oturumları transcript-tail; aktivite zaman damgası ve
+            // provider bilinmiyor → provider/lastActivityAt nil bırakılır, telefonda
+            // boş göreli-zaman etiketi görünür.
             metas.append(SessionMeta(
                 id: chat.id, repoName: repoName, status: "idle",
                 title: nil, model: nil, cols: 80, rows: 24, kind: "chat"

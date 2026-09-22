@@ -32,6 +32,13 @@ extension FakeRelayConnection {
 
     /// `projects` frame sayısı.
     func projectsCount() -> Int { sent.filter { $0.type == "projects" }.count }
+
+    /// En son `projects` frame'indeki proje path'leri.
+    func lastProjectPaths() -> [String] {
+        guard let payload = sent.last(where: { $0.type == "projects" })?.payload,
+              let list = payload["projects"] as? [[String: Any]] else { return [] }
+        return list.compactMap { $0["path"] as? String }
+    }
 }
 
 // MARK: - Tests
@@ -118,6 +125,73 @@ extension FakeRelayConnection {
         let addable = await conn.addablePaths()
         #expect(addable.contains("/p/other"))
         #expect(!addable.contains("/p/fav"))
+
+        svc.stop()
+    }
+
+    // MARK: - T4: config-change broadcast trigger
+
+    /// Mac'te projeyi favoritelere eklemek → telefona projects frame yayını.
+    /// `RemoteService.configTask`: `.configChanged` ile farklı `sidebarProjectPaths`
+    /// gelince `sendProjects()` çağrılmalı — bu production yolu test-kilitleniyor.
+    @Test func configChangeBroadcastsUpdatedProjects() async throws {
+        let conn = FakeRelayConnection()
+        let term = FakeTerminalServicing()
+        let repos = FakeRepoService(repos: [
+            Repo(name: "unco", path: "/p/unco", isGitRepo: true, source: .standalone)
+        ])
+        let cfg = FakeConfigService()
+        // Başlangıçta favorites boş → sidebarProjectPaths: []
+        let emptyConfig = AppConfig(
+            projectsRoot: "",
+            additionalPaths: [],
+            aiProvider: .claude,
+            theme: "dark",
+            terminalFontSize: 13,
+            terminalFontFamily: "",
+            terminalCursorStyle: "block",
+            terminalCursorBlink: true,
+            notifications: .defaults,
+            sidebarProjectPaths: []
+        )
+        await cfg.seed(emptyConfig)
+
+        let svc = RemoteService(
+            paths: .testDefaults(), terminal: term, repos: repos,
+            connection: conn, chatSource: FakeChatTranscriptSource(events: []),
+            hookEvents: { AsyncStream { _ in } }, config: cfg
+        )
+        await svc.start()
+
+        // Welcome → ilk projects frame (boş liste, count == 1)
+        await conn.injectInbound(type: "welcome", payload: [:])
+        try await conn.waitForSent(types: ["projects"])
+        let countAfterWelcome = await conn.projectsCount()
+
+        // Config değişikliği: /p/unco favoritelere eklendi.
+        // Önce stored config güncellenir (production'da disk yazımı önce olur),
+        // sonra configChanged eventi yayınlanır.
+        let newConfig = AppConfig(
+            projectsRoot: "",
+            additionalPaths: [],
+            aiProvider: .claude,
+            theme: "dark",
+            terminalFontSize: 13,
+            terminalFontFamily: "",
+            terminalCursorStyle: "block",
+            terminalCursorBlink: true,
+            notifications: .defaults,
+            sidebarProjectPaths: ["/p/unco"]
+        )
+        await cfg.seed(newConfig)
+        cfg.emitConfigChange(old: emptyConfig, new: newConfig)
+
+        // Config emit sonrası ikinci bir projects frame gelmeli
+        try await conn.waitForCount(type: "projects", atLeast: countAfterWelcome + 1)
+
+        // En son projects frame'i /p/unco içermeli
+        let lastPaths = await conn.lastProjectPaths()
+        #expect(lastPaths.contains("/p/unco"))
 
         svc.stop()
     }
