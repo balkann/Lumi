@@ -17,6 +17,8 @@ struct AppComposition {
     /// AppKit kabuğunun (uyanma sonrası tazeleme) hâlâ tipli eriştiği tek
     /// assembly. Faz 6.1 sonrası diğerleri yalnız `ShellComposition`'a girer.
     let repo: RepoFeatureAssembly
+    /// Remote terminal-mirror assembly (Task 5); Task 6'da ShellContext'e verilecek.
+    let remote: RemoteFeatureAssembly
     /// Panel/route/overlay kayıt defteri + kabuk bağlamı (Faz 6.6).
     let shell: ShellComposition
 
@@ -42,6 +44,7 @@ struct AppComposition {
         let repo = RepoFeatureAssembly()
         let workspaceBoot = WorkspaceBootAssembly()
         let statusBar = StatusBarFeatureAssembly()
+        let remote = RemoteFeatureAssembly()
         let deepSeek = DeepSeekAssembly()
         let tasks = TasksFeatureAssembly()
         // Hesap değişince Claude göstergesi yeni hesabın kotasını göstermeli.
@@ -59,7 +62,7 @@ struct AppComposition {
             shared: shared,
             assemblies: [
                 agentHooks, terminal, notifications, sessionSchedule, usage, repo, codexAccounts,
-                workspaceBoot, statusBar, deepSeek, tasks, claudeAccounts, terminalLinks,
+                workspaceBoot, statusBar, remote, deepSeek, tasks, claudeAccounts, terminalLinks,
             ]
         )
         let shell = ShellComposition.make(
@@ -71,6 +74,7 @@ struct AppComposition {
             sessionSchedule: sessionSchedule,
             workspaceBoot: workspaceBoot,
             statusBar: statusBar,
+            remote: remote,
             deepSeek: deepSeek,
             claudeAccounts: claudeAccounts,
             codexAccounts: codexAccounts,
@@ -84,6 +88,7 @@ struct AppComposition {
             container: container,
             shared: shared,
             repo: repo,
+            remote: remote,
             shell: shell
         )
     }

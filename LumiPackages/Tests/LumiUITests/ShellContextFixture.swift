@@ -56,6 +56,7 @@ struct ShellContextFixture {
             agentHistory: AgentHistoryStore(service: FakeAgentHistoryService(), transfer: FakeAgentSessionTransferService(), toasts: toasts),
             fileViewer: FileViewerStore(git: git, toasts: toasts),
             settings: shared.settings,
+            remote: RemoteStore(service: FakeRemoteService()),
             sessionSchedule: SessionScheduleStore(starter: FakeSessionStarterService()),
             promptQueue: PromptQueueStore(service: terminalService, toasts: toasts),
             toasts: toasts,

@@ -151,9 +151,11 @@ public final class AgentHookServer: AgentHookServing, @unchecked Sendable {
     private func respond(to request: HTTPRequest, on connection: NWConnection, token: String) {
         switch AgentHookRequestRouter.route(request, token: token) {
         case .accepted(let event):
+            DiagLog.shared.log("hook", "recv accepted: kind=\(event.kind) tool=\(event.toolName ?? "-") path=\(request.path)")
             broadcaster.send(event)
             finish(connection, with: HTTPRequestParser.response(status: 200, reason: "OK"))
         case .rejected(let status, let reason):
+            DiagLog.shared.log("hook", "recv rejected: \(status) \(reason) path=\(request.path)")
             finish(connection, with: HTTPRequestParser.response(status: status, reason: reason))
         }
     }

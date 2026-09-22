@@ -14,6 +14,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     case session
     case usage
     case shortcuts
+    case remote
 
     var id: String { rawValue }
 
@@ -28,6 +29,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .session: return "Session"
         case .usage: return "Usage"
         case .shortcuts: return "Shortcuts"
+        case .remote: return "Remote"
         }
     }
 
@@ -43,6 +45,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .session: return "clock.arrow.circlepath"
         case .usage: return "gauge.with.dots.needle.bottom.50percent"
         case .shortcuts: return "keyboard"
+        case .remote: return "iphone.and.arrow.forward"
         }
     }
 
@@ -61,6 +64,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .session: SessionSettingsTab()
         case .usage: UsageSettingsTab()
         case .shortcuts: ShortcutsSettingsTab()
+        case .remote: RemoteSettingsTab()
         }
     }
 }

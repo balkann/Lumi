@@ -157,7 +157,48 @@ AppKit tarafı: menü **bootstrap'ten önce** senkron kurulur (`AppMenuCommands.
 
 ---
 
-## 5. Karar 1-14 ile tutarlılık
+## 5. Chat lane (stream-json)
+
+Terminal oturumları PTY üzerinden tam TUI akışı çalıştırır; **chat oturumları** ise `claude --input-format stream-json --output-format stream-json` komutunu pipe child olarak başlatır, PTY yoktur.
+
+### SessionKind ayrımı
+
+```
+SessionKind = terminal | chat
+```
+
+`terminal` oturumları: PTY + `TerminalSessionManager` + Ek A zorunlulukları.
+`chat` oturumları: `StreamJsonAgentSession` aktörü + `ChatJournal` + saf pipe I/O.
+
+### Chat lane veri akışı
+
+```
+StreamingProcess (stdout satırları)
+    → StreamJsonEvent.decode(line)
+    → ChatJournal.reduce(_:)     — ChatJournalState anlık görüntüsü
+    → AsyncStream<ChatJournalState>
+```
+
+Kullanıcı girdisi stdin'e JSON satırı olarak yazılır (`StreamJsonAgentSession.send`); PTY'ye klavye enjeksiyonu yapılmaz.
+
+### Ek A muafiyeti
+
+`chat` lane, Ek A'daki PTY→UI backpressure ve replay güvenliği gereksinimlerinden **muaftır**:
+- Pipe child sonlandığında kayıp veri riski yoktur; tüm çıktı satır satır ve sıralı teslim edilir.
+- TUI yoktur; terminal emülatörü bağlı değildir, replay kavramı geçerli değildir.
+- `FlowController`, `OutputCoalescer`, `FeedWatchdog` gibi bileşenler chat lane'de **kullanılmaz**.
+
+### Kalıcılık
+
+Chat oturumu geçmişi Claude'un normal transcript dosyasında kalır (`~/.claude/projects/<encoded-cwd>/<sessionID>.jsonl`); ayrı bir Lumi-özgü kalıcılık formatı eklenmez (karar 9'a uygun).
+
+### Faz kapsamı
+
+Faz 1 salt headless veri çekirdeğidir (`StreamJsonEvent` / `ChatJournal` / `StreamingProcessSpawning` / `StreamJsonAgentSession`); UI entegrasyonu Faz 2/3'te yapılır. Bu dokümandaki Ek A ve §4 haritası terminal oturumlarına özgüdür; chat lane kararları `docs/decisions.md`'dedir (bkz. sıradaki karar).
+
+---
+
+## 6. Karar 1-14 ile tutarlılık
 
 [decisions.md](../decisions.md)'deki kararların tasarımdaki karşılıkları:
 

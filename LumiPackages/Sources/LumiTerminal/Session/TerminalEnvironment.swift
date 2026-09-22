@@ -29,6 +29,24 @@ enum TerminalEnvironment {
         if environment["LANG"] == nil {
             environment["LANG"] = "en_US.UTF-8"
         }
+        // oh-my-zsh güncelleme sorusu `[Y/n]` launch komutunun ilk karakter(ler)ini
+        // yiyor ("claude"→"laude"; LaunchCommandGate sessizliği "prompt hazır"
+        // sanıyor — [Y/n] da sessiz bekler). Lumi'nin açtığı shell'de güncelleme
+        // sorusunun yeri yok: omz'nin resmi anahtarlarıyla kapatılır (yeni omz
+        // DISABLE_UPDATE_PROMPT'u, eskisi DISABLE_AUTO_UPDATE'i okur).
+        environment["DISABLE_UPDATE_PROMPT"] = "true"
+        environment["DISABLE_AUTO_UPDATE"] = "true"
+        // Claude-oturum kimliği ASLA miras geçmez: Lumi bir claude oturumu
+        // içinden başlatılırsa (open env taşır) child claude kendini alt-oturum
+        // sanıp (CLAUDECODE=1 + CLAUDE_CODE_SESSION_ID) transcript'i enjekte
+        // edilen --session-id yoluna hiç yazmıyor → telefon chat aynası sonsuza
+        // dek boş kalıyordu (2026-09-17 teşhisi). CLAUDE_CONFIG_DIR bilinçli
+        // korunur (kullanıcının meşru global ayarı olabilir).
+        environment["CLAUDECODE"] = nil
+        environment["CLAUDE_EFFORT"] = nil
+        for key in environment.keys where key.hasPrefix("CLAUDE_CODE_") {
+            environment[key] = nil
+        }
         environment[AgentHookEndpoint.EnvironmentKey.terminalID] = nil
         environment[AgentHookEndpoint.EnvironmentKey.port] = nil
         environment[AgentHookEndpoint.EnvironmentKey.token] = nil

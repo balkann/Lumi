@@ -44,6 +44,8 @@ final class TerminalSession {
     private let pty: any PTYControlling
     private let ioQueue: DispatchQueue
     private let pipeline: TerminalPipeline
+    /// Ham PTY bayt batch'leri için broadcaster (remote mirror).
+    private let remoteOutputBroadcaster = EventBroadcaster<Data>()
     let presentation: TerminalPresentation
     /// Exit sonrası her dış etki susar (bell dahil) — bayat sinyal yayılmaz.
     private(set) var isTerminated = false
@@ -175,6 +177,7 @@ final class TerminalSession {
         guard !isTerminated else { return }
         launchGate?.noteOutput()
         pipeline.watchdog.measureFeed { presentation.feed(batch) }
+        remoteOutputBroadcaster.send(batch)
         if pipeline.flow.noteConsumed(batch.count) {
             pty.resumeReading()
         }
@@ -265,9 +268,44 @@ final class TerminalSession {
         meta.codexSessionID = sessionID
     }
 
+    // MARK: - Remote mirror
+
+    func subscribeRemoteOutput() -> AsyncStream<Data> {
+        remoteOutputBroadcaster.stream()
+    }
+
+    func writeRemoteInput(_ data: Data) {
+        write(data)
+    }
+
+    func serializeScrollback() -> (data: Data, cols: Int, rows: Int) {
+        // getBufferAsData() SwiftTerm'in public API'si (Terminal.swift:5919):
+        // active buffer'ın TÜM satırlarını (scrollback + visible) UTF-8 döker —
+        // telefon subscribe'da tam geçmişi görür. Sadece görünür satırlar YETMEZ.
+        let terminal = presentation.view.getTerminal()
+        let dims = terminal.getDims()
+        return (data: terminal.getBufferAsData(), cols: dims.cols, rows: dims.rows)
+    }
+
     /// Karar 57: düz tıkla açılan link eylemleri (Settings ▸ Terminal).
     func setLinkActionsEnabled(_ enabled: Bool) {
         (terminalView as? DropAwareTerminalView)?.isLinkActionsEnabled = enabled
+    }
+
+    // MARK: - Test yardımcıları (LumiTerminalTests)
+
+    @MainActor
+    static func makeForTest() throws -> TerminalSession {
+        try TerminalSession(
+            repoPath: NSTemporaryDirectory(),
+            name: "test",
+            task: nil,
+            font: .monospacedSystemFont(ofSize: 13, weight: .regular)
+        )
+    }
+
+    func injectFlushBatch(_ data: Data) {
+        deliver(data)
     }
 
     /// Tüm PTY-bound yazımların tek hunisi (design/01 §4): klavye, SwiftTerm

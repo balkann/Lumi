@@ -3,13 +3,15 @@ import PackageDescription
 
 let package = Package(
     name: "LumiPackages",
-    platforms: [.macOS(.v14)],
+    platforms: [.macOS(.v14), .iOS(.v17)],
     products: [
+        .library(name: "LumiWire", targets: ["LumiWire"]),
         .library(name: "LumiKit", targets: ["LumiKit"]),
         .library(name: "LumiTerminal", targets: ["LumiTerminal"]),
         .library(name: "LumiServices", targets: ["LumiServices"]),
         .library(name: "LumiState", targets: ["LumiState"]),
         .library(name: "LumiUI", targets: ["LumiUI"]),
+        .library(name: "LumiRemote", targets: ["LumiRemote"]),
         .executable(name: "Lumi", targets: ["LumiApp"]),
     ],
     dependencies: [
@@ -24,7 +26,9 @@ let package = Package(
         .package(url: "https://github.com/raspu/Highlightr.git", from: "2.1.0"),
     ],
     targets: [
-        .target(name: "LumiKit"),
+        .target(name: "LumiWire"),
+        .testTarget(name: "LumiWireTests", dependencies: ["LumiWire"]),
+        .target(name: "LumiKit", dependencies: ["LumiWire"]),
         .target(
             name: "LumiTerminal",
             dependencies: [
@@ -42,6 +46,7 @@ let package = Package(
             ]
         ),
         .target(name: "LumiState", dependencies: ["LumiKit"]),
+        .target(name: "LumiRemote", dependencies: ["LumiKit"]),
         .target(
             name: "LumiUI",
             dependencies: ["LumiKit", "LumiState"],
@@ -55,7 +60,7 @@ let package = Package(
         // + yalnız `main.swift` içeren ince executable (`LumiApp` → ürün adı `Lumi`).
         .target(
             name: "LumiAppCore",
-            dependencies: ["LumiKit", "LumiTerminal", "LumiServices", "LumiState", "LumiUI"],
+            dependencies: ["LumiKit", "LumiTerminal", "LumiServices", "LumiState", "LumiRemote", "LumiUI"],
             resources: [.copy("Resources/icon.png")]
         ),
         .executableTarget(name: "LumiApp", dependencies: ["LumiAppCore"]),
@@ -68,5 +73,6 @@ let package = Package(
         .testTarget(name: "LumiStateTests", dependencies: ["LumiState", "LumiTestSupport"]),
         .testTarget(name: "LumiUITests", dependencies: ["LumiUI", "LumiTestSupport"]),
         .testTarget(name: "LumiAppTests", dependencies: ["LumiAppCore", "LumiTestSupport"]),
+        .testTarget(name: "LumiRemoteTests", dependencies: ["LumiRemote", "LumiTestSupport"]),
     ]
 )

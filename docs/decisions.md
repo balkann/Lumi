@@ -882,3 +882,28 @@ Karar: **bloklayıcı süreç beklemesi cooperative pool'da çalışmaz.**
 Karar 55'in "probe'da SIGKILL yedeği" ve karar 68'in "timeout kesin üst sınırdır" kararları bu boşluğu kapatmıyordu: ikisi de *çağıranın* ne kadar bekleyeceğini sınırlıyor, sonlandırmanın *thread'i* ne kadar tutacağını değil.
 
 - **Sınırlar.** `CodexAppServerProbe.swift` (`shutdownDetached`, `reapGrace`, `sleepOnePollInterval`, iki çağrı yeri). Probe protokolü, timeout/cache davranışı, yenileme aralıkları ve `EventBroadcaster`/`EventConsumer` değişmedi — tüketici zaten doğruydu, yakıtı kesilmişti. Test: `CodexAppServerProbeTests.testShutdownDoesNotBlockCallerOnStubbornChild` (SIGTERM'i `trap`'leyen app-server taklidi; iptalden sonra çağıran 1 sn'den kısa sürede döner ve süreç yine de ölür).
+
+### 87. Yol B Faz 1 — stream-json chat lane (2026-09-17)
+
+- Terminal-tek-kaynak ilkesi yalnız terminal oturumları (`SessionKind.terminal`) için geçerlidir. Chat oturumları (`SessionKind.chat`) `claude --input-format stream-json --output-format stream-json` pipe child'ı çalıştırır; ayrı `ChatSessionMeta` ile izlenir ve geçmiş Claude'un normal transcript dosyasında kalıcıdır (karar 9 formatı değişmez).
+- **Faz 1 headless veri çekirdeği:** `StreamJsonEvent` (satır çözümleyici) + `ChatJournal`/`ChatJournalState` (reducer + anlık görüntü) + `StreamingProcessSpawning`/`LiveStreamingProcess` (pipe child süreci) + `StreamJsonAgentSession` aktörü (yaşam döngüsü + stdin gönderimi + `AsyncStream<ChatJournalState>` yayını). UI entegrasyonu Faz 2/3'tedir.
+- **Ek A muafiyeti:** Chat lane PTY→UI backpressure, render-crash izolasyonu ve replay güvenliği gereksinimlerinden muaftır (pipe I/O, TUI yok; kayıp-uyanma yarışı söz konusu değildir). `FlowController`/`OutputCoalescer`/`FeedWatchdog` kullanılmaz.
+- **DI:** `StreamJsonAgentSession.init` canlı default'lar taşır (`spawner: LiveStreamingProcess()`, `binaryLocator: SystemBinaryLocator()`); testler her zamanki gibi `FakeStreamingProcess`/`FakeBinaryLocator` enjekte eder. `ServiceRegistry`'e yeni slot eklenmez — Faz 2 tüketim noktasında doğrudan default'lu init kullanır.
+- **Mimari yeri:** `docs/design/00-architecture.md §5 "Chat lane (stream-json)"` bağlayıcı referans oldu.
+
+### 88. macOS-başlatılan Claude terminalleri telefonda chat view'de görünür (2026-09-20)
+
+Faz 2'nin "terminal oturumları mirror-only" kararı Claude provider terminalleri için geri çevrildi. Bash/Codex/shell terminal'lar değişmez.
+
+- **`sendSessions`:** `meta.provider == .claude` ise `SessionMeta.kind = "chat"` set edilir. Telefon bu işareti görünce ilgili oturumu chat view'de açar ve yanıtları `chat_send` ile gönderir.
+- **`handleSubscribe` (chat modu, terminal ID):** Claude terminali için `awaitTranscript(id:raw:meta:)` iptal-edilebilir task olarak `chatSubscriptions[id]`'e bağlanır. Non-claude terminaller (bash/codex/shell) eski boş-chat + idle davranışını korur.
+- **`handleChatSend`:** `chatSessions.list()`'te id yoksa (stream-json oturumu değil) ve terminal ID ise `terminal.write(id:text+"\r")` ile PTY'ye yazar — `send_text` gibi davranır.
+- **Veri kaynağı:** Canlı token-token yerine transcript-tail (`TranscriptChatSource`) — macOS-başlatılan terminal claude'da tek mevcut kaynak. Phone-başlatılan stream-json chat aynen kalır.
+
+### 89. Telefon-başlatılan chat de Mac'te claude terminali olarak açılır (2026-09-20)
+
+Faz 2'nin "telefon chat = başsız stream-json alt-süreci" kararı (karar 54/87) telefon-başlatılan oturumlar için geri çevrildi: telefondan sıfırdan chat başlatınca Mac'te başsız bir stream-json child açılıyordu ve masaüstü arayüzünde HİÇBİR şey (kart/görünüm) belirmediği için Mac'ten takip edilemiyordu (`ChatSessionServicing`'i tüketen tek yer remote katmanıydı; LumiUI/LumiState onu gözlemiyordu). Kullanıcı tercihi: masaüstünde takip edilebilirlik > telefonda token-token akış.
+
+- **`RemoteCommandHandler.startSession` (`kind == "chat"`):** Artık `chatSessions.create/send` DEĞİL, `terminal.spawn(repoPath:command: "claude"/"claude <prompt>")` çağrılır. Böylece oturum masaüstü grid'inde bir kart olarak görünür (terminal store `.spawned` event'ini gözler) ve telefon onu **karar 88** makinesiyle (transcript-tail) izler — Mac-başlatılan claude terminalleriyle tam simetri. `branchMode != current` workspace/worktree oluşturma dalı korunur; spawn o path'te olur. Dönen `sessionId` = spawn edilen terminalin id'sidir (telefon `subscribeChat` için).
+- **Bedel:** Telefon-başlatılan chat de artık stream-json token-token yerine transcript-tail'dir (Mac-başlatılan zaten öyleydi → tutarlılık). Karar 54/87'in stream-json altyapısı (`StreamJsonAgentSession`/`ChatSessionService`) yerinde ama telefon-başlatılan yol için ARTIK ÇAĞRILMIYOR (dormant; `delete_session`'ın `chatSessions.list()` guard'ı savunma amaçlı kalır). İleride tümüyle sökülebilir.
+- **iOS/relay değişmez:** Telefon zaten dönen `sessionId`'yi `chatSessionIds`'e ekleyip `submitText`'i `chat_send`'e yönlendiriyor ve `subscribeChat` çağırıyor; hepsi terminal-tabanlı chat ile çalışır.

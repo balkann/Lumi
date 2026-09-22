@@ -25,5 +25,15 @@ build/
 dist/
 /.idea
 
+# Remote — RelayServer bağımlılıkları + LumiMobile üretim/çıktı
+RelayServer/node_modules/
+RelayServer/dist/
+LumiMobile/LumiMobile.xcodeproj
+LumiMobile/build/
+LumiMobile/build-device/
+LumiMobile/*.log
+LumiMobile/App/Info.plist
+
 # Kişisel build ayarları — commit edilmez
 Scripts/make-app.local.sh
+Scripts/make-mobile.local.sh

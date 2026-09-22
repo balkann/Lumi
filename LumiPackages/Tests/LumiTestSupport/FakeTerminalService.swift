@@ -89,7 +89,8 @@ public final class FakeTerminalService: TerminalServicing {
             name: "Terminal \(spawnedMetas.count + 1)",
             repoPath: repoPath,
             createdAt: Date(),
-            task: task
+            task: task,
+            claudeSessionID: UUID().uuidString
         )
         spawnedMetas.append(meta)
         spawnCalls.append((repoPath, task, command, environment))
@@ -183,5 +184,19 @@ public final class FakeTerminalService: TerminalServicing {
     /// Testin senaryo event'i itmesi için.
     public func emit(_ event: TerminalEvent) {
         broadcaster.send(event)
+    }
+
+    // MARK: - Remote mirror
+
+    private let remoteOutputBroadcaster = EventBroadcaster<Data>()
+
+    public func subscribeOutput(_ id: TerminalID) -> AsyncStream<Data> {
+        remoteOutputBroadcaster.stream()
+    }
+
+    public func writeInput(_ data: Data, to id: TerminalID) {}
+
+    public func serializeScrollback(_ id: TerminalID) -> (data: Data, cols: Int, rows: Int) {
+        (Data(), 0, 0)
     }
 }

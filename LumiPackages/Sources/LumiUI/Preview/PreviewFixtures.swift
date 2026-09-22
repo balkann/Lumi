@@ -42,6 +42,7 @@ public extension ShellContext {
             ),
             fileViewer: FileViewerStore(git: git, toasts: shared.toasts),
             settings: shared.settings,
+            remote: RemoteStore(service: PreviewRemoteService()),
             sessionSchedule: SessionScheduleStore(starter: PreviewSessionStarterService()),
             promptQueue: PromptQueueStore(service: terminal, toasts: shared.toasts),
             toasts: shared.toasts,
@@ -189,6 +190,12 @@ private final class PreviewTerminalService: TerminalServicing {
     func shutdown() {}
     func applyFont(_ font: NSFont) {}
     func applyCursor(shape: TerminalCursorShape, blink: Bool) {}
+
+    // MARK: - Remote mirror
+    private let remoteOutputBroadcaster = EventBroadcaster<Data>()
+    func subscribeOutput(_ id: TerminalID) -> AsyncStream<Data> { remoteOutputBroadcaster.stream() }
+    func writeInput(_ data: Data, to id: TerminalID) {}
+    func serializeScrollback(_ id: TerminalID) -> (data: Data, cols: Int, rows: Int) { (Data(), 0, 0) }
     func applyLinkActions(enabled: Bool) {}
 }
 
@@ -567,5 +574,16 @@ private final class PreviewHighlighter: SyntaxHighlighting {
     func highlight(code: String, fileName: String, fontSize: CGFloat) async -> NSAttributedString {
         NSAttributedString(string: code)
     }
+}
+
+@MainActor
+private final class PreviewRemoteService: RemoteServicing {
+    var state: RemoteConnectionState { .disconnected }
+    var currentConfig: RemoteConfig { .defaults }
+    func updateConfig(_ mutate: @Sendable (inout RemoteConfig) -> Void) async {}
+    func regenerateToken() async {}
+    func start() async {}
+    func stop() {}
+    func events() -> AsyncStream<RemoteEvent> { AsyncStream { _ in } }
 }
 #endif

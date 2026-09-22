@@ -299,6 +299,7 @@ final class ShellContextTests: XCTestCase {
             agentHistory: context.agentHistory,
             fileViewer: context.fileViewer,
             settings: context.settings,
+            remote: context.remote,
             sessionSchedule: context.sessionSchedule,
             promptQueue: context.promptQueue,
             toasts: context.toasts,
