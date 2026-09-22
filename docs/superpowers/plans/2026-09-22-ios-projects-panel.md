@@ -1477,7 +1477,7 @@ Run all three suites green, then verify on real hardware (memory: prior remote b
 - [ ] `cd LumiPackages && swift test` — green.
 - [ ] `cd RelayServer && npm test` — green.
 - [ ] `cd LumiPackages && swift build -c release --product Lumi` — builds.
-- [ ] Deploy relay (Railway service **`lumi-relay-new`** — the two-service trap from memory `faz2-chat-loading-send-regression`), reinstall the Mac app (`Scripts/make-app.sh --install`), rebuild + install the iOS app on device.
+- [ ] Deploy relay (Railway service **`lumi-relay`** — this is the LIVE service the app connects to at `wss://lumi-relay-production.up.railway.app`; the orphan `lumi-relay-new` was deleted 2026-09-22, so the old two-service trap is gone), reinstall the Mac app (`Scripts/make-app.sh --install`), rebuild + install the iOS app on device.
 - [ ] Device: pair; the phone home shows Projects (not the flat list). Favorited Mac projects appear; each checkout lists its agents; a waiting agent is amber with a side bar.
 - [ ] Device: add a favorite on the Mac → it appears on the phone within a beat (no phone action).
 - [ ] Device: tap `+` → pick a Mac-known project → it appears in the tree (Mac's `sidebarProjectPaths` gained it).

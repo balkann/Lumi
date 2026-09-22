@@ -179,6 +179,7 @@ Pure unit tests in `LumiMobileKit` unless noted.
 - **Stale build confusion** — prior remote bugs traced to stale builds, not code
   (memory `mobile-transcript-tracking-diagnosis`). Verify against a fresh build on both
   Mac and device before concluding behavior.
-- **Deploy footgun** — relay lives at Railway service `lumi-relay-new`; the Mac is
-  installed via `make-app.sh --install`. Both must be redeployed for the wire change to
-  take effect end-to-end.
+- **Deploy footgun** — relay lives at Railway service `lumi-relay` (the LIVE one, serving
+  `wss://lumi-relay-production.up.railway.app`; the orphan `lumi-relay-new` was deleted
+  2026-09-22); the Mac is installed via `make-app.sh --install`. Both must be redeployed
+  for the wire change to take effect end-to-end.
