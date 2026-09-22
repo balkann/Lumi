@@ -1,5 +1,4 @@
 import SwiftUI
-import UIKit
 import LumiMobileKit
 
 struct ProjectsView: View {
@@ -110,7 +109,7 @@ private struct CheckoutRowView: View {
                 // Show leading agent badge summary when agents row is collapsed
                 if agentsCollapsed, let lead = checkout.agents.first {
                     HStack(spacing: 4) {
-                        Circle().fill(badgeColor(lead.badge)).frame(width: 8, height: 8)
+                        Circle().fill(Color(badge: lead.badge)).frame(width: 8, height: 8)
                         Text("\(checkout.agents.count)").font(.caption).foregroundStyle(.secondary)
                     }
                 }
@@ -132,15 +131,6 @@ private struct CheckoutRowView: View {
             }
         }
     }
-
-    private func badgeColor(_ badge: Badge) -> Color {
-        switch badge {
-        case .idle: .gray
-        case .working: .blue
-        case .waiting: .orange
-        case .error: .red
-        }
-    }
 }
 
 private struct AgentRowView: View {
@@ -149,7 +139,7 @@ private struct AgentRowView: View {
     var body: some View {
         NavigationLink(value: agent.id) {
             HStack(spacing: 8) {
-                Circle().fill(badgeColor).frame(width: 8, height: 8)
+                Circle().fill(Color(badge: agent.badge)).frame(width: 8, height: 8)
                 Image(systemName: providerSymbol).font(.caption2).foregroundStyle(.secondary)
                 Text(agent.title)
                     .font(.subheadline)
@@ -176,15 +166,6 @@ private struct AgentRowView: View {
         case "claude": "sparkle"
         case "codex": "chevron.left.forwardslash.chevron.right"
         default: "circle.fill"
-        }
-    }
-
-    private var badgeColor: Color {
-        switch agent.badge {
-        case .idle: .gray
-        case .working: .blue
-        case .waiting: .orange
-        case .error: .red
         }
     }
 }
@@ -223,6 +204,17 @@ private struct AddProjectSheet: View {
                     Button("Cancel") { dismiss() }
                 }
             }
+        }
+    }
+}
+
+private extension Color {
+    init(badge: Badge) {
+        switch badge {
+        case .idle: self = .gray
+        case .working: self = .blue
+        case .waiting: self = .orange
+        case .error: self = .red
         }
     }
 }
