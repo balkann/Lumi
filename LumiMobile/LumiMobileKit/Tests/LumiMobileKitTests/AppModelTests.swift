@@ -806,4 +806,41 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(render.contains { $0.id == "a1" }, "message is still in the list after turn ends (no vanish)")
         XCTAssertFalse(render.contains { $0.id == "streaming" }, "no bubble after turn ends")
     }
+
+    // MARK: Projects tree (Task 4)
+
+    @MainActor
+    func testProjectsMessagePopulatesTree() async {
+        let (model, client, _) = makeModel()
+        await model.start()
+        client.emit(.message(.sessions([
+            SessionMeta(id: "t1", repoName: "p", status: "waiting-unseen", cols: 80, rows: 24, provider: "claude"),
+        ])))
+        client.emit(.message(.projects(ProjectsSnapshot(projects: [
+            ProjectNode(name: "p", path: "/p", checkouts: [
+                CheckoutNode(kind: "original", title: "main", branch: nil, scm: "git",
+                             path: "/p", agentIds: ["t1"])
+            ])
+        ], addable: [Repo(name: "orca", path: "/p/orca")]))))
+
+        // Wait for async event loop to process
+        for _ in 0..<200 where model.projectTree.isEmpty {
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+
+        XCTAssertEqual(model.projectTree.count, 1)
+        XCTAssertEqual(model.projectTree[0].checkouts[0].agents.map(\.id), ["t1"])
+        XCTAssertTrue(model.projectTree[0].checkouts[0].agents[0].needsAttention)
+        XCTAssertEqual(model.projectsSnapshot.addable.map(\.path), ["/p/orca"])
+        XCTAssertTrue(model.macOnline)
+    }
+
+    @MainActor
+    func testAddProjectSendsCommand() async {
+        let (model, client, _) = makeModel()
+        await model.start()
+        await model.addProject(path: "/p/orca")
+        let sent = client.commands
+        XCTAssertTrue(sent.contains { if case .addProject(let p) = $0.action { return p == "/p/orca" } else { return false } })
+    }
 }
