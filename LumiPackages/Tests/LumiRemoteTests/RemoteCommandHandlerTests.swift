@@ -164,7 +164,7 @@ struct RemoteCommandHandlerTests {
             repos: repos, config: config)
 
         let result = await handler.handle(["commandId": "c1", "action": "add_project", "path": "/p/orca"])
-        #expect(result["ok"] as? Bool == true)
+        #expect(result.ok == true)
         let saved = await config.config().sidebarProjectPaths
         #expect(saved.contains("/p/orca"))
     }
@@ -174,8 +174,8 @@ struct RemoteCommandHandlerTests {
             terminal: FakeTerminalService(), trust: FakeClaudeWorkspaceTrust(),
             repos: FakeRepoService(repos: []), config: FakeConfigService())
         let result = await handler.handle(["commandId": "c1", "action": "add_project", "path": "/nope"])
-        #expect(result["ok"] as? Bool == false)
-        #expect(result["error"] as? String == "unknown_repo")
+        #expect(result.ok == false)
+        #expect(result.error == "unknown_repo")
     }
 
     @Test func addProjectIsIdempotent() async throws {

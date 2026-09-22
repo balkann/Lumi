@@ -187,18 +187,18 @@ final class RemoteCommandHandler {
         }
     }
 
-    private func addProject(_ payload: [String: Any], commandId: Any) async -> sending [String: Any] {
+    private func addProject(_ payload: [String: Any], commandId: String?) async -> CommandResult {
         let path = payload["path"] as? String ?? ""
         guard !path.isEmpty, await repos.repos().contains(where: { $0.path == path }) else {
-            return ["commandId": commandId, "ok": false, "error": "unknown_repo"]
+            return .failure(commandId, "unknown_repo")
         }
         do {
             try await config.updateConfig { c in
                 if !c.sidebarProjectPaths.contains(path) { c.sidebarProjectPaths.append(path) }
             }
-            return ["commandId": commandId, "ok": true]
+            return .ok(commandId)
         } catch {
-            return ["commandId": commandId, "ok": false, "error": "\(error)"]
+            return .failure(commandId, "\(error)")
         }
     }
 
