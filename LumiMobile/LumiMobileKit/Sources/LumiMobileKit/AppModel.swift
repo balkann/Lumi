@@ -266,6 +266,10 @@ public final class AppModel {
             list.removeAll { $0.itemId == p.itemId }
             if p.state == .pending { list.append(p) }   // resolved/cancelled → listede tutma
             prompts[sessionId] = list
+
+        case .projects:
+            // Projects tree — consumed by the Projects feature (Task 2+); ignored here.
+            macOnline = true
         }
     }
 
@@ -294,6 +298,8 @@ public final class AppModel {
             "chat_status \(sessionId.prefix(8))"
         case .prompt(let sessionId, let p):
             "prompt \(sessionId.prefix(8)) \(p.kind.rawValue) \(p.state.rawValue)"
+        case .projects(let snap):
+            "projects projects=\(snap.projects.count) addable=\(snap.addable.count)"
         }
     }
 
